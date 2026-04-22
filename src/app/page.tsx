@@ -1,9 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
 import TopBar from "@/components/newsroom/TopBar";
 import NewsroomClient from "@/components/newsroom/NewsroomClient";
 import Footer from "@/components/newsroom/Footer";
+
+export const dynamic = "force-dynamic"; // 항상 최신 데이터 fetch
 
 const MOCK_NEWS: NewsItem[] = [
   // ── TOP / HERO ──
@@ -198,15 +201,24 @@ async function fetchSiteSettings(): Promise<SiteSettings> {
 async function fetchNews(): Promise<NewsItem[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return MOCK_NEWS;
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient(); // service role → RLS 우회, 서버 전용
     const { data, error } = await supabase
       .from("news")
       .select("*")
       .eq("is_published", true)
       .order("display_order", { ascending: true });
-    if (error || !data?.length) return MOCK_NEWS;
+    if (error) {
+      console.error("[fetchNews] Supabase error:", error);
+      return MOCK_NEWS;
+    }
+    if (!data?.length) {
+      console.log("[fetchNews] No published articles, showing mock data");
+      return MOCK_NEWS;
+    }
+    console.log(`[fetchNews] Loaded ${data.length} published articles`);
     return data as NewsItem[];
-  } catch {
+  } catch (e) {
+    console.error("[fetchNews] Exception:", e);
     return MOCK_NEWS;
   }
 }

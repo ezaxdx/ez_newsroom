@@ -1,39 +1,69 @@
 "use client";
 
-import { useState } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2 } from "lucide-react";
 import { RssSource } from "@/lib/types";
-
-const MOCK_SOURCES: RssSource[] = [
-  { id: "1", url: "https://feeds.feedburner.com/TechCrunch", source_name: "TechCrunch", weight: 3, default_category: "AI", is_active: true },
-  { id: "2", url: "https://www.meetingstoday.com/rss", source_name: "Meetings Today", weight: 5, default_category: "MICE", is_active: true },
-  { id: "3", url: "https://skift.com/feed", source_name: "Skift", weight: 4, default_category: "TOURISM", is_active: true },
-  { id: "4", url: "https://www.travelweekly.com/rss", source_name: "Travel Weekly", weight: 3, default_category: "TOURISM", is_active: false },
-];
 
 const CATEGORIES = ["AI", "MICE", "TOURISM", "STARTUP", "POLICY", "OPERATIONS", "INDUSTRY"];
 
+const EMPTY_FORM = { url: "", source_name: "", weight: 3, default_category: "AI" };
+
 export default function RssPage() {
-  const [sources, setSources] = useState<RssSource[]>(MOCK_SOURCES);
+  const [sources, setSources] = useState<RssSource[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ url: "", source_name: "", weight: 3, default_category: "AI" });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [saving, setSaving] = useState(false);
 
-  const toggleActive = (id: string) =>
-    setSources((prev) => prev.map((s) => s.id === id ? { ...s, is_active: !s.is_active } : s));
+  // ── 초기 로드 ──
+  useEffect(() => {
+    fetch("/api/admin/rss")
+      .then((r) => r.json())
+      .then((d) => setSources(d.data ?? []))
+      .finally(() => setLoading(false));
+  }, []);
 
-  const remove = (id: string) => {
-    if (!confirm("이 소스를 삭제할까요?")) return;
-    setSources((prev) => prev.filter((s) => s.id !== id));
+  // ── 토글 ──
+  const toggleActive = async (source: RssSource) => {
+    setSources((prev) => prev.map((s) => s.id === source.id ? { ...s, is_active: !s.is_active } : s));
+    await fetch("/api/admin/rss", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: source.id, is_active: !source.is_active }),
+    });
   };
 
-  const addSource = () => {
+  // ── 삭제 ──
+  const remove = async (id: string) => {
+    if (!confirm("이 소스를 삭제할까요?")) return;
+    setSources((prev) => prev.filter((s) => s.id !== id));
+    await fetch("/api/admin/rss", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+  };
+
+  // ── 추가 ──
+  const addSource = async () => {
     if (!form.url || !form.source_name) return;
-    setSources((prev) => [
-      ...prev,
-      { id: Date.now().toString(), ...form, is_active: true },
-    ]);
-    setForm({ url: "", source_name: "", weight: 3, default_category: "AI" });
-    setShowForm(false);
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/rss", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...form, is_active: true }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      setSources((prev) => [...prev, json.data]);
+      setForm(EMPTY_FORM);
+      setShowForm(false);
+    } catch (e) {
+      alert("추가 실패: " + (e instanceof Error ? e.message : "오류"));
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -54,7 +84,7 @@ export default function RssPage() {
         </button>
       </div>
 
-      {/* Add form */}
+      {/* 추가 폼 */}
       {showForm && (
         <div
           className="p-5 rounded-lg mb-5 flex flex-col gap-3"
@@ -62,30 +92,23 @@ export default function RssPage() {
         >
           <h3 className="text-sm font-semibold m-0">새 RSS 소스</h3>
           <div className="grid grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1">
-              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>RSS URL</label>
-              <input
-                value={form.url}
-                onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="https://example.com/feed"
-                className="h-8 px-3 rounded-md text-sm outline-none"
-                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>소스명</label>
-              <input
-                value={form.source_name}
-                onChange={(e) => setForm((f) => ({ ...f, source_name: e.target.value }))}
-                placeholder="TechCrunch"
-                className="h-8 px-3 rounded-md text-sm outline-none"
-                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
-              />
-            </div>
+            {[
+              { label: "RSS URL", key: "url", placeholder: "https://example.com/feed" },
+              { label: "소스명", key: "source_name", placeholder: "TechCrunch" },
+            ].map(({ label, key, placeholder }) => (
+              <div key={key} className="flex flex-col gap-1">
+                <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>{label}</label>
+                <input
+                  value={form[key as keyof typeof form] as string}
+                  onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+                  placeholder={placeholder}
+                  className="h-8 px-3 rounded-md text-sm outline-none"
+                  style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                />
+              </div>
+            ))}
             <div className="flex flex-col gap-1">
               <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>기본 카테고리</label>
               <select
@@ -111,14 +134,16 @@ export default function RssPage() {
           <div className="flex gap-2 pt-1">
             <button
               onClick={addSource}
-              className="h-8 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
+              disabled={saving}
+              className="flex items-center gap-2 h-8 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-50"
               style={{ background: "var(--primary)", color: "#fff" }}
             >
+              {saving && <Loader2 size={12} className="animate-spin" />}
               추가
             </button>
             <button
               onClick={() => setShowForm(false)}
-              className="h-8 px-4 rounded-md text-sm font-medium transition-colors"
+              className="h-8 px-4 rounded-md text-sm font-medium"
               style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}
             >
               취소
@@ -127,75 +152,61 @@ export default function RssPage() {
         </div>
       )}
 
-      {/* Source list */}
-      <div className="flex flex-col gap-2">
-        {sources.map((source) => (
-          <div
-            key={source.id}
-            className="flex items-center gap-4 p-4 rounded-lg transition-opacity"
-            style={{
-              background: "var(--surface-container-lowest)",
-              opacity: source.is_active ? 1 : 0.5,
-            }}
-          >
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-0.5">
-                <p className="font-semibold text-sm m-0" style={{ color: "var(--on-surface)" }}>
-                  {source.source_name}
-                </p>
-                <span
-                  className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
-                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}
-                >
-                  {source.default_category}
-                </span>
+      {/* 소스 목록 */}
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 size={20} className="animate-spin" style={{ color: "var(--on-surface-variant)" }} />
+        </div>
+      ) : sources.length === 0 ? (
+        <div className="flex items-center justify-center py-16 text-sm rounded-lg"
+          style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
+          등록된 RSS 소스가 없습니다.
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          {sources.map((source) => (
+            <div
+              key={source.id}
+              className="flex items-center gap-4 p-4 rounded-lg transition-opacity"
+              style={{ background: "var(--surface-container-lowest)", opacity: source.is_active ? 1 : 0.5 }}
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="font-semibold text-sm m-0">{source.source_name}</p>
+                  <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
+                    style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
+                    {source.default_category}
+                  </span>
+                </div>
+                <p className="text-xs m-0 truncate" style={{ color: "var(--on-surface-variant)" }}>{source.url}</p>
               </div>
-              <p className="text-xs m-0 truncate" style={{ color: "var(--on-surface-variant)" }}>
-                {source.url}
-              </p>
-            </div>
 
-            {/* Weight bar */}
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium" style={{ color: "var(--on-surface-variant)" }}>
-                가중치
-              </span>
-              <div className="flex gap-0.5">
-                {Array.from({ length: 10 }, (_, i) => (
-                  <span
-                    key={i}
-                    className="w-1.5 h-4 rounded-sm"
-                    style={{ background: i < source.weight ? "var(--primary)" : "var(--surface-container-highest)" }}
-                  />
-                ))}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium" style={{ color: "var(--on-surface-variant)" }}>가중치</span>
+                <div className="flex gap-0.5">
+                  {Array.from({ length: 10 }, (_, i) => (
+                    <span key={i} className="w-1.5 h-4 rounded-sm"
+                      style={{ background: i < source.weight ? "var(--primary)" : "var(--surface-container-highest)" }} />
+                  ))}
+                </div>
+                <span className="text-xs font-bold w-4">{source.weight}</span>
               </div>
-              <span className="text-xs font-bold w-4">{source.weight}</span>
-            </div>
 
-            {/* Toggle + Delete */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => toggleActive(source.id)}
-                className="p-1.5 rounded transition-colors"
-                style={{ background: "transparent", border: "none", cursor: "pointer" }}
-                title={source.is_active ? "비활성화" : "활성화"}
-              >
-                {source.is_active
-                  ? <ToggleRight size={20} style={{ color: "var(--primary)" }} />
-                  : <ToggleLeft size={20} style={{ color: "var(--on-surface-variant)" }} />
-                }
-              </button>
-              <button
-                onClick={() => remove(source.id)}
-                className="p-1.5 rounded hover:bg-red-50 transition-colors"
-                style={{ background: "transparent", border: "none", cursor: "pointer" }}
-              >
-                <Trash2 size={14} style={{ color: "#dc2626" }} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button onClick={() => toggleActive(source)} style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+                  {source.is_active
+                    ? <ToggleRight size={20} style={{ color: "var(--primary)" }} />
+                    : <ToggleLeft size={20} style={{ color: "var(--on-surface-variant)" }} />}
+                </button>
+                <button onClick={() => remove(source.id)} className="p-1.5 rounded"
+                  style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+                  <Trash2 size={14} style={{ color: "#dc2626" }} />
+                </button>
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

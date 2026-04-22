@@ -31,7 +31,8 @@ create table if not exists public.curation_settings (
   focus_keywords        text[],
   persona_prompt        text,
   nav_categories        text[] default array['AI','MICE','TOURISM'],
-  carousel_interval_sec integer default 5
+  carousel_interval_sec integer default 5,
+  category_settings     jsonb  default '{}'
 );
 
 -- ── user_logs ─────────────────────────────────────────────────────────

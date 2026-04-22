@@ -107,7 +107,18 @@ export default function SettingsPage() {
     update({ keywords: current.keywords.filter((kw) => kw !== k) });
 
   const handleSave = async () => {
-    await new Promise((r) => setTimeout(r, 500));
+    try {
+      const { createClient } = await import("@/lib/supabase/client");
+      const supabase = createClient();
+      const { data: existing } = await supabase
+        .from("curation_settings").select("id").limit(1).single();
+      const payload = { category_settings: settings };
+      if (existing?.id) {
+        await supabase.from("curation_settings").update(payload).eq("id", existing.id);
+      } else {
+        await supabase.from("curation_settings").insert(payload);
+      }
+    } catch { /* fallback */ }
     setSavedTab(activeTab);
     setTimeout(() => setSavedTab(null), 2000);
   };

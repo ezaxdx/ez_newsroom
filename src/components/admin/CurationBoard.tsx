@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef } from "react";
-import { GripVertical, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, ExternalLink } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { GripVertical, Eye, EyeOff, ArrowUp, ArrowDown, Trash2, ExternalLink, Sparkles, Loader2 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 
 type Props = {
@@ -9,9 +10,19 @@ type Props = {
 };
 
 export default function CurationBoard({ initialNews }: Props) {
+  const router = useRouter();
   const [items, setItems] = useState<NewsItem[]>(initialNews);
   const [saving, setSaving] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState<string | null>(null);
   const [tab, setTab] = useState<"published" | "staging">("published");
+  const [deletedIds, setDeletedIds] = useState<string[]>([]);
+
+  // 서버 refresh 후 새 데이터 동기화
+  useEffect(() => {
+    setItems(initialNews);
+    setDeletedIds([]);
+  }, [initialNews]);
 
   const dragIdx = useRef<number | null>(null);
   const dragOverIdx = useRef<number | null>(null);
@@ -72,6 +83,7 @@ export default function CurationBoard({ initialNews }: Props) {
   const remove = (id: string) => {
     if (!confirm("이 기사를 삭제할까요?")) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
+    setDeletedIds((prev) => [...prev, id]);
   };
 
   const handleSave = async () => {
@@ -80,7 +92,7 @@ export default function CurationBoard({ initialNews }: Props) {
       const res = await fetch("/api/admin/save-curation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items, deletedIds }),
       });
       if (!res.ok) throw new Error("저장 실패");
     } catch (e) {
@@ -88,6 +100,23 @@ export default function CurationBoard({ initialNews }: Props) {
       console.error(e);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleRunCuration = async () => {
+    if (!confirm("RSS 피드에서 새 기사를 수집하고 AI로 생성합니다. 진행할까요?")) return;
+    setRunning(true);
+    setRunResult(null);
+    try {
+      const res = await fetch("/api/admin/run-curation", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "실패");
+      setRunResult(`✅ 생성 ${json.created}건 / 중복 건너뜀 ${json.skipped}건 / 실패 ${json.failed}건`);
+      router.refresh(); // 서버 데이터만 새로고침 (상태 유지)
+    } catch (e) {
+      setRunResult(`❌ ${e instanceof Error ? e.message : "오류 발생"}`);
+    } finally {
+      setRunning(false);
     }
   };
 
@@ -105,15 +134,34 @@ export default function CurationBoard({ initialNews }: Props) {
             드래그로 순서를 조정하고 발행 상태를 관리합니다
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="h-9 px-5 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
-          style={{ background: "var(--primary)", color: "#fff" }}
-        >
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleRunCuration}
+            disabled={running}
+            className="flex items-center gap-2 h-9 px-4 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
+            style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}
+          >
+            {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
+            {running ? "수집 중..." : "AI 큐레이션 실행"}
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="h-9 px-5 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
+            style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+          >
           {saving ? "저장 중..." : "변경사항 저장"}
-        </button>
+          </button>
+        </div>
       </div>
+
+      {/* 큐레이션 실행 결과 */}
+      {runResult && (
+        <div className="mb-4 px-4 py-3 rounded-lg text-sm"
+          style={{ background: "var(--surface-container-lowest)", color: "var(--on-surface)" }}>
+          {runResult}
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-4 p-1 rounded-lg w-fit" style={{ background: "var(--surface-container-highest)" }}>

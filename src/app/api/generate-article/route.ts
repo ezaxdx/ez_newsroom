@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from "next/server";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const PERSONA_PROMPTS: Record<string, string> = {
   AI: "당신은 AI·디지털 전환 전문 에디터입니다. MICE·관광 산업 종사자가 즉시 활용할 수 있는 실용적 시각으로 AI 기술 뉴스를 분석합니다.",
@@ -68,15 +67,21 @@ export async function POST(req: NextRequest) {
 ${articleText}`;
 
   try {
-    const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({
-      model: "gemini-flash-latest",
-      generationConfig: { responseMimeType: "application/json" },
-    });
-
-    const result = await model.generateContent(prompt);
-    const raw = result.response.text().trim();
-
+    const res = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+        }),
+        signal: AbortSignal.timeout(30000),
+      }
+    );
+    const json = await res.json();
+    if (!res.ok) throw new Error(JSON.stringify(json));
+    const raw = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
+      ?.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "") ?? "";
     const parsed = JSON.parse(raw);
     const image_url = await ogImagePromise;
 
