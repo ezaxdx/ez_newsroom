@@ -1,26 +1,94 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Newsroom Design Tokens (DESIGN.md) ─── */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Surface hierarchy */
+  --surface:                  #f9f9fa;
+  --surface-container-low:    #f3f3f4;
+  --surface-container-high:   #ebebec;
+  --surface-container-highest:#e2e2e3;
+  --surface-container-lowest: #ffffff;
+
+  /* Text */
+  --on-surface:         #1a1c1d;
+  --on-surface-variant: #47464a;
+
+  /* Primary */
+  --primary:            #000000;
+  --primary-container:  #1c1b1d;
+  --on-primary:         #ffffff;
+
+  /* Outline */
+  --outline-variant:    #c8c5ca;
+
+  /* shadcn token mapping */
+  --background:         var(--surface);
+  --foreground:         var(--on-surface);
+  --card:               var(--surface-container-lowest);
+  --card-foreground:    var(--on-surface);
+  --popover:            var(--surface-container-lowest);
+  --popover-foreground: var(--on-surface);
+  --primary:            #000000;
+  --primary-foreground: #ffffff;
+  --secondary:          var(--surface-container-highest);
+  --secondary-foreground: var(--on-surface);
+  --muted:              var(--surface-container-low);
+  --muted-foreground:   var(--on-surface-variant);
+  --accent:             var(--surface-container-high);
+  --accent-foreground:  var(--on-surface);
+  --destructive:        oklch(0.577 0.245 27.325);
+  --border:             rgba(200, 197, 202, 0.15);
+  --input:              var(--surface-container-lowest);
+  --ring:               #000000;
+  --radius:             0.375rem;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-background:   var(--background);
+  --color-foreground:   var(--foreground);
+  --color-card:         var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary:      var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary:    var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted:        var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent:       var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive:  var(--destructive);
+  --color-border:       var(--border);
+  --color-input:        var(--input);
+  --color-ring:         var(--ring);
+  --font-sans:          var(--font-inter);
+
+  /* newsroom custom */
+  --color-surface:                var(--surface);
+  --color-surface-low:            var(--surface-container-low);
+  --color-surface-high:           var(--surface-container-high);
+  --color-surface-highest:        var(--surface-container-highest);
+  --color-surface-lowest:         var(--surface-container-lowest);
+  --color-on-surface:             var(--on-surface);
+  --color-on-surface-variant:     var(--on-surface-variant);
+  --color-primary-container:      var(--primary-container);
+
+  --radius-sm:  calc(var(--radius) * 0.6);
+  --radius-md:  var(--radius);
+  --radius-lg:  calc(var(--radius) * 1.6);
+  --radius-full: 9999px;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
-}
-
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  body {
+    @apply bg-[--surface] text-[--on-surface];
+    font-family: var(--font-inter), sans-serif;
+    line-height: 1.55;
+  }
 }
