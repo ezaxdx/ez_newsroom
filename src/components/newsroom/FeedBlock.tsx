@@ -8,6 +8,12 @@ type Props = {
   onOpen: (item: NewsItem) => void;
 };
 
+const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
+  초급: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
+  중급: { bg: "rgba(26,28,29,0.72)", color: "#fff" },
+  고급: { bg: "var(--primary)", color: "#fff" },
+};
+
 export default function FeedBlock({ label, items, onOpen }: Props) {
   return (
     <section id={label.toLowerCase()}>
@@ -35,23 +41,29 @@ export default function FeedBlock({ label, items, onOpen }: Props) {
             className="flex flex-col cursor-pointer group"
             onClick={() => onOpen(item)}
           >
-            {/* image placeholder or actual image */}
+            {/* image + level badge */}
             <div
-              className="w-full mb-3 rounded overflow-hidden"
+              className="relative w-full mb-3 rounded overflow-hidden"
               style={{
                 aspectRatio: "16/9",
-                background: item.image_url
-                  ? undefined
-                  : "var(--surface-container-highest)",
+                background: "var(--surface-container-highest)",
               }}
             >
               {item.image_url && (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={item.image_url}
-                  alt=""
-                  className="w-full h-full object-cover"
-                />
+                <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+              )}
+              {item.level && (
+                <span
+                  className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
+                  style={{
+                    background: LEVEL_STYLE[item.level]?.bg ?? "var(--surface-container-highest)",
+                    color: LEVEL_STYLE[item.level]?.color ?? "var(--on-surface-variant)",
+                    backdropFilter: "blur(6px)",
+                  }}
+                >
+                  {item.level}
+                </span>
               )}
             </div>
 

@@ -6,7 +6,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("curation_settings")
-    .select("nav_categories, carousel_interval_sec, category_settings")
+    .select("nav_categories, carousel_interval_sec, category_settings, level_prompts")
     .limit(1)
     .single();
 
@@ -14,12 +14,13 @@ export async function GET() {
     categories: data?.nav_categories ?? ["AI", "MICE", "TOURISM"],
     carouselSec: data?.carousel_interval_sec ?? 5,
     categorySettings: data?.category_settings ?? {},
+    levelPrompts: data?.level_prompts ?? {},
   });
 }
 
 /* POST – 카테고리 + 카루셀 + 페르소나 통합 저장 */
 export async function POST(req: NextRequest) {
-  const { categories, carouselSec, categorySettings } = await req.json();
+  const { categories, carouselSec, categorySettings, levelPrompts } = await req.json();
   const supabase = createAdminClient();
 
   const { data: existing } = await supabase
@@ -32,6 +33,7 @@ export async function POST(req: NextRequest) {
     nav_categories: categories,
     carousel_interval_sec: carouselSec,
     ...(categorySettings !== undefined && { category_settings: categorySettings }),
+    ...(levelPrompts !== undefined && { level_prompts: levelPrompts }),
   };
 
   if (existing?.id) {

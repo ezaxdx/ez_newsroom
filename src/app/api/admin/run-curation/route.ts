@@ -21,7 +21,7 @@ function parseRSS(xml: string) {
     const pubDate = c.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim() ?? "";
     if (title && link) items.push({ title, link, pubDate });
   }
-  return items.slice(0, 5); // 소스당 최대 5개
+  return items.slice(0, 3); // 소스당 최대 3개
 }
 
 /* ── 원문 텍스트 추출 ── */
@@ -62,14 +62,30 @@ async function generateArticle(
   url: string,
   persona: string,
   audience: string,
-  keywords: string[]
-): Promise<{ title: string; summary_short: string; content_long: string; implications: string } | null> {
+  keywords: string[],
+  levelPrompts: Record<string, string>
+): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
+  const levelGuide = `
+먼저 아래 기사의 복잡도와 필요한 배경지식 수준을 판단해 레벨을 결정하세요:
+- 초급: 전문 배경지식 없어도 이해 가능한 일반적 내용
+- 중급: 업계 기본 지식 보유자를 위한 실무 관련 내용
+- 고급: 깊은 전문성이 필요한 기술적·전략적 심층 분석
+
+레벨별 작성 지침:
+[초급] ${levelPrompts["초급"] ?? "쉽고 명확하게 작성하세요."}
+[중급] ${levelPrompts["중급"] ?? "실무 담당자 관점에서 작성하세요."}
+[고급] ${levelPrompts["고급"] ?? "전략적 심층 분석으로 작성하세요."}
+
+결정한 레벨의 지침에 따라 기사를 작성하고, level 필드에 해당 레벨을 명시하세요.`;
+
   const prompt = `${persona}
 타겟 독자: ${audience}${keywordHint}
+${levelGuide}
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
 {
+  "level": "초급 또는 중급 또는 고급",
   "title": "한국어 제목 (50자 이내)",
   "summary_short": "한국어 요약 (2~3문장, 120자 이내)",
   "content_long": "한국어 상세 분석 (4~6문장)",
@@ -120,14 +136,16 @@ export async function POST(req: Request) {
     .eq("is_active", true);
   if (!sources?.length) return NextResponse.json({ error: "활성 RSS 소스가 없습니다." }, { status: 400 });
 
-  // 2. 카테고리별 큐레이션 설정 조회
+  // 2. 카테고리별 큐레이션 설정 + 레벨 프롬프트 조회
   const { data: settings } = await supabase
     .from("curation_settings")
-    .select("category_settings")
+    .select("category_settings, level_prompts")
     .limit(1)
     .single();
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> =
     settings?.category_settings ?? {};
+  // 카테고리별 레벨 프롬프트: { AI: {초급:..., 중급:..., 고급:...}, MICE: {...} }
+  const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
 
   // 3. 기존 기사 URL 목록 (중복 방지)
   const { data: existingNews } = await supabase.from("news").select("original_url");
@@ -171,9 +189,11 @@ export async function POST(req: Request) {
 
       console.log(`[생성 시도] ${item.title.slice(0, 40)}... (텍스트 ${articleText.length}자)`);
 
+      // 해당 카테고리의 레벨 프롬프트 (없으면 빈 객체 → generateArticle 내 기본값 사용)
+      const catLevelPrompts = allLevelPrompts[category] ?? {};
       const generated = await generateArticle(
         apiKey, articleText, item.link,
-        setting.persona, setting.audience, setting.keywords
+        setting.persona, setting.audience, setting.keywords, catLevelPrompts
       );
 
       if (!generated) { results.failed++; continue; }
@@ -183,6 +203,7 @@ export async function POST(req: Request) {
         summary_short: generated.summary_short,
         content_long: generated.content_long,
         implications: generated.implications,
+        level: generated.level ?? "중급",
         image_url,
         original_url: item.link,
         category,

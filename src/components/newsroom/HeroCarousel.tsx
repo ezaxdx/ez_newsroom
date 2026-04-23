@@ -8,8 +8,19 @@ type Slide = { category: string; item: NewsItem };
 type Props = {
   slides: Slide[];
   onOpen: (item: NewsItem) => void;
-  interval?: number; // ms, default 5000
+  interval?: number;
 };
+
+function formatFeaturedDate(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const isToday =
+    d.getFullYear() === today.getFullYear() &&
+    d.getMonth() === today.getMonth() &&
+    d.getDate() === today.getDate();
+  if (isToday) return "Featured Today";
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+}
 
 export default function HeroCarousel({ slides, onOpen, interval = 5000 }: Props) {
   const [current, setCurrent] = useState(0);
@@ -22,7 +33,7 @@ export default function HeroCarousel({ slides, onOpen, interval = 5000 }: Props)
     if (paused || slides.length <= 1) return;
     const t = setInterval(next, interval);
     return () => clearInterval(t);
-  }, [paused, next, slides.length]);
+  }, [paused, next, slides.length, interval]);
 
   if (!slides.length) return null;
 
@@ -31,160 +42,199 @@ export default function HeroCarousel({ slides, onOpen, interval = 5000 }: Props)
 
   return (
     <section
-      className="grid gap-3"
-      style={{ gridTemplateColumns: "2fr 0.93fr" }}
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
     >
-      {/* ── Main hero card ── */}
-      <article
-        className="relative min-h-[480px] rounded-lg overflow-hidden flex flex-col justify-end p-10 cursor-pointer"
-        style={{
-          background: `
-            linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0.34) 52%, rgba(0,0,0,0)),
-            radial-gradient(circle at 50% 38%, rgba(124,124,124,0.7), rgba(28,27,29,0.94) 70%)
-          `,
-          color: "#ffffff",
-        }}
-        onClick={() => onOpen(item)}
-      >
-        {item.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={item.image_url}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-30"
-          />
-        )}
-
-        {/* Category + TOP NEWS pill */}
-        <div className="flex items-center gap-2 mb-3">
+      {/* ── 상단 헤더 바: TOP NEWS (좌) + 점 인디케이터 (우) ── */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3">
+          <span className="block w-10 h-[2px]" style={{ background: "var(--on-surface)" }} />
           <span
-            className="inline-flex px-3 py-1 rounded-full text-xs font-bold tracking-[0.05em] uppercase"
-            style={{ background: "#000", color: "#fff" }}
+            className="text-[0.72rem] font-bold tracking-[0.12em] uppercase"
+            style={{ color: "var(--on-surface)" }}
           >
-            TOP NEWS
-          </span>
-          <span
-            className="inline-flex px-3 py-1 rounded-full text-xs font-bold tracking-[0.05em] uppercase"
-            style={{ background: "rgba(255,255,255,0.15)", color: "#fff" }}
-          >
-            {item.category}
+            Top News
           </span>
         </div>
 
-        <h2
-          className="font-bold leading-[1.18] tracking-[-0.02em] mb-3 max-w-[28ch]"
-          style={{ fontSize: "clamp(1.8rem, 2.5vw, 2.7rem)" }}
-        >
-          {item.title}
-        </h2>
-
-        <p className="mb-5 max-w-[66ch] text-sm leading-relaxed"
-          style={{ color: "rgba(255,255,255,0.82)" }}>
-          {item.summary_short}
-        </p>
-
-        <div className="flex items-center justify-between">
-          <button
-            className="h-10 px-4 rounded-md text-xs font-bold tracking-[0.04em] uppercase transition-opacity hover:opacity-80"
-            style={{ background: "#fff", color: "#000", border: "none", cursor: "pointer" }}
-            onClick={(e) => { e.stopPropagation(); onOpen(item); }}
-          >
-            VIEW INSIGHT →
-          </button>
-
-          {/* Dot indicators */}
-          <div className="flex gap-2">
-            {slides.map((s, i) => (
-              <button
-                key={s.category}
-                onClick={(e) => { e.stopPropagation(); setCurrent(i); }}
-                title={s.category}
-                className="flex flex-col items-center gap-1 transition-all"
-                style={{ background: "transparent", border: "none", cursor: "pointer", padding: "4px" }}
-              >
-                <span
-                  className="text-[0.55rem] font-bold tracking-wider uppercase transition-opacity"
-                  style={{ color: i === current ? "#fff" : "rgba(255,255,255,0.4)" }}
-                >
-                  {s.category}
-                </span>
-                <span
-                  className="block rounded-full transition-all"
-                  style={{
-                    width: i === current ? "24px" : "8px",
-                    height: "3px",
-                    background: i === current ? "#fff" : "rgba(255,255,255,0.35)",
-                  }}
-                />
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Progress bar */}
-        {!paused && slides.length > 1 && (
-          <div
-            className="absolute bottom-0 left-0 h-0.5"
-            style={{ background: "rgba(255,255,255,0.3)", width: "100%" }}
-          >
-            <div
-              key={current}
-              className="h-full"
+        {/* 점 인디케이터 */}
+        <div className="flex items-center gap-2">
+          {slides.map((_, i) => (
+            <button
+              key={i}
+              onClick={() => setCurrent(i)}
               style={{
-                background: "#fff",
-                animation: `progress ${interval}ms linear forwards`,
+                width: i === current ? "20px" : "8px",
+                height: "8px",
+                borderRadius: "99px",
+                background: "var(--on-surface)",
+                opacity: i === current ? 1 : 0.2,
+                border: "none",
+                cursor: "pointer",
+                padding: 0,
+                transition: "all 0.3s ease",
               }}
             />
-          </div>
-        )}
+          ))}
+        </div>
+      </div>
 
-        <style>{`
-          @keyframes progress { from { width: 0% } to { width: 100% } }
-        `}</style>
-      </article>
-
-      {/* ── Side mini-cards (other categories) ── */}
-      <aside
-        className="flex flex-col gap-2 p-3 rounded-lg"
-        style={{ background: "var(--surface-container-low)" }}
+      {/* ── 메인 그리드: 히어로(좌) + 사이드 패널(우) ── */}
+      <div
+        className="grid gap-3"
+        style={{ gridTemplateColumns: "2fr 0.93fr" }}
       >
-        {sideSlides.map((slide) => (
-          <article
-            key={slide.category}
-            className="flex flex-col p-4 rounded-md cursor-pointer transition-colors"
-            style={{ background: "var(--surface-container-lowest)" }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-container-high)")}
-            onMouseLeave={(e) => (e.currentTarget.style.background = "var(--surface-container-lowest)")}
-            onClick={() => onOpen(slide.item)}
-          >
-            <span
-              className="inline-flex self-start px-2.5 py-1 rounded-full text-[0.7rem] font-bold tracking-[0.05em] uppercase mb-2"
-              style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}
+        {/* ── 메인 히어로 카드 ── */}
+        <article
+          className="relative rounded-xl overflow-hidden cursor-pointer"
+          style={{ minHeight: "460px" }}
+          onClick={() => onOpen(item)}
+        >
+          {/* 배경 이미지 */}
+          {item.image_url ? (
+            <img
+              src={item.image_url}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover"
+            />
+          ) : (
+            <div
+              className="absolute inset-0"
+              style={{
+                background:
+                  "radial-gradient(circle at 50% 38%, rgba(80,90,100,0.9), rgba(18,18,20,0.98) 72%)",
+              }}
+            />
+          )}
+
+          {/* 그라디언트 오버레이 */}
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                "linear-gradient(to top, rgba(0,0,0,0.85) 0%, rgba(0,0,0,0.35) 55%, rgba(0,0,0,0.08) 100%)",
+            }}
+          />
+
+          {/* 콘텐츠 */}
+          <div className="relative flex flex-col justify-end h-full p-9" style={{ minHeight: "460px" }}>
+            {/* 카테고리 pill + Featured date */}
+            <div className="flex items-center gap-3 mb-4">
+              <span
+                className="inline-flex px-3 py-1 rounded-full text-[0.7rem] font-bold tracking-[0.06em] uppercase"
+                style={{ background: "#000", color: "#fff" }}
+              >
+                {item.category}
+              </span>
+              <span
+                className="text-[0.78rem] font-medium"
+                style={{ color: "rgba(255,255,255,0.55)" }}
+              >
+                {formatFeaturedDate(item.published_at)}
+              </span>
+            </div>
+
+            {/* 제목 */}
+            <h2
+              className="font-bold leading-[1.15] tracking-[-0.02em] mb-4 max-w-[22ch]"
+              style={{
+                fontSize: "clamp(1.7rem, 2.5vw, 2.6rem)",
+                color: "#fff",
+              }}
             >
-              {slide.category}
-            </span>
-            <h3
-              className="font-semibold leading-[1.35] mb-2"
-              style={{ fontSize: "1.05rem", color: "var(--on-surface)", margin: "0 0 8px" }}
+              {item.title}
+            </h2>
+
+            {/* 요약 */}
+            <p
+              className="mb-7 max-w-[52ch] leading-relaxed line-clamp-2"
+              style={{ fontSize: "0.92rem", color: "rgba(255,255,255,0.72)" }}
             >
-              {slide.item.title}
-            </h3>
-            <p className="text-xs leading-relaxed line-clamp-2 m-0"
-              style={{ color: "var(--on-surface-variant)" }}>
-              {slide.item.summary_short}
+              {item.summary_short}
             </p>
-            <button
-              className="self-start mt-2 text-[0.7rem] font-semibold tracking-[0.04em] uppercase hover:underline"
-              style={{ color: "var(--on-surface-variant)", background: "transparent", border: "none", padding: 0, cursor: "pointer" }}
-              onClick={(e) => { e.stopPropagation(); onOpen(slide.item); }}
+
+            {/* 버튼 */}
+            <div>
+              <button
+                className="h-11 px-6 rounded-lg text-[0.78rem] font-bold tracking-[0.05em] uppercase transition-opacity hover:opacity-85"
+                style={{ background: "#fff", color: "#000", border: "none", cursor: "pointer" }}
+                onClick={(e) => { e.stopPropagation(); onOpen(item); }}
+              >
+                Read Article →
+              </button>
+            </div>
+          </div>
+
+          {/* 프로그레스 바 */}
+          {!paused && slides.length > 1 && (
+            <div
+              className="absolute bottom-0 left-0 w-full h-[3px]"
+              style={{ background: "rgba(255,255,255,0.15)" }}
             >
-              INSIGHT
-            </button>
-          </article>
-        ))}
-      </aside>
+              <div
+                key={current}
+                className="h-full"
+                style={{
+                  background: "#fff",
+                  animation: `heroProgress ${interval}ms linear forwards`,
+                }}
+              />
+            </div>
+          )}
+
+          <style>{`
+            @keyframes heroProgress { from { width: 0% } to { width: 100% } }
+          `}</style>
+        </article>
+
+        {/* ── 사이드 미니 카드 패널 ── */}
+        <aside
+          className="flex flex-col gap-2 p-3 rounded-xl"
+          style={{ background: "var(--surface-container-low)" }}
+        >
+          {sideSlides.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-xs"
+              style={{ color: "var(--on-surface-variant)" }}>
+              —
+            </div>
+          ) : (
+            sideSlides.map((slide) => (
+              <article
+                key={slide.category}
+                className="flex flex-col flex-1 p-4 rounded-lg cursor-pointer transition-colors"
+                style={{ background: "var(--surface-container-lowest)" }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "var(--surface-container-high)")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "var(--surface-container-lowest)")}
+                onClick={() => onOpen(slide.item)}
+              >
+                <span
+                  className="inline-flex self-start px-2.5 py-1 rounded-full text-[0.68rem] font-bold tracking-[0.05em] uppercase mb-2"
+                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}
+                >
+                  {slide.category}
+                </span>
+                <h3
+                  className="font-semibold leading-[1.35] mb-2 line-clamp-3"
+                  style={{ fontSize: "0.95rem", color: "var(--on-surface)", margin: "0 0 8px" }}
+                >
+                  {slide.item.title}
+                </h3>
+                <p className="text-xs leading-relaxed line-clamp-2 m-0"
+                  style={{ color: "var(--on-surface-variant)" }}>
+                  {slide.item.summary_short}
+                </p>
+                <button
+                  className="self-start mt-auto pt-3 text-[0.7rem] font-semibold tracking-[0.04em] uppercase hover:underline"
+                  style={{ color: "var(--on-surface-variant)", background: "transparent", border: "none", padding: "12px 0 0", cursor: "pointer" }}
+                  onClick={(e) => { e.stopPropagation(); onOpen(slide.item); }}
+                >
+                  Read →
+                </button>
+              </article>
+            ))
+          )}
+        </aside>
+      </div>
     </section>
   );
 }

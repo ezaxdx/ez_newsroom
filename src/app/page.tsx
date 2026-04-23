@@ -22,10 +22,11 @@ const MOCK_NEWS: NewsItem[] = [
     image_url: null,
     original_url: "#",
     category: "MICE",
+    level: null,
     priority_score: 100,
     is_published: true,
     display_order: 1,
-    published_at: new Date().toISOString(),
+    published_at: "2026-04-23T09:00:00.000Z",
   },
   // ── SIDE (3개) ──
   {
@@ -37,10 +38,11 @@ const MOCK_NEWS: NewsItem[] = [
     image_url: null,
     original_url: "#",
     category: "AI",
+    level: null,
     priority_score: 90,
     is_published: true,
     display_order: 2,
-    published_at: new Date().toISOString(),
+    published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "side-2",
@@ -51,10 +53,11 @@ const MOCK_NEWS: NewsItem[] = [
     image_url: null,
     original_url: "#",
     category: "TOURISM",
+    level: null,
     priority_score: 80,
     is_published: true,
     display_order: 3,
-    published_at: new Date().toISOString(),
+    published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "side-3",
@@ -65,10 +68,11 @@ const MOCK_NEWS: NewsItem[] = [
     image_url: null,
     original_url: "#",
     category: "STARTUP",
+    level: null,
     priority_score: 75,
     is_published: true,
     display_order: 4,
-    published_at: new Date().toISOString(),
+    published_at: "2026-04-23T09:00:00.000Z",
   },
   // ── AI ──
   {
@@ -77,8 +81,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "온라인 거래량 급증으로 글로벌 무역 지표가 전년 대비 최고치를 기록했습니다.",
     content_long: "디지털 무역 플랫폼의 확산으로 중소기업의 해외 진출 장벽이 낮아지고 있습니다.",
     implications: "디지털 전환은 규모의 경제보다 속도의 경제를 우선시합니다.",
-    image_url: null, original_url: "#", category: "AI",
-    priority_score: 70, is_published: true, display_order: 5, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "AI", level: null,
+    priority_score: 70, is_published: true, display_order: 5, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "ai-2",
@@ -86,8 +90,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "B2B SaaS 시드 라운드가 급증하며 AI 기반 업무 자동화 툴에 투자가 집중되고 있습니다.",
     content_long: "벤처캐피털의 관심이 소비자 앱에서 기업용 AI 솔루션으로 빠르게 이동하고 있습니다.",
     implications: "초기 투자 유치 시 ROI 증명 가능한 단일 유즈케이스에 집중하는 것이 유리합니다.",
-    image_url: null, original_url: "#", category: "AI",
-    priority_score: 68, is_published: true, display_order: 6, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "AI", level: null,
+    priority_score: 68, is_published: true, display_order: 6, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "ai-3",
@@ -95,8 +99,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "MICE 분야 2분기 여행 데이터가 팬데믹 이전 기준선을 앞질렀습니다.",
     content_long: "국제 행사 참석자 수가 2019년 수준을 회복하며 컨벤션 센터 예약률이 급등하고 있습니다.",
     implications: "수요 회복기에 차별화된 경험 설계가 중장기 경쟁력을 결정합니다.",
-    image_url: null, original_url: "#", category: "AI",
-    priority_score: 65, is_published: true, display_order: 7, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "AI", level: null,
+    priority_score: 65, is_published: true, display_order: 7, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "ai-4",
@@ -104,8 +108,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "미디어·엔터테인먼트 부문도 여행 회복세에 맞춰 성장 궤도에 진입했습니다.",
     content_long: "스트리밍과 라이브 이벤트의 경계가 허물어지며 복합 콘텐츠 경험 수요가 증가하고 있습니다.",
     implications: "온·오프라인 통합 전략이 관객 확장의 핵심 레버입니다.",
-    image_url: null, original_url: "#", category: "AI",
-    priority_score: 63, is_published: true, display_order: 8, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "AI", level: null,
+    priority_score: 63, is_published: true, display_order: 8, published_at: "2026-04-23T09:00:00.000Z",
   },
   // ── MICE ──
   {
@@ -114,8 +118,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "분산 시스템에서 언어별 런타임 성능 차이가 아키텍처 선택에 미치는 영향을 분석했습니다.",
     content_long: "Go와 Rust의 런타임 특성을 비교 분석한 결과, 대규모 컨벤션 시스템에서 지연시간 차이가 운영 비용에 직접 영향을 줍니다.",
     implications: "운영 규모가 커질수록 런타임 선택이 TCO에 미치는 영향이 기하급수적으로 증가합니다.",
-    image_url: null, original_url: "#", category: "MICE",
-    priority_score: 60, is_published: true, display_order: 9, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "MICE", level: null,
+    priority_score: 60, is_published: true, display_order: 9, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "mice-2",
@@ -123,8 +127,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "실시간 시맨틱 검색을 위한 벡터 DB 도입이 MICE 플랫폼에서 가속화되고 있습니다.",
     content_long: "참가자 매칭, 세션 추천 등에 벡터 검색을 적용한 사례가 증가하며 플랫폼 만족도가 향상됐습니다.",
     implications: "벡터 DB는 단순 검색 개선을 넘어 개인화 경험의 인프라가 됩니다.",
-    image_url: null, original_url: "#", category: "MICE",
-    priority_score: 58, is_published: true, display_order: 10, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "MICE", level: null,
+    priority_score: 58, is_published: true, display_order: 10, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "mice-3",
@@ -132,8 +136,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "컨벤션 현장 데이터를 실시간으로 처리하는 벡터 파이프라인 구축 사례가 주목받고 있습니다.",
     content_long: "부스 혼잡도 예측과 세션 추천을 결합한 통합 플랫폼이 운영 효율을 30% 향상시켰습니다.",
     implications: "데이터 파이프라인 설계는 현장 운영 품질의 선행 지표입니다.",
-    image_url: null, original_url: "#", category: "MICE",
-    priority_score: 56, is_published: true, display_order: 11, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "MICE", level: null,
+    priority_score: 56, is_published: true, display_order: 11, published_at: "2026-04-23T09:00:00.000Z",
   },
   // ── TOURISM ──
   {
@@ -142,8 +146,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "수직 통합 전략이 관광 AI 시장에서 지속 가능한 경쟁 우위를 만들고 있습니다.",
     content_long: "데이터 수집부터 개인화 추천, 예약까지 하나의 플랫폼에서 처리하는 수직 통합 모델이 주목받고 있습니다.",
     implications: "수직 통합은 단기 개발 비용이 높지만 장기적으로 데이터 해자를 구축하는 최선의 방법입니다.",
-    image_url: null, original_url: "#", category: "TOURISM",
-    priority_score: 55, is_published: true, display_order: 12, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "TOURISM", level: null,
+    priority_score: 55, is_published: true, display_order: 12, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "tourism-2",
@@ -151,8 +155,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "AI 분야에서도 수직 통합이 플랫폼 경쟁력의 핵심으로 자리 잡고 있습니다.",
     content_long: "모델 학습부터 서빙, 피드백 루프까지 통합 관리하는 기업이 벤치마크에서 앞서나가고 있습니다.",
     implications: "AI 스택 전체를 통제할 수 있는 기업이 장기 경쟁에서 유리한 위치를 점합니다.",
-    image_url: null, original_url: "#", category: "TOURISM",
-    priority_score: 53, is_published: true, display_order: 13, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "TOURISM", level: null,
+    priority_score: 53, is_published: true, display_order: 13, published_at: "2026-04-23T09:00:00.000Z",
   },
   {
     id: "tourism-3",
@@ -160,8 +164,8 @@ const MOCK_NEWS: NewsItem[] = [
     summary_short: "관광 스타트업들이 수직 통합 전략으로 글로벌 OTA와의 경쟁에서 틈새를 공략하고 있습니다.",
     content_long: "특정 여행 카테고리에서 전체 여정을 소유하는 전략이 높은 리텐션과 마진으로 이어지고 있습니다.",
     implications: "틈새 시장에서의 수직 통합이 대형 플랫폼 대비 차별화된 경쟁력을 만듭니다.",
-    image_url: null, original_url: "#", category: "TOURISM",
-    priority_score: 51, is_published: true, display_order: 14, published_at: new Date().toISOString(),
+    image_url: null, original_url: "#", category: "TOURISM", level: null,
+    priority_score: 51, is_published: true, display_order: 14, published_at: "2026-04-23T09:00:00.000Z",
   },
 ];
 

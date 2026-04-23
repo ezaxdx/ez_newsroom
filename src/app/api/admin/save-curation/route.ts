@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
   for (const item of items) {
     await supabase
       .from("news")
-      .update({ is_published: item.is_published, display_order: item.display_order })
+      .update({ is_published: item.is_published, display_order: item.display_order, level: item.level })
       .eq("id", item.id);
   }
 

@@ -25,10 +25,17 @@ function groupByDate(items: NewsItem[]) {
   return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 }
 
+const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
+  초급: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
+  중급: { bg: "rgba(26,28,29,0.72)", color: "#fff" },
+  고급: { bg: "var(--primary)", color: "#fff" },
+};
+
 export default function CategoryArchive({ category, items }: Props) {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [levelFilter, setLevelFilter] = useState<string>("전체");
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
 
   const filtered = useMemo(() => {
@@ -40,9 +47,10 @@ export default function CategoryArchive({ category, items }: Props) {
       }
       if (dateFrom && day < dateFrom) return false;
       if (dateTo   && day > dateTo)   return false;
+      if (levelFilter !== "전체" && item.level !== levelFilter) return false;
       return true;
     });
-  }, [items, search, dateFrom, dateTo]);
+  }, [items, search, dateFrom, dateTo, levelFilter]);
 
   const grouped = groupByDate(filtered);
 
@@ -98,15 +106,38 @@ export default function CategoryArchive({ category, items }: Props) {
           />
         </div>
 
+        {/* 레벨 필터 */}
+        <div className="flex gap-1 p-1 rounded-lg" style={{ background: "rgba(26,28,29,0.06)" }}>
+          {["전체", "초급", "중급", "고급"].map((lv) => {
+            const isActive = levelFilter === lv;
+            return (
+              <button
+                key={lv}
+                onClick={() => setLevelFilter(lv)}
+                className="px-3 py-1 rounded-md text-[0.7rem] font-semibold tracking-wide transition-all"
+                style={{
+                  background: isActive ? "#ffffff" : "transparent",
+                  color: isActive ? "var(--on-surface)" : "var(--on-surface-variant)",
+                  border: "none",
+                  cursor: "pointer",
+                  boxShadow: isActive ? "0 1px 4px rgba(26,28,29,0.10)" : "none",
+                }}
+              >
+                {lv}
+              </button>
+            );
+          })}
+        </div>
+
         {/* Result count */}
         <span className="text-xs ml-auto" style={{ color: "var(--on-surface-variant)" }}>
           {filtered.length}건
         </span>
 
         {/* Reset */}
-        {(search || dateFrom || dateTo) && (
+        {(search || dateFrom || dateTo || levelFilter !== "전체") && (
           <button
-            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); }}
+            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setLevelFilter("전체"); }}
             className="h-9 px-3 rounded-md text-xs font-medium transition-colors hover:opacity-80"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)", border: "none", cursor: "pointer" }}
           >
@@ -149,14 +180,26 @@ export default function CategoryArchive({ category, items }: Props) {
                     className="flex flex-col cursor-pointer group"
                     onClick={() => handleOpen(item)}
                   >
-                    {/* Thumbnail */}
+                    {/* Thumbnail + level badge */}
                     <div
-                      className="w-full mb-3 rounded overflow-hidden"
+                      className="relative w-full mb-3 rounded overflow-hidden"
                       style={{ aspectRatio: "16/9", background: "var(--surface-container-highest)" }}
                     >
                       {item.image_url && (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={item.image_url} alt="" className="w-full h-full object-cover" />
+                      )}
+                      {item.level && (
+                        <span
+                          className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
+                          style={{
+                            background: LEVEL_STYLE[item.level]?.bg ?? "var(--surface-container-highest)",
+                            color: LEVEL_STYLE[item.level]?.color ?? "var(--on-surface-variant)",
+                            backdropFilter: "blur(6px)",
+                          }}
+                        >
+                          {item.level}
+                        </span>
                       )}
                     </div>
 

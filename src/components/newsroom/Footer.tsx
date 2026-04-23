@@ -1,7 +1,14 @@
 import { Rss, Mail } from "lucide-react";
 
-const NAV_LINKS = ["Daily Digest", "Engineering Logs", "Strategy Board", "Product Roadmap"];
-const SUPPORT_LINKS = ["Editorial Policy", "Source Submission", "Feedback Loop", "Internal Slack"];
+const NAV_LINKS = [
+  { label: "EZ데이터허브", href: "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do" },
+  { label: "EZ人의 AI 도구 완전 정복", href: "https://www.notion.so/EZ-AI-27d90afe6d18804085fcd34edbe0bfb4" },
+];
+const SUPPORT_LINKS = [
+  { label: "ezpmp", href: "https://www.ezpmp.co.kr/EZPMPHOME/99999/index.do" },
+  { label: "Seoul Speakers Bureau", href: "https://www.seoulspeakers.co.kr/" },
+  { label: "GMEG", href: "http://www.gmeg.kr/kor/" },
+];
 
 export default function Footer() {
   return (
@@ -23,9 +30,8 @@ export default function Footer() {
             className="m-0 text-sm leading-relaxed max-w-[28ch]"
             style={{ color: "var(--on-surface-variant)" }}
           >
-            The definitive source of news for the internal engineering
-            and product leadership within the ecosystem. Curated by
-            humans, powered by authority.
+            The essential daily briefing for the AI, MICE, and tourism community.
+            Rapid AI-curated intelligence, condensed for the modern professional.
           </p>
         </div>
 
@@ -38,14 +44,16 @@ export default function Footer() {
             Navigation
           </p>
           <nav className="flex flex-col gap-2.5">
-            {NAV_LINKS.map((label) => (
+            {NAV_LINKS.map((item) => (
               <a
-                key={label}
-                href="#"
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-sm transition-colors hover:text-black"
                 style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
               >
-                {label}
+                {item.label}
               </a>
             ))}
           </nav>
@@ -60,14 +68,16 @@ export default function Footer() {
             Support
           </p>
           <nav className="flex flex-col gap-2.5">
-            {SUPPORT_LINKS.map((label) => (
+            {SUPPORT_LINKS.map((item) => (
               <a
-                key={label}
-                href="#"
+                key={item.label}
+                href={item.href}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="text-sm transition-colors hover:text-black"
                 style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
               >
-                {label}
+                {item.label}
               </a>
             ))}
           </nav>
@@ -83,7 +93,7 @@ export default function Footer() {
           className="m-0 text-[0.68rem] font-medium tracking-[0.06em] uppercase"
           style={{ color: "var(--on-surface-variant)" }}
         >
-          © 2024 The Monolith Newsroom. Internal Access Only.
+          © {new Date().getFullYear()} The Monolith Newsroom. Internal Access Only.
         </p>
         <div className="flex items-center gap-3">
           <a
