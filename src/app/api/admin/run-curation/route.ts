@@ -66,6 +66,18 @@ async function fetchArticleText(url: string): Promise<string> {
   }
 }
 
+/* ── 날짜 문자열 안전 파싱 ── */
+function safeDateISO(raw: string | undefined | null): string {
+  if (!raw) return new Date().toISOString();
+  try {
+    const d = new Date(raw);
+    if (isNaN(d.getTime())) return new Date().toISOString();
+    return d.toISOString();
+  } catch {
+    return new Date().toISOString();
+  }
+}
+
 /* ── OG 이미지 추출 ── */
 async function fetchOgImage(url: string, origin: string): Promise<string | null> {
   try {
@@ -267,7 +279,7 @@ export async function POST(req: Request) {
         is_published: false,
         priority_score: source.weight * 10,
         display_order: 999,
-        published_at: item.pubDate ? new Date(item.pubDate).toISOString() : new Date().toISOString(),
+        published_at: safeDateISO(item.pubDate),
       });
 
       if (error) { results.failed++; } else {
