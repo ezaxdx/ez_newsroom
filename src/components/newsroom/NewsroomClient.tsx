@@ -16,7 +16,7 @@ type Props = {
   carouselInterval?: number;
 };
 
-const LEVELS = ["전체", "초급", "중급", "고급"] as const;
+const LEVELS = ["Total", "Beginner", "Intermediate", "Advanced"] as const;
 type LevelFilter = typeof LEVELS[number];
 
 // 모든 레벨 활성 상태를 동일한 스타일로 통일
@@ -24,7 +24,7 @@ const ACTIVE_STYLE = { bg: "#ffffff", color: "var(--on-surface)" };
 
 export default function NewsroomClient({ heroSlides, categoryGroups, carouselInterval }: Props) {
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
-  const [levelFilter, setLevelFilter] = useState<LevelFilter>("전체");
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("Total");
 
   useEffect(() => {
     logEvent({ event_type: "view" });
@@ -38,10 +38,11 @@ export default function NewsroomClient({ heroSlides, categoryGroups, carouselInt
   // 레벨 필터 적용 (히어로는 필터 제외)
   const filteredGroups = categoryGroups.map((group) => ({
     ...group,
-    items: levelFilter === "전체"
+    items: levelFilter === "Total"
       ? group.items
       : group.items.filter((item) => item.level === levelFilter),
   })).filter((group) => group.items.length > 0);
+
 
   return (
     <>
@@ -83,7 +84,7 @@ export default function NewsroomClient({ heroSlides, categoryGroups, carouselInt
           <FeedBlock key={group.label} label={group.label} items={group.items} onOpen={handleOpen} />
         ))}
 
-        {filteredGroups.length === 0 && levelFilter !== "전체" && (
+        {filteredGroups.length === 0 && levelFilter !== "Total" && (
           <div className="flex items-center justify-center py-20 text-sm"
             style={{ color: "var(--on-surface-variant)" }}>
             {levelFilter} 기사가 없습니다.

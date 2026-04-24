@@ -60,17 +60,17 @@ export default function CurationBoard({ initialNews }: Props) {
   };
 
   /* ── actions ── */
-  const LEVELS = ["초급", "중급", "고급"] as const;
+  const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
   const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
-    초급: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-    중급: { bg: "rgba(26,28,29,0.75)", color: "#fff" },
-    고급: { bg: "var(--primary)", color: "#fff" },
+    Beginner: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
+    Intermediate: { bg: "rgba(26,28,29,0.75)", color: "#fff" },
+    Advanced: { bg: "var(--primary)", color: "#fff" },
   };
 
   const cycleLevel = (id: string) => {
     setItems((prev) => prev.map((item) => {
       if (item.id !== id) return item;
-      const cur = item.level ?? "중급";
+      const cur = item.level ?? "Intermediate";
       const next = LEVELS[(LEVELS.indexOf(cur as typeof LEVELS[number]) + 1) % LEVELS.length];
       return { ...item, level: next };
     }));
@@ -247,13 +247,13 @@ export default function CurationBoard({ initialNews }: Props) {
                   onClick={() => cycleLevel(item.id)}
                   className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase transition-all"
                   style={{
-                    background: LEVEL_STYLE[item.level ?? "중급"]?.bg ?? "var(--surface-container-highest)",
-                    color: LEVEL_STYLE[item.level ?? "중급"]?.color ?? "var(--on-surface-variant)",
+                    background: LEVEL_STYLE[item.level ?? "Intermediate"]?.bg ?? "var(--surface-container-highest)",
+                    color: LEVEL_STYLE[item.level ?? "Intermediate"]?.color ?? "var(--on-surface-variant)",
                     border: "none",
                     cursor: "pointer",
                   }}
                 >
-                  {item.level ?? "중급"}
+                  {item.level ?? "Intermediate"}
                 </button>
                 <span className="text-[0.65rem]" style={{ color: "var(--on-surface-variant)" }}>
                   #{item.display_order}

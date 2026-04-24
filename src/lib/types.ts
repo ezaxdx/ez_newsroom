@@ -7,7 +7,7 @@ export type NewsItem = {
   image_url: string | null;
   original_url: string;
   category: string;
-  level: "초급" | "중급" | "고급" | null;
+  level: "Beginner" | "Intermediate" | "Advanced" | null;
   priority_score: number;
   is_published: boolean;
   display_order: number;

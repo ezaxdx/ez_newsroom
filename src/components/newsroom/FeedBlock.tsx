@@ -9,9 +9,9 @@ type Props = {
 };
 
 const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
-  초급: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-  중급: { bg: "rgba(26,28,29,0.72)", color: "#fff" },
-  고급: { bg: "var(--primary)", color: "#fff" },
+  Beginner: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
+  Intermediate: { bg: "rgba(26,28,29,0.72)", color: "#fff" },
+  Advanced: { bg: "var(--primary)", color: "#fff" },
 };
 
 export default function FeedBlock({ label, items, onOpen }: Props) {

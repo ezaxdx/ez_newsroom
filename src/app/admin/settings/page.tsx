@@ -12,19 +12,19 @@ type CategorySetting = {
   presets: Preset[]; // 카테고리별 커스텀 프리셋
 };
 type SettingsMap = Record<string, CategorySetting>;
-type LevelPrompts = { 초급: string; 중급: string; 고급: string };
+type LevelPrompts = { Beginner: string; Intermediate: string; Advanced: string };
 type CategoryLevelPrompts = Record<string, LevelPrompts>;
 
 const DEFAULT_LEVEL_PROMPTS: LevelPrompts = {
-  초급: "배경지식이 없는 독자도 이해할 수 있도록 쉽게 작성하세요. 전문 용어는 반드시 쉬운 말로 풀어서 설명하고, '이것이 무엇인지'부터 설명한 후 시사점을 제시하세요. 문장은 짧고 명확하게 유지하세요.",
-  중급: "업계 기본 지식을 갖춘 실무 담당자를 대상으로 작성하세요. 전문 용어를 자연스럽게 사용하되, What보다 Why와 How에 집중해 실행 가능한 시사점을 중심으로 분석하세요.",
-  고급: "깊은 전문성을 갖춘 전략가와 의사결정자를 위해 작성하세요. 표면적 사실보다 시장 구조 변화, 2차·3차 파급효과, 경쟁 구도 변화를 중심으로 심층 분석하세요. 전문 용어와 데이터를 적극 활용하세요.",
+  Beginner: "배경지식이 없는 독자도 이해할 수 있도록 쉽게 작성하세요. 전문 용어는 반드시 쉬운 말로 풀어서 설명하고, '이것이 무엇인지'부터 설명한 후 시사점을 제시하세요. 문장은 짧고 명확하게 유지하세요.",
+  Intermediate: "업계 기본 지식을 갖춘 실무 담당자를 대상으로 작성하세요. 전문 용어를 자연스럽게 사용하되, What보다 Why와 How에 집중해 실행 가능한 시사점을 중심으로 분석하세요.",
+  Advanced: "깊은 전문성을 갖춘 전략가와 의사결정자를 위해 작성하세요. 표면적 사실보다 시장 구조 변화, 2차·3차 파급효과, 경쟁 구도 변화를 중심으로 심층 분석하세요. 전문 용어와 데이터를 적극 활용하세요.",
 };
 
 const LEVEL_BADGE: Record<string, { bg: string; color: string }> = {
-  초급: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-  중급: { bg: "rgba(26,28,29,0.75)", color: "#fff" },
-  고급: { bg: "var(--primary)", color: "#fff" },
+  Beginner: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
+  Intermediate: { bg: "rgba(26,28,29,0.75)", color: "#fff" },
+  Advanced: { bg: "var(--primary)", color: "#fff" },
 };
 
 // 기존 하드코딩 프리셋 → 마이그레이션 시 사용
@@ -95,13 +95,13 @@ export default function SettingsPage() {
 
         // 레벨 프롬프트 로드 (구버전 전역 형식 마이그레이션)
         const rawLp = d.levelPrompts ?? {};
-        if (rawLp["초급"] || rawLp["중급"] || rawLp["고급"]) {
+        if (rawLp["초급"] || rawLp["중급"] || rawLp["고급"] || rawLp["Beginner"] || rawLp["Intermediate"] || rawLp["Advanced"]) {
           const migrated: CategoryLevelPrompts = {};
           for (const cat of cats) {
             migrated[cat] = {
-              초급: rawLp["초급"] ?? DEFAULT_LEVEL_PROMPTS["초급"],
-              중급: rawLp["중급"] ?? DEFAULT_LEVEL_PROMPTS["중급"],
-              고급: rawLp["고급"] ?? DEFAULT_LEVEL_PROMPTS["고급"],
+              Beginner: rawLp["Beginner"] ?? rawLp["초급"] ?? DEFAULT_LEVEL_PROMPTS["Beginner"],
+              Intermediate: rawLp["Intermediate"] ?? rawLp["중급"] ?? DEFAULT_LEVEL_PROMPTS["Intermediate"],
+              Advanced: rawLp["Advanced"] ?? rawLp["고급"] ?? DEFAULT_LEVEL_PROMPTS["Advanced"],
             };
           }
           setLevelPrompts(migrated);
@@ -491,7 +491,7 @@ export default function SettingsPage() {
                 </p>
               </div>
               <div className="flex flex-col gap-3">
-                {(["초급", "중급", "고급"] as const).map((lv) => (
+                {(["Beginner", "Intermediate", "Advanced"] as const).map((lv) => (
                   <div key={lv} className="flex flex-col gap-2">
                     <span
                       className="self-start px-2.5 py-0.5 rounded-full text-[0.62rem] font-bold tracking-[0.05em] uppercase"

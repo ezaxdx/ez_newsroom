@@ -26,16 +26,16 @@ function groupByDate(items: NewsItem[]) {
 }
 
 const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
-  초급: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-  중급: { bg: "rgba(26,28,29,0.72)", color: "#fff" },
-  고급: { bg: "var(--primary)", color: "#fff" },
+  Beginner: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
+  Intermediate: { bg: "rgba(26,28,29,0.72)", color: "#fff" },
+  Advanced: { bg: "var(--primary)", color: "#fff" },
 };
 
 export default function CategoryArchive({ category, items }: Props) {
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [levelFilter, setLevelFilter] = useState<string>("전체");
+  const [levelFilter, setLevelFilter] = useState<string>("Total");
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
 
   const filtered = useMemo(() => {
@@ -47,7 +47,7 @@ export default function CategoryArchive({ category, items }: Props) {
       }
       if (dateFrom && day < dateFrom) return false;
       if (dateTo   && day > dateTo)   return false;
-      if (levelFilter !== "전체" && item.level !== levelFilter) return false;
+      if (levelFilter !== "Total" && item.level !== levelFilter) return false;
       return true;
     });
   }, [items, search, dateFrom, dateTo, levelFilter]);
@@ -108,7 +108,7 @@ export default function CategoryArchive({ category, items }: Props) {
 
         {/* 레벨 필터 */}
         <div className="flex gap-1 p-1 rounded-lg" style={{ background: "rgba(26,28,29,0.06)" }}>
-          {["전체", "초급", "중급", "고급"].map((lv) => {
+          {["Total", "Beginner", "Intermediate", "Advanced"].map((lv) => {
             const isActive = levelFilter === lv;
             return (
               <button
@@ -135,9 +135,9 @@ export default function CategoryArchive({ category, items }: Props) {
         </span>
 
         {/* Reset */}
-        {(search || dateFrom || dateTo || levelFilter !== "전체") && (
+        {(search || dateFrom || dateTo || levelFilter !== "Total") && (
           <button
-            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setLevelFilter("전체"); }}
+            onClick={() => { setSearch(""); setDateFrom(""); setDateTo(""); setLevelFilter("Total"); }}
             className="h-9 px-3 rounded-md text-xs font-medium transition-colors hover:opacity-80"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)", border: "none", cursor: "pointer" }}
           >

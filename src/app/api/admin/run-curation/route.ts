@@ -68,14 +68,14 @@ async function generateArticle(
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
   const levelGuide = `
 먼저 아래 기사의 복잡도와 필요한 배경지식 수준을 판단해 레벨을 결정하세요:
-- 초급: 전문 배경지식 없어도 이해 가능한 일반적 내용
-- 중급: 업계 기본 지식 보유자를 위한 실무 관련 내용
-- 고급: 깊은 전문성이 필요한 기술적·전략적 심층 분석
+- Beginner: 전문 배경지식 없어도 이해 가능한 일반적 내용
+- Intermediate: 업계 기본 지식 보유자를 위한 실무 관련 내용
+- Advanced: 깊은 전문성이 필요한 기술적·전략적 심층 분석
 
 레벨별 작성 지침:
-[초급] ${levelPrompts["초급"] ?? "쉽고 명확하게 작성하세요."}
-[중급] ${levelPrompts["중급"] ?? "실무 담당자 관점에서 작성하세요."}
-[고급] ${levelPrompts["고급"] ?? "전략적 심층 분석으로 작성하세요."}
+[Beginner] ${levelPrompts["Beginner"] ?? "쉽고 명확하게 작성하세요."}
+[Intermediate] ${levelPrompts["Intermediate"] ?? "실무 담당자 관점에서 작성하세요."}
+[Advanced] ${levelPrompts["Advanced"] ?? "전략적 심층 분석으로 작성하세요."}
 
 결정한 레벨의 지침에 따라 기사를 작성하고, level 필드에 해당 레벨을 명시하세요.`;
 
@@ -85,7 +85,7 @@ ${levelGuide}
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
 {
-  "level": "초급 또는 중급 또는 고급",
+  "level": "Beginner 또는 Intermediate 또는 Advanced",
   "title": "한국어 제목 (50자 이내)",
   "summary_short": "한국어 요약 (2~3문장, 120자 이내)",
   "content_long": "한국어 상세 분석 (4~6문장)",
@@ -203,7 +203,7 @@ export async function POST(req: Request) {
         summary_short: generated.summary_short,
         content_long: generated.content_long,
         implications: generated.implications,
-        level: generated.level ?? "중급",
+        level: generated.level ?? "Intermediate",
         image_url,
         original_url: item.link,
         category,
