@@ -1,6 +1,28 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+/* ── RSS XML 인코딩 감지 후 텍스트 변환 ── */
+async function fetchRssText(url: string): Promise<string> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
+    signal: AbortSignal.timeout(8000),
+  });
+  const buffer = await res.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+
+  // XML 선언부 또는 Content-Type 헤더에서 인코딩 감지
+  const sniff = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, 200));
+  const encMatch = sniff.match(/encoding=["']([^"']+)["']/i)
+    ?? res.headers.get("content-type")?.match(/charset=([^\s;]+)/i);
+  const encoding = (encMatch?.[1] ?? "utf-8").toLowerCase().replace("-", "");
+
+  const decoder = new TextDecoder(
+    encoding.includes("euckr") || encoding.includes("949") ? "euc-kr" : "utf-8",
+    { fatal: false }
+  );
+  return decoder.decode(buffer);
+}
+
 /* ── RSS XML 파서 ── */
 function extractCDATA(raw: string) {
   return raw.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, "$1").trim();
@@ -206,11 +228,7 @@ export async function POST(req: Request) {
     /* ── RSS 피드 소스 ── */
     let rssItems: { title: string; link: string; pubDate: string }[] = [];
     try {
-      const res = await fetch(source.url, {
-        headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
-        signal: AbortSignal.timeout(8000),
-      });
-      const xml = await res.text();
+      const xml = await fetchRssText(source.url);
       rssItems = parseRSS(xml);
       console.log(`[RSS] ${source.source_name}: ${rssItems.length}개 파싱됨`);
     } catch (e) {
