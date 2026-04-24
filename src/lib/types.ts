@@ -21,6 +21,7 @@ export type RssSource = {
   weight: number;
   default_category: string;
   is_active: boolean;
+  source_type: "rss" | "url";
 };
 
 export type CurationSettings = {

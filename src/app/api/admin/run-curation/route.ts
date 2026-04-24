@@ -161,8 +161,49 @@ export async function POST(req: Request) {
       persona: `당신은 ${category} 전문 에디터입니다. 업계 종사자 관점에서 핵심 시사점을 분석합니다.`,
       keywords: [],
     };
+    const catLevelPrompts = allLevelPrompts[category] ?? {};
 
-    // RSS 피드 파싱
+    /* ── 직접 URL 소스 ── */
+    if (source.source_type === "url") {
+      if (existingUrls.has(source.url)) { results.skipped++; continue; }
+
+      const [articleText, image_url] = await Promise.all([
+        fetchArticleText(source.url),
+        fetchOgImage(source.url, origin),
+      ]);
+
+      console.log(`[URL 생성 시도] ${source.source_name} (텍스트 ${articleText.length}자)`);
+
+      const generated = await generateArticle(
+        apiKey, articleText, source.url,
+        setting.persona, setting.audience, setting.keywords, catLevelPrompts
+      );
+
+      if (!generated) { results.failed++; continue; }
+
+      const { error } = await supabase.from("news").insert({
+        title: generated.title,
+        summary_short: generated.summary_short,
+        content_long: generated.content_long,
+        implications: generated.implications,
+        level: generated.level ?? "Intermediate",
+        image_url,
+        original_url: source.url,
+        category,
+        is_published: false,
+        priority_score: source.weight * 10,
+        display_order: 999,
+        published_at: new Date().toISOString(),
+      });
+
+      if (error) { results.failed++; } else {
+        results.created++;
+        existingUrls.add(source.url);
+      }
+      continue;
+    }
+
+    /* ── RSS 피드 소스 ── */
     let rssItems: { title: string; link: string; pubDate: string }[] = [];
     try {
       const res = await fetch(source.url, {
@@ -189,8 +230,6 @@ export async function POST(req: Request) {
 
       console.log(`[생성 시도] ${item.title.slice(0, 40)}... (텍스트 ${articleText.length}자)`);
 
-      // 해당 카테고리의 레벨 프롬프트 (없으면 빈 객체 → generateArticle 내 기본값 사용)
-      const catLevelPrompts = allLevelPrompts[category] ?? {};
       const generated = await generateArticle(
         apiKey, articleText, item.link,
         setting.persona, setting.audience, setting.keywords, catLevelPrompts
