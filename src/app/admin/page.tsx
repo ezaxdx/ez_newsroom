@@ -2,6 +2,19 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import CurationBoard from "@/components/admin/CurationBoard";
 
+/** 스케줄된 요일 배열로 최대 노출 기간(일) 계산 */
+function calcDisplayWindow(days: number[]): number {
+  if (!days || days.length <= 1) return 7;
+  const sorted = [...days].sort((a, b) => a - b);
+  let maxGap = 0;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    maxGap = Math.max(maxGap, sorted[i + 1] - sorted[i]);
+  }
+  // wrap-around: 마지막 요일 → 다음 주 첫 요일
+  maxGap = Math.max(maxGap, sorted[0] + 7 - sorted[sorted.length - 1]);
+  return maxGap;
+}
+
 
 const MOCK: NewsItem[] = [
   {
@@ -61,10 +74,33 @@ async function fetchAllNews(): Promise<NewsItem[]> {
   } catch { return MOCK; }
 }
 
-
+async function fetchSettings(): Promise<{
+  qualityThresholds: { auto_publish: number; staging: number };
+  displayWindowDays: number;
+}> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL)
+    return { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4 };
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("curation_settings")
+      .select("quality_thresholds, auto_schedule")
+      .limit(1)
+      .single();
+    const qualityThresholds = data?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
+    const schedule = data?.auto_schedule ?? { enabled: false, days: [] };
+    const displayWindowDays = schedule.enabled && schedule.days?.length > 1
+      ? calcDisplayWindow(schedule.days)
+      : 4;
+    return { qualityThresholds, displayWindowDays };
+  } catch { return { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4 }; }
+}
 
 export default async function AdminPage() {
-  const news = await fetchAllNews();
+  const [news, { qualityThresholds, displayWindowDays }] = await Promise.all([
+    fetchAllNews(),
+    fetchSettings(),
+  ]);
 
   return (
     <div className="p-8 max-w-4xl">
@@ -89,7 +125,7 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      <CurationBoard initialNews={news} />
+      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} />
     </div>
   );
 }

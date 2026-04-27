@@ -12,6 +12,16 @@ export type NewsItem = {
   is_published: boolean;
   display_order: number;
   published_at: string;
+  quality_score: number | null;
+  created_at?: string;
+};
+
+export type ApiConfig = {
+  endpoint: string;          // e.g. "/areaTouDivList"
+  service_key_env: string;   // env var name, e.g. "TOURAPI_SERVICE_KEY"
+  params: Record<string, string>; // extra params; use "auto" for baseYm to auto-compute
+  data_path: string;         // dot-notation path to items array, e.g. "response.body.items.item"
+  context_hint: string;      // human-readable description for Gemini context
 };
 
 export type RssSource = {
@@ -21,7 +31,8 @@ export type RssSource = {
   weight: number;
   default_category: string;
   is_active: boolean;
-  source_type: "rss" | "url";
+  source_type: "rss" | "url" | "api";
+  api_config?: ApiConfig | null;
 };
 
 export type CurationSettings = {

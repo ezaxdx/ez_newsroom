@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, X, Sparkles, Save, Loader2, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { Plus, X, Sparkles, Save, Loader2, ChevronLeft, ChevronRight, Check, ToggleLeft, ToggleRight } from "lucide-react";
 
 type Preset = { label: string; prompt: string };
 
@@ -52,6 +52,17 @@ function makeDefault(cat: string): CategorySetting {
   };
 }
 
+function calcScheduleWindow(days: number[]): number {
+  if (!days || days.length <= 1) return 7;
+  const sorted = [...days].sort((a, b) => a - b);
+  let maxGap = 0;
+  for (let i = 0; i < sorted.length - 1; i++) {
+    maxGap = Math.max(maxGap, sorted[i + 1] - sorted[i]);
+  }
+  maxGap = Math.max(maxGap, sorted[0] + 7 - sorted[sorted.length - 1]);
+  return maxGap;
+}
+
 export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -62,6 +73,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingsMap>({});
   const [levelPrompts, setLevelPrompts] = useState<CategoryLevelPrompts>({});
   const [activeTab, setActiveTab] = useState("AI");
+  const [autoSchedule, setAutoSchedule] = useState<{ enabled: boolean; days: number[]; hour: number }>({ enabled: false, days: [], hour: 9 });
+  const [qualityThresholds, setQualityThresholds] = useState({ auto_publish: 8, staging: 5 });
 
   const [newCat, setNewCat] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
@@ -80,6 +93,8 @@ export default function SettingsPage() {
         setNavCategories(cats);
         setCarouselSec(d.carouselSec ?? 5);
         setActiveTab(cats[0] ?? "AI");
+        setAutoSchedule(d.autoSchedule ?? { enabled: false, days: [], hour: 9 });
+        setQualityThresholds(d.qualityThresholds ?? { auto_publish: 8, staging: 5 });
 
         const savedSettings: SettingsMap = d.categorySettings ?? {};
         const merged: SettingsMap = {};
@@ -181,7 +196,7 @@ export default function SettingsPage() {
       await fetch("/api/admin/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories: navCategories, carouselSec, categorySettings: settings, levelPrompts }),
+        body: JSON.stringify({ categories: navCategories, carouselSec, categorySettings: settings, levelPrompts, autoSchedule, qualityThresholds }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -279,6 +294,133 @@ export default function SettingsPage() {
             />
             <span>초</span>
           </label>
+        </div>
+      </div>
+
+      {/* ── 자동 큐레이션 스케줄 ── */}
+      <div className="p-5 rounded-lg mb-8 flex flex-col gap-4" style={{ background: "var(--surface-container-lowest)" }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0 mb-0.5" style={{ color: "var(--on-surface-variant)" }}>
+              자동 큐레이션 스케줄
+            </p>
+            <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>
+              {autoSchedule.enabled
+                ? `자동 큐레이션 실행 중 · 메인 노출 기간 ${calcScheduleWindow(autoSchedule.days)}일`
+                : "설정한 요일·시각에 자동으로 AI 큐레이션이 실행됩니다"}
+            </p>
+          </div>
+          {/* ON/OFF 토글 */}
+          <button
+            onClick={() => setAutoSchedule((s) => ({ ...s, enabled: !s.enabled }))}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
+            style={{
+              background: autoSchedule.enabled ? "rgba(26,28,29,0.08)" : "transparent",
+              border: "none",
+              cursor: "pointer",
+              color: autoSchedule.enabled ? "var(--on-surface)" : "var(--on-surface-variant)",
+            }}
+          >
+            {autoSchedule.enabled
+              ? <ToggleRight size={22} style={{ color: "var(--primary)" }} />
+              : <ToggleLeft size={22} style={{ color: "var(--on-surface-variant)" }} />}
+            {autoSchedule.enabled ? "ON" : "OFF"}
+          </button>
+        </div>
+
+        {autoSchedule.enabled && (
+          <div className="flex flex-col gap-3">
+            {/* 요일 선택 */}
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                실행 요일
+              </label>
+              <div className="flex gap-2">
+                {[{ label: "일", val: 0 }, { label: "월", val: 1 }, { label: "화", val: 2 }, { label: "수", val: 3 }, { label: "목", val: 4 }, { label: "금", val: 5 }, { label: "토", val: 6 }].map(({ label, val }) => {
+                  const isOn = autoSchedule.days.includes(val);
+                  return (
+                    <button
+                      key={val}
+                      onClick={() => setAutoSchedule((s) => ({
+                        ...s,
+                        days: isOn ? s.days.filter((d) => d !== val) : [...s.days, val].sort(),
+                      }))}
+                      className="w-9 h-9 rounded-full text-xs font-bold transition-all"
+                      style={{
+                        background: isOn ? "var(--primary)" : "var(--surface-container-highest)",
+                        color: isOn ? "#fff" : "var(--on-surface-variant)",
+                        border: "none", cursor: "pointer",
+                      }}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* 시각 선택 */}
+            <div className="flex items-center gap-2">
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                실행 시각 (KST)
+              </label>
+              <select
+                value={autoSchedule.hour}
+                onChange={(e) => setAutoSchedule((s) => ({ ...s, hour: Number(e.target.value) }))}
+                className="h-8 px-3 rounded-md text-sm outline-none"
+                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={i}>{String(i).padStart(2, "0")}:00</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ── 자동 발행 퀄리티 기준 ── */}
+      <div className="p-5 rounded-lg mb-8 flex flex-col gap-4" style={{ background: "var(--surface-container-lowest)" }}>
+        <div>
+          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0 mb-0.5" style={{ color: "var(--on-surface-variant)" }}>
+            자동 발행 퀄리티 기준
+          </p>
+          <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>
+            AI가 생성한 기사의 퀄리티 점수(1~10)에 따라 자동 처리됩니다
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          {/* 자동 발행 */}
+          <div className="p-3 rounded-lg text-center" style={{ background: "rgba(26,28,29,0.08)" }}>
+            <p className="text-[0.65rem] font-semibold uppercase m-0 mb-1" style={{ color: "var(--on-surface-variant)" }}>자동 발행</p>
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-lg font-bold" style={{ color: "var(--on-surface)" }}>{qualityThresholds.auto_publish}</span>
+              <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>점 이상</span>
+            </div>
+            <input type="range" min={6} max={10} value={qualityThresholds.auto_publish}
+              onChange={(e) => setQualityThresholds((t) => ({ ...t, auto_publish: Math.max(Number(e.target.value), t.staging + 1) }))}
+              className="w-full mt-2" />
+          </div>
+          {/* 대기열 */}
+          <div className="p-3 rounded-lg text-center" style={{ background: "rgba(26,28,29,0.08)" }}>
+            <p className="text-[0.65rem] font-semibold uppercase m-0 mb-1" style={{ color: "var(--on-surface-variant)" }}>대기열</p>
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-lg font-bold" style={{ color: "var(--on-surface)" }}>{qualityThresholds.staging}~{qualityThresholds.auto_publish - 1}</span>
+              <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>점</span>
+            </div>
+            <input type="range" min={3} max={8} value={qualityThresholds.staging}
+              onChange={(e) => setQualityThresholds((t) => ({ ...t, staging: Math.min(Number(e.target.value), t.auto_publish - 1) }))}
+              className="w-full mt-2" />
+          </div>
+          {/* 자동 삭제 */}
+          <div className="p-3 rounded-lg text-center" style={{ background: "rgba(26,28,29,0.08)" }}>
+            <p className="text-[0.65rem] font-semibold uppercase m-0 mb-1" style={{ color: "var(--on-surface-variant)" }}>자동 삭제</p>
+            <div className="flex items-center justify-center gap-1">
+              <span className="text-lg font-bold" style={{ color: "var(--on-surface)" }}>{qualityThresholds.staging - 1}</span>
+              <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>점 이하</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -438,7 +580,7 @@ export default function SettingsPage() {
               <div className="flex flex-wrap gap-2">
                 {current.keywords.map((kw, idx) => (
                   <span key={kw}
-                    className="flex items-center gap-0.5 pl-2 pr-1.5 py-1 rounded-full text-sm font-medium"
+                    className="flex items-center gap-0.5 pl-2 pr-1.5 py-0.5 rounded-full text-xs font-medium"
                     style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}
                   >
                     <button onClick={() => moveKeyword(idx, -1)} disabled={idx === 0}

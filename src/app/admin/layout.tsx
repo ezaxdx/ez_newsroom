@@ -1,5 +1,8 @@
+"use client";
+
 import Link from "next/link";
-import { LayoutDashboard, Rss, Settings, BarChart2, ArrowLeft, PenLine } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { LayoutDashboard, Rss, Settings, BarChart2, ArrowLeft, PenLine, LogOut } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "큐레이션 보드", icon: LayoutDashboard },
@@ -10,6 +13,13 @@ const NAV = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
+
+  const handleLogout = async () => {
+    await fetch("/api/admin/auth", { method: "DELETE" });
+    router.push("/");
+    router.refresh();
+  };
   return (
     <div
       className="min-h-screen flex"
@@ -44,8 +54,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </Link>
         ))}
 
-        {/* Back to newsroom */}
-        <div className="mt-2 pt-3" style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+        {/* Back to newsroom + Logout */}
+        <div className="mt-auto pt-3 flex flex-col gap-1" style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
           <Link
             href="/"
             className="flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors hover:bg-[--surface-container-high] rounded-md"
@@ -54,6 +64,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <ArrowLeft size={13} />
             뉴스룸으로 돌아가기
           </Link>
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-3 py-2 text-xs font-medium transition-colors hover:bg-[--surface-container-high] rounded-md w-full"
+            style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--on-surface-variant)", textAlign: "left" }}
+          >
+            <LogOut size={13} />
+            로그아웃
+          </button>
         </div>
       </aside>
 

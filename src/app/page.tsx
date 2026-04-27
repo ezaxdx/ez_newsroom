@@ -206,10 +206,14 @@ async function fetchNews(): Promise<NewsItem[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return MOCK_NEWS;
   try {
     const supabase = createAdminClient(); // service role → RLS 우회, 서버 전용
+    const fourDaysAgo = new Date();
+    fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
+
     const { data, error } = await supabase
       .from("news")
       .select("*")
       .eq("is_published", true)
+      .gte("published_at", fourDaysAgo.toISOString())
       .order("display_order", { ascending: true });
     if (error) {
       console.error("[fetchNews] Supabase error:", error);

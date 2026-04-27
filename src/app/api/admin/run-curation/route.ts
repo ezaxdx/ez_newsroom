@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { ApiConfig } from "@/lib/types";
 
 /* ── RSS XML 인코딩 감지 후 텍스트 변환 ── */
 async function fetchRssText(url: string): Promise<string> {
@@ -78,6 +79,83 @@ function safeDateISO(raw: string | undefined | null): string {
   }
 }
 
+/* ── 공공 API 데이터 fetch & 텍스트 변환 ── */
+function getNestedValue(obj: unknown, path: string): unknown {
+  return path.split(".").reduce((acc, key) => {
+    if (acc && typeof acc === "object" && !Array.isArray(acc)) {
+      return (acc as Record<string, unknown>)[key];
+    }
+    return undefined;
+  }, obj);
+}
+
+function autoBaseYm(): string {
+  const d = new Date();
+  d.setMonth(d.getMonth() - 1); // 전월
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}${m}`;
+}
+
+async function fetchApiData(
+  baseUrl: string,
+  config: ApiConfig
+): Promise<{ text: string; articleUrl: string } | null> {
+  try {
+    const serviceKey = process.env[config.service_key_env];
+    if (!serviceKey) {
+      console.error(`[API] 환경변수 없음: ${config.service_key_env}`);
+      return null;
+    }
+
+    const params = new URLSearchParams();
+    params.set("serviceKey", serviceKey);
+    for (const [k, v] of Object.entries(config.params)) {
+      params.set(k, v === "auto" && k === "baseYm" ? autoBaseYm() : v);
+    }
+
+    const fullUrl = `${baseUrl}${config.endpoint}?${params.toString()}`;
+    console.log(`[API 요청] ${baseUrl}${config.endpoint}`);
+
+    const res = await fetch(fullUrl, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.error(`[API 오류] ${res.status} ${res.statusText}`);
+      return null;
+    }
+
+    const json = await res.json();
+    const items = getNestedValue(json, config.data_path);
+    const arr = Array.isArray(items) ? items : items ? [items] : [];
+
+    if (!arr.length) {
+      console.warn(`[API] 데이터 없음 (경로: ${config.data_path})`);
+      return null;
+    }
+
+    // 데이터를 가독성 있는 텍스트로 변환
+    const baseYm = config.params["baseYm"] === "auto" ? autoBaseYm() : (config.params["baseYm"] ?? "");
+    const header = `[${config.context_hint}] 기준연월: ${baseYm}\n\n`;
+    const rows = arr.slice(0, 20).map((item, i) => {
+      if (typeof item !== "object" || !item) return "";
+      const fields = Object.entries(item as Record<string, unknown>)
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(" | ");
+      return `${i + 1}. ${fields}`;
+    }).join("\n");
+
+    return {
+      text: (header + rows).slice(0, 6000),
+      articleUrl: `${baseUrl}${config.endpoint}`,
+    };
+  } catch (e) {
+    console.error("[API fetch 실패]", e);
+    return null;
+  }
+}
+
 /* ── OG 이미지 추출 ── */
 async function fetchOgImage(url: string, origin: string): Promise<string | null> {
   try {
@@ -98,9 +176,16 @@ async function generateArticle(
   audience: string,
   keywords: string[],
   levelPrompts: Record<string, string>
-): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string } | null> {
+): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
   const levelGuide = `
+퀄리티 점수 기준 (1~10):
+- 9~10: 업계 핵심 인사이트, 구체적 수치/사례 풍부, 즉시 실행 가능한 시사점
+- 7~8: 관련성 높고 실용적, 부분적으로 구체적
+- 5~6: 일반적 내용, 시사점이 다소 추상적
+- 3~4: 관련성 낮거나 원문 접근 불가로 내용 빈약
+- 1~2: 카테고리와 무관하거나 정보 없음
+
 먼저 아래 기사의 복잡도와 필요한 배경지식 수준을 판단해 레벨을 결정하세요:
 - Beginner: 전문 배경지식 없어도 이해 가능한 일반적 내용
 - Intermediate: 업계 기본 지식 보유자를 위한 실무 관련 내용
@@ -119,6 +204,7 @@ ${levelGuide}
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
 {
+  "quality_score": 퀄리티 점수 1~10 (기사 관련성·구체성·시사점 실용성·원문 충실도 종합),
   "level": "Beginner 또는 Intermediate 또는 Advanced",
   "title": "한국어 제목 (50자 이내)",
   "summary_short": "한국어 요약 (2~3문장, 120자 이내)",
@@ -173,13 +259,18 @@ export async function POST(req: Request) {
   // 2. 카테고리별 큐레이션 설정 + 레벨 프롬프트 조회
   const { data: settings } = await supabase
     .from("curation_settings")
-    .select("category_settings, level_prompts")
+    .select("category_settings, level_prompts, quality_thresholds")
     .limit(1)
     .single();
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> =
     settings?.category_settings ?? {};
   // 카테고리별 레벨 프롬프트: { AI: {초급:..., 중급:..., 고급:...}, MICE: {...} }
   const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
+  const qualityThresholds: { auto_publish: number; staging: number } =
+    settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
+
+  // 2-1. 이전 대기열 기사 삭제 (is_published=false인 기사)
+  await supabase.from("news").delete().eq("is_published", false);
 
   // 3. 기존 기사 URL 목록 (중복 방지)
   const { data: existingNews } = await supabase.from("news").select("original_url");
@@ -215,6 +306,18 @@ export async function POST(req: Request) {
 
       if (!generated) { results.failed++; continue; }
 
+      const score = generated.quality_score ?? 5;
+
+      // 퀄리티 미달 → 삽입 안 함
+      if (score < qualityThresholds.staging) {
+        console.log(`[퀄리티 미달 스킵] score=${score}`);
+        results.skipped++;
+        existingUrls.add(source.url);
+        continue;
+      }
+
+      const shouldAutoPublish = score >= qualityThresholds.auto_publish;
+
       const { error } = await supabase.from("news").insert({
         title: generated.title,
         summary_short: generated.summary_short,
@@ -224,15 +327,72 @@ export async function POST(req: Request) {
         image_url,
         original_url: source.url,
         category,
-        is_published: false,
+        quality_score: score,
+        is_published: shouldAutoPublish,
         priority_score: source.weight * 10,
-        display_order: 999,
-        published_at: new Date().toISOString(),
+        display_order: 1000 - score * 10,
+        published_at: shouldAutoPublish ? new Date().toISOString() : new Date().toISOString(),
       });
 
       if (error) { results.failed++; } else {
         results.created++;
         existingUrls.add(source.url);
+      }
+      continue;
+    }
+
+    /* ── 공공 API 소스 ── */
+    if (source.source_type === "api") {
+      const cfg = source.api_config;
+      if (!cfg?.endpoint) { results.skipped++; continue; }
+
+      const apiResult = await fetchApiData(source.url, cfg);
+      if (!apiResult) { results.failed++; continue; }
+
+      const { text: articleText, articleUrl } = apiResult;
+
+      // API 소스는 기준연월 기반으로 중복 체크 (같은 URL은 한 번만)
+      if (existingUrls.has(articleUrl)) { results.skipped++; continue; }
+
+      console.log(`[API 생성 시도] ${source.source_name} (텍스트 ${articleText.length}자)`);
+
+      const generated = await generateArticle(
+        apiKey, articleText, articleUrl,
+        setting.persona, setting.audience, setting.keywords, catLevelPrompts
+      );
+
+      if (!generated) { results.failed++; continue; }
+
+      const score = generated.quality_score ?? 5;
+
+      if (score < qualityThresholds.staging) {
+        console.log(`[퀄리티 미달 스킵] score=${score}`);
+        results.skipped++;
+        existingUrls.add(articleUrl);
+        continue;
+      }
+
+      const shouldAutoPublish = score >= qualityThresholds.auto_publish;
+
+      const { error } = await supabase.from("news").insert({
+        title: generated.title,
+        summary_short: generated.summary_short,
+        content_long: generated.content_long,
+        implications: generated.implications,
+        level: generated.level ?? "Intermediate",
+        image_url: null,
+        original_url: articleUrl,
+        category,
+        quality_score: score,
+        is_published: shouldAutoPublish,
+        priority_score: source.weight * 10,
+        display_order: 1000 - score * 10,
+        published_at: new Date().toISOString(),
+      });
+
+      if (error) { results.failed++; } else {
+        results.created++;
+        existingUrls.add(articleUrl);
       }
       continue;
     }
@@ -267,6 +427,18 @@ export async function POST(req: Request) {
 
       if (!generated) { results.failed++; continue; }
 
+      const score = generated.quality_score ?? 5;
+
+      // 퀄리티 미달 → 삽입 안 함
+      if (score < qualityThresholds.staging) {
+        console.log(`[퀄리티 미달 스킵] score=${score}`);
+        results.skipped++;
+        existingUrls.add(item.link);
+        continue;
+      }
+
+      const shouldAutoPublish = score >= qualityThresholds.auto_publish;
+
       const { error } = await supabase.from("news").insert({
         title: generated.title,
         summary_short: generated.summary_short,
@@ -276,10 +448,11 @@ export async function POST(req: Request) {
         image_url,
         original_url: item.link,
         category,
-        is_published: false,
+        quality_score: score,
+        is_published: shouldAutoPublish,
         priority_score: source.weight * 10,
-        display_order: 999,
-        published_at: safeDateISO(item.pubDate),
+        display_order: 1000 - score * 10,
+        published_at: shouldAutoPublish ? new Date().toISOString() : safeDateISO(item.pubDate),
       });
 
       if (error) { results.failed++; } else {

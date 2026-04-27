@@ -1,15 +1,24 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link } from "lucide-react";
-import { RssSource } from "@/lib/types";
+import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database } from "lucide-react";
+import { RssSource, ApiConfig } from "@/lib/types";
+
+const EMPTY_API_CONFIG: ApiConfig = {
+  endpoint: "",
+  service_key_env: "TOURAPI_SERVICE_KEY",
+  params: { numOfRows: "10", pageNo: "1", MobileOS: "ETC", MobileApp: "MonolithBot", baseYm: "auto", _type: "json" },
+  data_path: "response.body.items.item",
+  context_hint: "",
+};
 
 const EMPTY_FORM = {
   url: "",
   source_name: "",
   weight: 3,
   default_category: "AI",
-  source_type: "rss" as "rss" | "url",
+  source_type: "rss" as "rss" | "url" | "api",
+  api_config: EMPTY_API_CONFIG,
 };
 
 const TYPE_META = {
@@ -28,6 +37,14 @@ const TYPE_META = {
     color: "#fff",
     placeholder: "https://example.com/article",
     hint: "개별 기사 URL. 큐레이션 실행 시 해당 페이지를 직접 분석해 기사 1건을 생성합니다.",
+  },
+  api: {
+    label: "공공 API",
+    icon: Database,
+    bg: "#0891b2",
+    color: "#fff",
+    placeholder: "https://apis.data.go.kr/B551011/AreaTarDivService",
+    hint: "JSON REST API. 응답 데이터를 분석해 기사를 생성합니다. (한국관광공사 등 공공데이터 API 지원)",
   },
 };
 
@@ -96,6 +113,7 @@ export default function RssPage() {
   // 유형별 소스 분리
   const rssSources = sources.filter((s) => (s.source_type ?? "rss") === "rss");
   const urlSources = sources.filter((s) => s.source_type === "url");
+  const apiSources = sources.filter((s) => s.source_type === "api");
 
   const meta = TYPE_META[form.source_type];
 
@@ -131,14 +149,14 @@ export default function RssPage() {
               소스 유형
             </label>
             <div className="flex gap-2">
-              {(["rss", "url"] as const).map((type) => {
+              {(["rss", "url", "api"] as const).map((type) => {
                 const m = TYPE_META[type];
                 const Icon = m.icon;
                 const isSelected = form.source_type === type;
                 return (
                   <button
                     key={type}
-                    onClick={() => setForm((f) => ({ ...f, source_type: type, url: "" }))}
+                    onClick={() => setForm((f) => ({ ...f, source_type: type, url: "", api_config: EMPTY_API_CONFIG }))}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
                     style={{
                       background: isSelected ? "var(--primary)" : "var(--surface-container-low)",
@@ -162,7 +180,7 @@ export default function RssPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
-                {form.source_type === "rss" ? "RSS URL" : "기사 URL"}
+                {form.source_type === "rss" ? "RSS URL" : form.source_type === "api" ? "API Base URL" : "기사 URL"}
               </label>
               <input
                 value={form.url}
@@ -209,10 +227,94 @@ export default function RssPage() {
             </div>
           </div>
 
+          {/* API 전용 추가 설정 */}
+          {form.source_type === "api" && (
+            <div className="flex flex-col gap-3 p-4 rounded-lg" style={{ background: "var(--surface-container-low)" }}>
+              <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "#0891b2" }}>
+                API 설정
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    엔드포인트 (Endpoint)
+                  </label>
+                  <input
+                    value={form.api_config.endpoint}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, endpoint: e.target.value } }))}
+                    placeholder="/areaTouDivList"
+                    className="h-8 px-3 rounded-md text-sm outline-none"
+                    style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    서비스키 환경변수명
+                  </label>
+                  <input
+                    value={form.api_config.service_key_env}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, service_key_env: e.target.value } }))}
+                    placeholder="TOURAPI_SERVICE_KEY"
+                    className="h-8 px-3 rounded-md text-sm outline-none"
+                    style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    응답 데이터 경로
+                  </label>
+                  <input
+                    value={form.api_config.data_path}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, data_path: e.target.value } }))}
+                    placeholder="response.body.items.item"
+                    className="h-8 px-3 rounded-md text-sm outline-none"
+                    style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    기사 맥락 설명
+                  </label>
+                  <input
+                    value={form.api_config.context_hint}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, context_hint: e.target.value } }))}
+                    placeholder="지역별 관광객 연령대 다양성 데이터"
+                    className="h-8 px-3 rounded-md text-sm outline-none"
+                    style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                  />
+                </div>
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                  추가 파라미터 (JSON) — baseYm: "auto" 입력 시 전월 자동 적용
+                </label>
+                <textarea
+                  rows={3}
+                  value={JSON.stringify(form.api_config.params, null, 2)}
+                  onChange={(e) => {
+                    try { setForm((f) => ({ ...f, api_config: { ...f.api_config, params: JSON.parse(e.target.value) } })); }
+                    catch { /* invalid JSON, ignore */ }
+                  }}
+                  className="px-3 py-2 rounded-md text-xs outline-none font-mono"
+                  style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)", resize: "vertical" }}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="flex gap-2 pt-1">
             <button
               onClick={addSource}
-              disabled={saving || !form.url || !form.source_name}
+              disabled={saving || !form.url || !form.source_name || (form.source_type === "api" && !form.api_config.endpoint)}
               className="flex items-center gap-2 h-8 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
             >
@@ -277,6 +379,24 @@ export default function RssPage() {
               </div>
             </section>
           )}
+
+          {/* 공공 API 섹션 */}
+          {apiSources.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Database size={13} style={{ color: "#0891b2" }} />
+                <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
+                  style={{ color: "#0891b2" }}>
+                  공공 API <span className="ml-1 opacity-60">({apiSources.length})</span>
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {apiSources.map((source) => (
+                  <SourceCard key={source.id} source={source} onToggle={toggleActive} onRemove={remove} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -293,7 +413,7 @@ function SourceCard({
   onToggle: (s: RssSource) => void;
   onRemove: (id: string) => void;
 }) {
-  const type = source.source_type ?? "rss";
+  const type = (source.source_type ?? "rss") as "rss" | "url" | "api";
   const Icon = TYPE_META[type].icon;
 
   return (
@@ -305,10 +425,10 @@ function SourceCard({
       <div
         className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
         style={{
-          background: type === "url" ? "var(--primary)" : "var(--surface-container-highest)",
+          background: type === "url" ? "var(--primary)" : type === "api" ? "#0891b2" : "var(--surface-container-highest)",
         }}
       >
-        <Icon size={13} style={{ color: type === "url" ? "#fff" : "var(--on-surface-variant)" }} />
+        <Icon size={13} style={{ color: type !== "rss" ? "#fff" : "var(--on-surface-variant)" }} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -327,8 +447,13 @@ function SourceCard({
           style={{ color: "var(--on-surface-variant)", textDecoration: "none", maxWidth: "38ch" }}
           title={source.url}
         >
-          {source.url}
+          {source.url}{source.api_config?.endpoint ?? ""}
         </a>
+        {type === "api" && source.api_config?.context_hint && (
+          <p className="text-[0.65rem] m-0 mt-0.5 truncate" style={{ color: "#0891b2", maxWidth: "38ch" }}>
+            {source.api_config.context_hint}
+          </p>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
