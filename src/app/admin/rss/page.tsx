@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database } from "lucide-react";
+import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Pencil, Check, X as XIcon } from "lucide-react";
 import { RssSource, ApiConfig } from "@/lib/types";
 
 const EMPTY_API_CONFIG: ApiConfig = {
@@ -386,7 +386,7 @@ export default function RssPage() {
               </div>
               <div className="flex flex-col gap-2">
                 {rssSources.map((source) => (
-                  <SourceCard key={source.id} source={source} onToggle={toggleActive} onRemove={remove} />
+                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
                 ))}
               </div>
             </section>
@@ -404,7 +404,7 @@ export default function RssPage() {
               </div>
               <div className="flex flex-col gap-2">
                 {urlSources.map((source) => (
-                  <SourceCard key={source.id} source={source} onToggle={toggleActive} onRemove={remove} />
+                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
                 ))}
               </div>
             </section>
@@ -422,7 +422,7 @@ export default function RssPage() {
               </div>
               <div className="flex flex-col gap-2">
                 {apiSources.map((source) => (
-                  <SourceCard key={source.id} source={source} onToggle={toggleActive} onRemove={remove} />
+                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
                 ))}
               </div>
             </section>
@@ -436,15 +436,29 @@ export default function RssPage() {
 /* ── 소스 카드 컴포넌트 ── */
 function SourceCard({
   source,
+  categories,
   onToggle,
   onRemove,
+  onUpdate,
 }: {
   source: RssSource;
+  categories: string[];
   onToggle: (s: RssSource) => void;
   onRemove: (id: string) => void;
+  onUpdate: (s: RssSource) => void;
 }) {
   const type = (source.source_type ?? "rss") as "rss" | "url" | "api";
   const Icon = TYPE_META[type].icon;
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    source_name: source.source_name,
+    url: source.url,
+    default_category: source.default_category,
+    weight: source.weight,
+  });
+
+  // 가중치 단독 편집 제거 (전체 편집으로 통합)
   const [editingWeight, setEditingWeight] = useState(false);
   const [weight, setWeight] = useState(source.weight);
   const [savingWeight, setSavingWeight] = useState(false);
@@ -459,14 +473,98 @@ function SourceCard({
     });
     setSavingWeight(false);
     setEditingWeight(false);
-    source.weight = weight;
+    onUpdate({ ...source, weight });
+  };
+
+  const saveEdit = async () => {
+    setSaving(true);
+    await fetch("/api/admin/rss", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: source.id, ...editForm }),
+    });
+    setSaving(false);
+    setEditing(false);
+    setWeight(editForm.weight);
+    onUpdate({ ...source, ...editForm });
   };
 
   return (
     <div
-      className="flex items-center gap-4 p-4 rounded-lg transition-opacity"
+      className="rounded-lg transition-opacity"
       style={{ background: "var(--surface-container-lowest)", opacity: source.is_active ? 1 : 0.5 }}
     >
+      {/* ── 편집 폼 ── */}
+      {editing && (
+        <div className="p-4 flex flex-col gap-3" style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1">
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>소스명</label>
+              <input
+                value={editForm.source_name}
+                onChange={(e) => setEditForm((f) => ({ ...f, source_name: e.target.value }))}
+                className="h-8 px-3 rounded-md text-sm outline-none"
+                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>URL</label>
+              <input
+                value={editForm.url}
+                onChange={(e) => setEditForm((f) => ({ ...f, url: e.target.value }))}
+                className="h-8 px-3 rounded-md text-sm outline-none"
+                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>카테고리</label>
+              <select
+                value={editForm.default_category}
+                onChange={(e) => setEditForm((f) => ({ ...f, default_category: e.target.value }))}
+                className="h-8 px-3 rounded-md text-sm outline-none"
+                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+              >
+                {categories.map((c) => <option key={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                가중치 ({editForm.weight})
+              </label>
+              <input
+                type="range" min={1} max={10} value={editForm.weight}
+                onChange={(e) => setEditForm((f) => ({ ...f, weight: Number(e.target.value) }))}
+                className="mt-2"
+              />
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={saveEdit}
+              disabled={saving}
+              className="flex items-center gap-1.5 h-8 px-4 rounded-md text-sm font-semibold"
+              style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+            >
+              {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+              저장
+            </button>
+            <button
+              onClick={() => { setEditing(false); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight }); }}
+              className="h-8 px-4 rounded-md text-sm font-medium"
+              style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}
+            >
+              취소
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 카드 기본 뷰 ── */}
+      <div className="flex items-center gap-4 p-4">
       {/* 유형 아이콘 */}
       <div
         className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
@@ -479,21 +577,21 @@ function SourceCard({
 
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-0.5">
-          <p className="font-semibold text-sm m-0">{source.source_name}</p>
+          <p className="font-semibold text-sm m-0">{editForm.source_name}</p>
           <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
-            {source.default_category}
+            {editForm.default_category}
           </span>
         </div>
         <a
-          href={source.url}
+          href={editForm.url}
           target="_blank"
           rel="noopener noreferrer"
           className="text-xs truncate block transition-opacity hover:opacity-60"
           style={{ color: "var(--on-surface-variant)", textDecoration: "none", maxWidth: "38ch" }}
-          title={source.url}
+          title={editForm.url}
         >
-          {source.url}{source.api_config?.endpoint ?? ""}
+          {editForm.url}{source.api_config?.endpoint ?? ""}
         </a>
         {type === "api" && source.api_config?.context_hint && (
           <p className="text-[0.65rem] m-0 mt-0.5 truncate" style={{ color: "#0891b2", maxWidth: "38ch" }}>
@@ -550,6 +648,14 @@ function SourceCard({
       </div>
 
       <div className="flex items-center gap-1">
+        <button
+          onClick={() => { setEditing(!editing); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight }); }}
+          className="p-1.5 rounded transition-colors"
+          title="수정"
+          style={{ background: editing ? "var(--surface-container-highest)" : "transparent", border: "none", cursor: "pointer" }}
+        >
+          <Pencil size={14} style={{ color: editing ? "var(--primary)" : "var(--on-surface-variant)" }} />
+        </button>
         <button onClick={() => onToggle(source)} style={{ background: "transparent", border: "none", cursor: "pointer" }}>
           {source.is_active
             ? <ToggleRight size={20} style={{ color: "var(--primary)" }} />
@@ -560,6 +666,7 @@ function SourceCard({
           <Trash2 size={14} style={{ color: "#dc2626" }} />
         </button>
       </div>
+    </div>
     </div>
   );
 }
