@@ -38,27 +38,109 @@ const MOCK = {
   ],
 };
 
+const SOURCE_LABEL: Record<string, string> = {
+  newsletter:  "뉴스레터",
+  kakao:       "카카오톡",
+  kakaotalk:   "카카오톡",
+  linkedin:    "LinkedIn",
+  twitter:     "Twitter / X",
+  x:           "Twitter / X",
+  instagram:   "Instagram",
+  facebook:    "Facebook",
+};
+
 async function fetchAnalytics() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return MOCK;
   try {
-    const supabase = await createClient();
-    const { data } = await supabase
-      .from("user_logs")
-      .select("event_type, news_id, referrer, utm_source, utm_campaign");
-    if (!data?.length) return MOCK;
+    const supabase      = await createClient();
+    const adminSupabase = createAdminClient();
 
-    const view        = data.filter((r) => r.event_type === "view").length;
-    const detail_view = data.filter((r) => r.event_type === "detail_view").length;
-    const outbound    = data.filter((r) => r.event_type === "outbound_click").length;
+    const [{ data: logs }, { data: articles }] = await Promise.all([
+      supabase.from("user_logs").select("event_type, news_id, utm_source, utm_campaign"),
+      adminSupabase.from("news_items").select("id, title, category"),
+    ]);
+
+    if (!logs?.length) return MOCK;
+
+    // ── 기본 카운트 ──
+    const view        = logs.filter((r) => r.event_type === "view").length;
+    const detail_view = logs.filter((r) => r.event_type === "detail_view").length;
+    const outbound    = logs.filter((r) => r.event_type === "outbound_click").length;
+
+    // ── 유입 경로 (utm_source 기반) ──
+    const refMap: Record<string, number> = {};
+    for (const log of logs) {
+      const raw   = (log.utm_source ?? "").toLowerCase();
+      const label = SOURCE_LABEL[raw] ?? "직접 접속";
+      refMap[label] = (refMap[label] ?? 0) + 1;
+    }
+    const referrers = Object.entries(refMap)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // ── UTM 캠페인 ──
+    const campMap: Record<string, number> = {};
+    for (const log of logs) {
+      const camp = log.utm_campaign ?? "(없음)";
+      campMap[camp] = (campMap[camp] ?? 0) + 1;
+    }
+    const utmCampaigns = Object.entries(campMap)
+      .map(([campaign, count]) => ({ campaign, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    // ── 카테고리별 성과 ──
+    const articleMap  = new Map((articles ?? []).map((a) => [a.id, a]));
+    const catViews:   Record<string, number> = {};
+    const catDetails: Record<string, number> = {};
+    const catOut:     Record<string, number> = {};
+
+    for (const log of logs) {
+      if (!log.news_id) continue;
+      const art = articleMap.get(log.news_id);
+      if (!art) continue;
+      const c = art.category;
+      if (log.event_type === "view")           catViews[c]   = (catViews[c]   ?? 0) + 1;
+      if (log.event_type === "detail_view")    catDetails[c] = (catDetails[c] ?? 0) + 1;
+      if (log.event_type === "outbound_click") catOut[c]     = (catOut[c]     ?? 0) + 1;
+    }
+
+    const allCats  = new Set([...Object.keys(catViews), ...Object.keys(catDetails)]);
+    const categories = Array.from(allCats).map((cat) => ({
+      category:     cat,
+      views:        catViews[cat]   ?? 0,
+      detail_views: catDetails[cat] ?? 0,
+      outbound:     catOut[cat]     ?? 0,
+      avg_read_sec: 0,
+    })).sort((a, b) => b.detail_views - a.detail_views);
+
+    // ── 인기 기사 TOP 5 ──
+    const artDetails: Record<string, number> = {};
+    const artOut:     Record<string, number> = {};
+    for (const log of logs) {
+      if (!log.news_id) continue;
+      if (log.event_type === "detail_view")    artDetails[log.news_id] = (artDetails[log.news_id] ?? 0) + 1;
+      if (log.event_type === "outbound_click") artOut[log.news_id]     = (artOut[log.news_id]     ?? 0) + 1;
+    }
+    const topArticles = Object.entries(artDetails)
+      .map(([id, detail_views]) => {
+        const art = articleMap.get(id);
+        return { title: art?.title ?? "(삭제된 기사)", category: art?.category ?? "-", detail_views, outbound: artOut[id] ?? 0 };
+      })
+      .sort((a, b) => b.detail_views - a.detail_views)
+      .slice(0, 5);
 
     return {
-      ...MOCK,
       totals: { view, detail_view, outbound_click: outbound },
       funnel: [
-        { label: "메인 노출",    count: view,         pct: 100 },
-        { label: "인사이트 열람", count: detail_view,  pct: view ? +((detail_view / view) * 100).toFixed(1) : 0 },
-        { label: "원문 클릭",    count: outbound,      pct: view ? +((outbound / view) * 100).toFixed(1) : 0 },
+        { label: "메인 노출",    count: view,        pct: 100 },
+        { label: "인사이트 열람", count: detail_view, pct: view ? +((detail_view / view) * 100).toFixed(1) : 0 },
+        { label: "원문 클릭",    count: outbound,    pct: view ? +((outbound    / view) * 100).toFixed(1) : 0 },
       ],
+      referrers:    referrers.length    ? referrers    : [{ source: "직접 접속", count: logs.length }],
+      utmCampaigns: utmCampaigns.length ? utmCampaigns : [{ campaign: "(없음)", count: logs.length }],
+      categories:   categories.length   ? categories   : MOCK.categories,
+      topArticles:  topArticles.length  ? topArticles  : MOCK.topArticles,
     };
   } catch {
     return MOCK;
