@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { ApiConfig } from "@/lib/types";
 
+export const maxDuration = 60; // Pro: 60s / Hobby: 10s (최대치 요청)
+
 /* ── RSS XML 인코딩 감지 후 텍스트 변환 ── */
 async function fetchRssText(url: string): Promise<string> {
   const res = await fetch(url, {

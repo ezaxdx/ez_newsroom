@@ -164,8 +164,11 @@ export default function CurationBoard({
     setRunResult(null);
     try {
       const res = await fetch("/api/admin/run-curation", { method: "POST" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "실패");
+      const text = await res.text();
+      let json: Record<string, unknown>;
+      try { json = JSON.parse(text); }
+      catch { throw new Error("서버 응답 오류 — 실행 시간 초과일 수 있습니다. RSS 소스 수를 줄이거나 잠시 후 다시 시도해주세요."); }
+      if (!res.ok) throw new Error((json.error as string) ?? "실패");
       setRunResult(`✅ 생성 ${json.created}건 / 중복 건너뜀 ${json.skipped}건 / 실패 ${json.failed}건`);
       router.refresh();
     } catch (e) {
