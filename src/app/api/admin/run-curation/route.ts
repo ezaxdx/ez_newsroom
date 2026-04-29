@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { ApiConfig } from "@/lib/types";
+import { google } from "googleapis";
+import type { ApiConfig, GmailConfig } from "@/lib/types";
 
 export const maxDuration = 60; // Pro: 60s / Hobby: 10s (최대치 요청)
 
@@ -156,6 +157,143 @@ async function fetchApiData(
     console.error("[API fetch 실패]", e);
     return null;
   }
+}
+
+/* ── Gmail 뉴스레터 수집 ── */
+async function fetchGmailNewsletters(
+  config: GmailConfig
+): Promise<{ title: string; link: string; pubDate: string }[]> {
+  const supabase = createAdminClient();
+  const { data: tokenRow } = await supabase
+    .from("gmail_tokens")
+    .select("access_token, refresh_token, expiry_date")
+    .eq("id", "singleton")
+    .single();
+
+  if (!tokenRow?.refresh_token) {
+    console.error("[Gmail] 저장된 토큰 없음. /admin/gmail 에서 인증하세요.");
+    return [];
+  }
+
+  const oauth2Client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    process.env.GMAIL_REDIRECT_URI
+  );
+  oauth2Client.setCredentials({
+    access_token: tokenRow.access_token,
+    refresh_token: tokenRow.refresh_token,
+    expiry_date: tokenRow.expiry_date,
+  });
+
+  // 토큰 갱신 시 Supabase에 저장
+  oauth2Client.on("tokens", async (tokens) => {
+    if (tokens.access_token) {
+      await supabase.from("gmail_tokens").update({
+        access_token: tokens.access_token,
+        expiry_date: tokens.expiry_date,
+        updated_at: new Date().toISOString(),
+      }).eq("id", "singleton");
+    }
+  });
+
+  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+  // 발신자 + 제목 필터로 검색 (최근 7일)
+  const query = [
+    `from:${config.sender_filter}`,
+    config.subject_filter ? `subject:${config.subject_filter}` : "",
+    "newer_than:7d",
+  ].filter(Boolean).join(" ");
+
+  const listRes = await gmail.users.messages.list({
+    userId: "me",
+    q: query,
+    maxResults: config.max_emails ?? 3,
+  });
+
+  const messages = listRes.data.messages ?? [];
+  const results: { title: string; link: string; pubDate: string }[] = [];
+
+  for (const msg of messages) {
+    try {
+      const detail = await gmail.users.messages.get({
+        userId: "me",
+        id: msg.id!,
+        format: "full",
+      });
+
+      const headers = detail.data.payload?.headers ?? [];
+      const subject = headers.find((h) => h.name === "Subject")?.value ?? "(제목 없음)";
+      const date = headers.find((h) => h.name === "Date")?.value ?? "";
+
+      // HTML 파트에서 본문 추출
+      const htmlBody = extractHtmlBody(detail.data.payload);
+      if (!htmlBody) continue;
+
+      // 이메일 HTML에서 기사 링크 추출
+      const articleLinks = extractArticleLinks(htmlBody, config.sender_filter);
+
+      if (articleLinks.length === 0) {
+        // 링크 없으면 이메일 자체를 단일 기사로 처리
+        results.push({ title: subject, link: `gmail:${msg.id}`, pubDate: date });
+      } else {
+        for (const link of articleLinks.slice(0, 3)) {
+          results.push({ title: link.title || subject, link: link.url, pubDate: date });
+        }
+      }
+    } catch (e) {
+      console.error("[Gmail 메시지 파싱 오류]", e);
+    }
+  }
+
+  return results;
+}
+
+function extractHtmlBody(payload: import("googleapis").gmail_v1.Schema$MessagePart | undefined): string {
+  if (!payload) return "";
+
+  // multipart인 경우 재귀 탐색
+  if (payload.parts) {
+    for (const part of payload.parts) {
+      const found = extractHtmlBody(part);
+      if (found) return found;
+    }
+  }
+
+  if (payload.mimeType === "text/html" && payload.body?.data) {
+    return Buffer.from(payload.body.data, "base64").toString("utf-8");
+  }
+  return "";
+}
+
+function extractArticleLinks(html: string, senderDomain: string): { title: string; url: string }[] {
+  // 발신자 도메인에서 핵심 도메인 추출 (예: "noreply@yozm.wishket.com" → "wishket.com")
+  const domainParts = senderDomain.split("@")[1]?.split(".") ?? [];
+  const coreDomain = domainParts.slice(-2).join(".");
+
+  const results: { title: string; url: string }[] = [];
+  const seen = new Set<string>();
+
+  // <a href="...">텍스트</a> 패턴 추출
+  const linkPattern = /<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = linkPattern.exec(html)) !== null) {
+    const url = match[1];
+    const rawTitle = match[2].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+
+    // 구독 취소, 추적 링크 등 제외
+    if (!url.startsWith("http")) continue;
+    if (url.includes("unsubscribe") || url.includes("optout") || url.includes("click.")) continue;
+    if (!url.includes(coreDomain)) continue;
+    if (seen.has(url)) continue;
+    if (rawTitle.length < 5) continue;
+
+    seen.add(url);
+    results.push({ title: rawTitle, url });
+  }
+
+  return results;
 }
 
 /* ── OG 이미지 추출 ── */
@@ -395,6 +533,69 @@ export async function POST(req: Request) {
       if (error) { results.failed++; } else {
         results.created++;
         existingUrls.add(articleUrl);
+      }
+      continue;
+    }
+
+    /* ── Gmail 뉴스레터 소스 ── */
+    if (source.source_type === "gmail") {
+      const cfg = source.api_config as GmailConfig | null;
+      if (!cfg?.sender_filter) { results.skipped++; continue; }
+
+      let gmailItems: { title: string; link: string; pubDate: string }[] = [];
+      try {
+        gmailItems = await fetchGmailNewsletters(cfg);
+        console.log(`[Gmail] ${source.source_name}: ${gmailItems.length}개 수집됨`);
+      } catch (e) {
+        console.error(`[Gmail 실패] ${source.source_name}:`, e);
+        results.failed++;
+        continue;
+      }
+
+      for (const item of gmailItems) {
+        if (existingUrls.has(item.link)) { results.skipped++; continue; }
+
+        // gmail: 접두사 링크는 이메일 직접 참조 — 원문 fetch 불가
+        const isGmailRef = item.link.startsWith("gmail:");
+        const [articleText, image_url] = isGmailRef
+          ? ["", null]
+          : await Promise.all([fetchArticleText(item.link), fetchOgImage(item.link, origin)]);
+
+        const generated = await generateArticle(
+          apiKey, articleText, isGmailRef ? source.url : item.link,
+          setting.persona, setting.audience, setting.keywords, catLevelPrompts
+        );
+
+        if (!generated) { results.failed++; continue; }
+
+        const score = generated.quality_score ?? 5;
+        if (score < qualityThresholds.staging) {
+          results.skipped++;
+          existingUrls.add(item.link);
+          continue;
+        }
+
+        const shouldAutoPublish = score >= qualityThresholds.auto_publish;
+        const { error } = await supabase.from("news").insert({
+          title: generated.title,
+          summary_short: generated.summary_short,
+          content_long: generated.content_long,
+          implications: generated.implications,
+          level: generated.level ?? "Intermediate",
+          image_url,
+          original_url: isGmailRef ? source.url : item.link,
+          category,
+          quality_score: score,
+          is_published: shouldAutoPublish,
+          priority_score: source.weight * 10,
+          display_order: 1000 - score * 10,
+          published_at: new Date().toISOString(),
+        });
+
+        if (error) { results.failed++; } else {
+          results.created++;
+          existingUrls.add(item.link);
+        }
       }
       continue;
     }

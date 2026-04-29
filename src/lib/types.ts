@@ -24,6 +24,12 @@ export type ApiConfig = {
   context_hint: string;      // human-readable description for Gemini context
 };
 
+export type GmailConfig = {
+  sender_filter: string;   // 발신자 이메일 필터 (예: "noreply@yozm.wishket.com")
+  subject_filter?: string; // 선택적 제목 키워드 필터
+  max_emails: number;      // 가져올 최대 이메일 수
+};
+
 export type RssSource = {
   id: string;
   url: string;
@@ -31,8 +37,8 @@ export type RssSource = {
   weight: number;
   default_category: string;
   is_active: boolean;
-  source_type: "rss" | "url" | "api";
-  api_config?: ApiConfig | null;
+  source_type: "rss" | "url" | "api" | "gmail";
+  api_config?: ApiConfig | GmailConfig | null;
 };
 
 export type CurationSettings = {

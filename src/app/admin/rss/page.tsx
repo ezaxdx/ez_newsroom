@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Pencil, Check, X as XIcon } from "lucide-react";
-import { RssSource, ApiConfig } from "@/lib/types";
+import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Mail, Pencil, Check, X as XIcon } from "lucide-react";
+import { RssSource, ApiConfig, GmailConfig } from "@/lib/types";
 
 const EMPTY_API_CONFIG: ApiConfig = {
   endpoint: "",
@@ -12,13 +12,19 @@ const EMPTY_API_CONFIG: ApiConfig = {
   context_hint: "",
 };
 
+const EMPTY_GMAIL_CONFIG: GmailConfig = {
+  sender_filter: "",
+  subject_filter: "",
+  max_emails: 3,
+};
+
 const EMPTY_FORM = {
   url: "",
   source_name: "",
   weight: 3,
   default_category: "AI",
-  source_type: "rss" as "rss" | "url" | "api",
-  api_config: EMPTY_API_CONFIG,
+  source_type: "rss" as "rss" | "url" | "api" | "gmail",
+  api_config: EMPTY_API_CONFIG as ApiConfig | GmailConfig,
 };
 
 const TYPE_META = {
@@ -45,6 +51,14 @@ const TYPE_META = {
     color: "#fff",
     placeholder: "https://apis.data.go.kr/B551011/AreaTarDivService",
     hint: "JSON REST API. 응답 데이터를 분석해 기사를 생성합니다. (한국관광공사 등 공공데이터 API 지원)",
+  },
+  gmail: {
+    label: "Gmail 뉴스레터",
+    icon: Mail,
+    bg: "#ea4335",
+    color: "#fff",
+    placeholder: "gmail://yozm-it",
+    hint: "Gmail로 수신한 뉴스레터에서 기사를 자동 수집합니다. 먼저 /admin/gmail 에서 Gmail 인증을 완료하세요.",
   },
 };
 
@@ -119,6 +133,7 @@ export default function RssPage() {
   const rssSources = filteredSources.filter((s) => (s.source_type ?? "rss") === "rss");
   const urlSources = filteredSources.filter((s) => s.source_type === "url");
   const apiSources = filteredSources.filter((s) => s.source_type === "api");
+  const gmailSources = filteredSources.filter((s) => s.source_type === "gmail");
 
   const meta = TYPE_META[form.source_type];
 
@@ -153,20 +168,25 @@ export default function RssPage() {
             <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
               소스 유형
             </label>
-            <div className="flex gap-2">
-              {(["rss", "url", "api"] as const).map((type) => {
+            <div className="flex gap-2 flex-wrap">
+              {(["rss", "url", "api", "gmail"] as const).map((type) => {
                 const m = TYPE_META[type];
                 const Icon = m.icon;
                 const isSelected = form.source_type === type;
                 return (
                   <button
                     key={type}
-                    onClick={() => setForm((f) => ({ ...f, source_type: type, url: "", api_config: EMPTY_API_CONFIG }))}
+                    onClick={() => setForm((f) => ({
+                      ...f,
+                      source_type: type,
+                      url: type === "gmail" ? `gmail://${f.source_name.toLowerCase().replace(/\s+/g, "-") || "newsletter"}` : "",
+                      api_config: type === "gmail" ? EMPTY_GMAIL_CONFIG : EMPTY_API_CONFIG,
+                    }))}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all"
                     style={{
-                      background: isSelected ? "var(--primary)" : "var(--surface-container-low)",
-                      color: isSelected ? "#fff" : "var(--on-surface-variant)",
-                      border: `1.5px solid ${isSelected ? "var(--primary)" : "transparent"}`,
+                      background: isSelected ? m.bg : "var(--surface-container-low)",
+                      color: isSelected ? m.color : "var(--on-surface-variant)",
+                      border: `1.5px solid ${isSelected ? m.bg : "transparent"}`,
                       cursor: "pointer",
                     }}
                   >
@@ -185,7 +205,7 @@ export default function RssPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
-                {form.source_type === "rss" ? "RSS URL" : form.source_type === "api" ? "API Base URL" : "기사 URL"}
+                {form.source_type === "rss" ? "RSS URL" : form.source_type === "api" ? "API Base URL" : form.source_type === "gmail" ? "식별자 (자동 입력됨)" : "기사 URL"}
               </label>
               <input
                 value={form.url}
@@ -232,8 +252,63 @@ export default function RssPage() {
             </div>
           </div>
 
+          {/* Gmail 전용 설정 */}
+          {form.source_type === "gmail" && (
+            <div className="flex flex-col gap-3 p-4 rounded-lg" style={{ background: "var(--surface-container-low)" }}>
+              <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "#ea4335" }}>
+                Gmail 설정
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="flex flex-col gap-1 col-span-2">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    발신자 이메일 <span style={{ color: "#ea4335" }}>*</span>
+                  </label>
+                  <input
+                    value={(form.api_config as GmailConfig).sender_filter}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...(f.api_config as GmailConfig), sender_filter: e.target.value } }))}
+                    placeholder="admin@wishket.com"
+                    className="h-8 px-3 rounded-md text-sm outline-none"
+                    style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#ea4335")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    제목 키워드 필터 (선택)
+                  </label>
+                  <input
+                    value={(form.api_config as GmailConfig).subject_filter ?? ""}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...(f.api_config as GmailConfig), subject_filter: e.target.value } }))}
+                    placeholder="요즘IT"
+                    className="h-8 px-3 rounded-md text-sm outline-none"
+                    style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "#ea4335")}
+                    onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+                  />
+                </div>
+                <div className="flex flex-col gap-1">
+                  <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
+                    최대 이메일 수 ({(form.api_config as GmailConfig).max_emails}개)
+                  </label>
+                  <input
+                    type="range" min={1} max={10} value={(form.api_config as GmailConfig).max_emails}
+                    onChange={(e) => setForm((f) => ({ ...f, api_config: { ...(f.api_config as GmailConfig), max_emails: Number(e.target.value) } }))}
+                    className="mt-2"
+                  />
+                </div>
+              </div>
+              <p className="text-[0.65rem] m-0" style={{ color: "var(--on-surface-variant)" }}>
+                최근 7일 이내 수신된 이메일에서 기사 링크를 추출합니다.
+                <a href="/admin/gmail" style={{ color: "#ea4335", marginLeft: 6 }}>Gmail 연동 상태 확인 →</a>
+              </p>
+            </div>
+          )}
+
           {/* API 전용 추가 설정 */}
-          {form.source_type === "api" && (
+          {form.source_type === "api" && (() => {
+            const apiCfg = form.api_config as ApiConfig;
+            return (
             <div className="flex flex-col gap-3 p-4 rounded-lg" style={{ background: "var(--surface-container-low)" }}>
               <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "#0891b2" }}>
                 API 설정
@@ -244,7 +319,7 @@ export default function RssPage() {
                     엔드포인트 (Endpoint)
                   </label>
                   <input
-                    value={form.api_config.endpoint}
+                    value={apiCfg.endpoint}
                     onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, endpoint: e.target.value } }))}
                     placeholder="/areaTouDivList"
                     className="h-8 px-3 rounded-md text-sm outline-none"
@@ -258,7 +333,7 @@ export default function RssPage() {
                     서비스키 환경변수명
                   </label>
                   <input
-                    value={form.api_config.service_key_env}
+                    value={apiCfg.service_key_env}
                     onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, service_key_env: e.target.value } }))}
                     placeholder="TOURAPI_SERVICE_KEY"
                     className="h-8 px-3 rounded-md text-sm outline-none"
@@ -272,7 +347,7 @@ export default function RssPage() {
                     응답 데이터 경로
                   </label>
                   <input
-                    value={form.api_config.data_path}
+                    value={apiCfg.data_path}
                     onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, data_path: e.target.value } }))}
                     placeholder="response.body.items.item"
                     className="h-8 px-3 rounded-md text-sm outline-none"
@@ -286,7 +361,7 @@ export default function RssPage() {
                     기사 맥락 설명
                   </label>
                   <input
-                    value={form.api_config.context_hint}
+                    value={apiCfg.context_hint}
                     onChange={(e) => setForm((f) => ({ ...f, api_config: { ...f.api_config, context_hint: e.target.value } }))}
                     placeholder="지역별 관광객 연령대 다양성 데이터"
                     className="h-8 px-3 rounded-md text-sm outline-none"
@@ -302,7 +377,7 @@ export default function RssPage() {
                 </label>
                 <textarea
                   rows={3}
-                  value={JSON.stringify(form.api_config.params, null, 2)}
+                  value={JSON.stringify(apiCfg.params, null, 2)}
                   onChange={(e) => {
                     try { setForm((f) => ({ ...f, api_config: { ...f.api_config, params: JSON.parse(e.target.value) } })); }
                     catch { /* invalid JSON, ignore */ }
@@ -314,12 +389,18 @@ export default function RssPage() {
                 />
               </div>
             </div>
-          )}
+            );
+          })()}
 
           <div className="flex gap-2 pt-1">
             <button
               onClick={addSource}
-              disabled={saving || !form.url || !form.source_name || (form.source_type === "api" && !form.api_config.endpoint)}
+              disabled={
+                saving || !form.source_name ||
+                (form.source_type !== "gmail" && !form.url) ||
+                (form.source_type === "api" && "endpoint" in form.api_config && !form.api_config.endpoint) ||
+                (form.source_type === "gmail" && !(form.api_config as GmailConfig).sender_filter)
+              }
               className="flex items-center gap-2 h-8 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40"
               style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
             >
@@ -427,6 +508,24 @@ export default function RssPage() {
               </div>
             </section>
           )}
+
+          {/* Gmail 뉴스레터 섹션 */}
+          {gmailSources.length > 0 && (
+            <section>
+              <div className="flex items-center gap-2 mb-3">
+                <Mail size={13} style={{ color: "#ea4335" }} />
+                <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
+                  style={{ color: "#ea4335" }}>
+                  Gmail 뉴스레터 <span className="ml-1 opacity-60">({gmailSources.length})</span>
+                </p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {gmailSources.map((source) => (
+                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       )}
     </div>
@@ -447,7 +546,7 @@ function SourceCard({
   onRemove: (id: string) => void;
   onUpdate: (s: RssSource) => void;
 }) {
-  const type = (source.source_type ?? "rss") as "rss" | "url" | "api";
+  const type = (source.source_type ?? "rss") as "rss" | "url" | "api" | "gmail";
   const Icon = TYPE_META[type].icon;
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -568,11 +667,9 @@ function SourceCard({
       {/* 유형 아이콘 */}
       <div
         className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
-        style={{
-          background: type === "url" ? "var(--primary)" : type === "api" ? "#0891b2" : "var(--surface-container-highest)",
-        }}
+        style={{ background: TYPE_META[type].bg }}
       >
-        <Icon size={13} style={{ color: type !== "rss" ? "#fff" : "var(--on-surface-variant)" }} />
+        <Icon size={13} style={{ color: TYPE_META[type].color }} />
       </div>
 
       <div className="flex-1 min-w-0">
@@ -591,9 +688,9 @@ function SourceCard({
           style={{ color: "var(--on-surface-variant)", textDecoration: "none", maxWidth: "38ch" }}
           title={editForm.url}
         >
-          {editForm.url}{source.api_config?.endpoint ?? ""}
+          {editForm.url}{type === "api" && source.api_config && "endpoint" in source.api_config ? source.api_config.endpoint : ""}
         </a>
-        {type === "api" && source.api_config?.context_hint && (
+        {type === "api" && source.api_config && "context_hint" in source.api_config && source.api_config.context_hint && (
           <p className="text-[0.65rem] m-0 mt-0.5 truncate" style={{ color: "#0891b2", maxWidth: "38ch" }}>
             {source.api_config.context_hint}
           </p>

@@ -54,11 +54,21 @@ alter table public.curation_settings
   add column if not exists nav_categories        text[] default array['AI','MICE','TOURISM'],
   add column if not exists carousel_interval_sec integer default 5;
 
+-- ── gmail_tokens ──────────────────────────────────────────────────────
+create table if not exists public.gmail_tokens (
+  id            text primary key,  -- 'singleton' 고정값
+  access_token  text,
+  refresh_token text not null,
+  expiry_date   bigint,
+  updated_at    timestamptz default now()
+);
+
 -- ── RLS ───────────────────────────────────────────────────────────────
 alter table public.news            enable row level security;
 alter table public.rss_sources     enable row level security;
 alter table public.curation_settings enable row level security;
 alter table public.user_logs       enable row level security;
+alter table public.gmail_tokens    enable row level security;
 
 -- drop before recreate to avoid "already exists" on re-run
 drop policy if exists "public read published news"   on public.news;
@@ -68,6 +78,7 @@ drop policy if exists "admin all rss_sources"        on public.rss_sources;
 drop policy if exists "admin all curation_settings"  on public.curation_settings;
 drop policy if exists "admin read user_logs"         on public.user_logs;
 drop policy if exists "public read curation_settings" on public.curation_settings;
+drop policy if exists "admin all gmail_tokens"        on public.gmail_tokens;
 
 create policy "public read published news"
   on public.news for select
@@ -95,4 +106,8 @@ create policy "admin all curation_settings"
 
 create policy "admin read user_logs"
   on public.user_logs for select
+  using (auth.role() = 'authenticated');
+
+create policy "admin all gmail_tokens"
+  on public.gmail_tokens for all
   using (auth.role() = 'authenticated');
