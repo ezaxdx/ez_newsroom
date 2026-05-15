@@ -20,15 +20,8 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: "auto schedule disabled" });
   }
 
-  const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const dayKST = nowKST.getUTCDay();
-  const hourKST = nowKST.getUTCHours();
-
-  if (!schedule.days.includes(dayKST) || hourKST !== schedule.hour) {
-    return NextResponse.json({
-      skipped: `not scheduled (day=${dayKST}, hour=${hourKST})`,
-    });
-  }
+  // TODO: 테스트 후 아래 day 체크 복구
+  // Vercel Hobby 플랜은 최대 1시간 지연 실행 → hour 체크 제거, day만 확인
 
   const origin = new URL(req.url).origin;
   try {
