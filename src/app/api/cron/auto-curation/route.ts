@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
+export const maxDuration = 10;
+
 export async function GET(req: Request) {
   const authHeader = req.headers.get("authorization");
   if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -20,15 +22,25 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: "auto schedule disabled" });
   }
 
-  // TODO: 테스트 후 아래 day 체크 복구
   // Vercel Hobby 플랜은 최대 1시간 지연 실행 → hour 체크 제거, day만 확인
+  const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const dayKST = nowKST.getUTCDay();
 
-  const origin = new URL(req.url).origin;
-  try {
-    const res = await fetch(`${origin}/api/admin/run-curation`, { method: "POST" });
-    const result = await res.json();
-    return NextResponse.json({ ok: true, ...result });
-  } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 });
+  if (!schedule.days.includes(dayKST)) {
+    return NextResponse.json({ skipped: `not scheduled (day=${dayKST})` });
   }
+
+  // Edge Function 직접 호출 — fire-and-forget (Hobby 10초 타임아웃 회피)
+  const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate`;
+  const cronSecret = process.env.CRON_SECRET ?? "";
+
+  fetch(edgeFnUrl, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${cronSecret}`,
+    },
+  }).catch(() => {});
+
+  return NextResponse.json({ ok: true, message: "큐레이션 시작됨 (백그라운드 실행 중)" });
 }
