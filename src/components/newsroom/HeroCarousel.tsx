@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { NewsItem } from "@/lib/types";
+import { LEVEL_STYLE_DARK, LEVEL_STYLE_LIGHT } from "@/lib/news-ui";
 
 type Slide = { category: string; item: NewsItem };
 
@@ -130,7 +131,7 @@ export default function HeroCarousel({ slides, onOpen, interval = 5000 }: Props)
                 <span
                   className="inline-flex px-3 py-1 rounded-full text-[0.7rem] font-bold tracking-[0.06em] uppercase"
                   style={{
-                    background: item.level === "Advanced" ? "var(--primary)" : "rgba(255,255,255,0.18)",
+                    background: LEVEL_STYLE_DARK[item.level]?.bg ?? "rgba(255,255,255,0.18)",
                     color: "#fff",
                     backdropFilter: "blur(4px)",
                     border: "1px solid rgba(255,255,255,0.25)",
@@ -231,8 +232,8 @@ export default function HeroCarousel({ slides, onOpen, interval = 5000 }: Props)
                     <span
                       className="inline-flex px-2.5 py-1 rounded-full text-[0.68rem] font-bold tracking-[0.05em] uppercase"
                       style={{
-                        background: slide.item.level === "Advanced" ? "var(--primary)" : "rgba(26,28,29,0.72)",
-                        color: "#fff",
+                        background: LEVEL_STYLE_LIGHT[slide.item.level]?.bg ?? "rgba(26,28,29,0.72)",
+                        color: LEVEL_STYLE_LIGHT[slide.item.level]?.color ?? "#fff",
                       }}
                     >
                       {slide.item.level}

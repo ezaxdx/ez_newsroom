@@ -1,12 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-
-const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
-  Beginner:     { bg: "rgba(255,255,255,0.18)", color: "#fff" },
-  Intermediate: { bg: "rgba(255,255,255,0.18)", color: "#fff" },
-  Advanced:     { bg: "var(--primary)",         color: "#fff" },
-};
+import { LEVEL_STYLE_DARK } from "@/lib/news-ui";
 
 type Props = {
   items: NewsItem[];
@@ -54,8 +49,8 @@ export default function InsightGrid({ items, onOpen }: Props) {
               <span
                 className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
                 style={{
-                  background: LEVEL_STYLE[item.level]?.bg ?? "rgba(255,255,255,0.18)",
-                  color: LEVEL_STYLE[item.level]?.color ?? "#fff",
+                  background: LEVEL_STYLE_DARK[item.level]?.bg ?? "rgba(255,255,255,0.18)",
+                  color: LEVEL_STYLE_DARK[item.level]?.color ?? "#fff",
                   backdropFilter: "blur(6px)",
                   border: "1px solid rgba(255,255,255,0.2)",
                 }}

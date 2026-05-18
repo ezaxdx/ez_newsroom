@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { Search, Calendar, ChevronDown } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import { logEvent } from "@/lib/analytics";
+import { LEVEL_STYLE_LIGHT, getCategoryBg } from "@/lib/news-ui";
 import InsightModal from "./InsightModal";
 
 const DEFAULT_DATE_GROUPS = 4;
@@ -26,18 +27,6 @@ function groupByDate(items: NewsItem[]) {
   }
   return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]));
 }
-
-const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
-  Beginner:     { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-  Intermediate: { bg: "rgba(26,28,29,0.72)",              color: "#fff" },
-  Advanced:     { bg: "var(--primary)",                   color: "#fff" },
-};
-
-const CATEGORY_GRADIENT: Record<string, string> = {
-  AI:      "radial-gradient(circle at 60% 40%, #1a3a5c, #0d1b2a)",
-  MICE:    "radial-gradient(circle at 60% 40%, #1a3a2a, #0d1f16)",
-  TOURISM: "radial-gradient(circle at 60% 40%, #3a2a1a, #1f150d)",
-};
 
 export default function CategoryArchive({ category, items }: Props) {
   const [search, setSearch] = useState("");
@@ -199,9 +188,7 @@ export default function CategoryArchive({ category, items }: Props) {
                       className="relative w-full mb-3 rounded overflow-hidden"
                       style={{
                         aspectRatio: "16/9",
-                        background: item.image_url
-                          ? "var(--surface-container-highest)"
-                          : (CATEGORY_GRADIENT[item.category] ?? "var(--surface-container-highest)"),
+                        background: getCategoryBg(item.category, item.image_url),
                       }}
                     >
                       {item.image_url && (
@@ -212,8 +199,8 @@ export default function CategoryArchive({ category, items }: Props) {
                         <span
                           className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
                           style={{
-                            background: LEVEL_STYLE[item.level]?.bg ?? "var(--surface-container-highest)",
-                            color: LEVEL_STYLE[item.level]?.color ?? "var(--on-surface-variant)",
+                            background: LEVEL_STYLE_LIGHT[item.level]?.bg ?? "var(--surface-container-highest)",
+                            color: LEVEL_STYLE_LIGHT[item.level]?.color ?? "var(--on-surface-variant)",
                             backdropFilter: "blur(6px)",
                           }}
                         >
