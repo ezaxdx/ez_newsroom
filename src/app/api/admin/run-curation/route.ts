@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // Supabase Edge Function으로 위임 — 150초 실행 가능 (Supabase 무료 플랜)
 // Vercel 함수는 단순 프록시 역할만 수행
@@ -6,6 +7,8 @@ import { NextResponse } from "next/server";
 export const maxDuration = 60;
 
 export async function POST() {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
   const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate`;
   const cronSecret = process.env.CRON_SECRET ?? "";
 

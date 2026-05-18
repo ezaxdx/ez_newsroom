@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-export function proxy(req: NextRequest) {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   // 로그인 페이지와 auth API는 통과

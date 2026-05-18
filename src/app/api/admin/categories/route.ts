@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 /* GET – 현재 카테고리 목록 + 카루셀 설정 + 페르소나 설정 */
 export async function GET() {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("curation_settings")
@@ -22,6 +25,8 @@ export async function GET() {
 
 /* POST – 카테고리 + 카루셀 + 페르소나 통합 저장 */
 export async function POST(req: NextRequest) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
   const { categories, carouselSec, categorySettings, levelPrompts, autoSchedule, qualityThresholds } = await req.json();
   const supabase = createAdminClient();
 

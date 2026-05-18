@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import { NewsItem } from "@/lib/types";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function POST(req: NextRequest) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
   const {
     items,
     deletedIds,

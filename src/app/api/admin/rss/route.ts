@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { requireAdmin } from "@/lib/admin-auth";
 
 // GET: 전체 RSS 소스 조회
 export async function GET() {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const supabase = createAdminClient();
   const { data, error } = await supabase.from("rss_sources").select("*").order("source_name");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -11,6 +15,9 @@ export async function GET() {
 
 // POST: 소스 추가
 export async function POST(req: NextRequest) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const body = await req.json();
   const supabase = createAdminClient();
   const { data, error } = await supabase.from("rss_sources").insert(body).select().single();
@@ -20,6 +27,9 @@ export async function POST(req: NextRequest) {
 
 // PATCH: 토글(is_active) or 수정
 export async function PATCH(req: NextRequest) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const { id, ...updates } = await req.json();
   const supabase = createAdminClient();
   const { error } = await supabase.from("rss_sources").update(updates).eq("id", id);
@@ -29,6 +39,9 @@ export async function PATCH(req: NextRequest) {
 
 // DELETE: 소스 삭제
 export async function DELETE(req: NextRequest) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
   const { id } = await req.json();
   const supabase = createAdminClient();
   const { error } = await supabase.from("rss_sources").delete().eq("id", id);

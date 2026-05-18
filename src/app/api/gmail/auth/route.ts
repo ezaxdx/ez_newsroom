@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { google } from "googleapis";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function GET() {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const redirectUri = process.env.GMAIL_REDIRECT_URI;
