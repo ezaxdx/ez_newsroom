@@ -1,12 +1,11 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { Lock, Loader2, Eye, EyeOff } from "lucide-react";
 import { Suspense } from "react";
 
 function LoginForm() {
-  const router = useRouter();
   const params = useSearchParams();
   const from = params.get("from") ?? "/admin";
 
@@ -34,8 +33,7 @@ function LoginForm() {
         inputRef.current?.focus();
         return;
       }
-      router.push(from);
-      router.refresh();
+      window.location.href = from;
     } catch {
       setError("오류가 발생했습니다. 다시 시도해주세요.");
     } finally {

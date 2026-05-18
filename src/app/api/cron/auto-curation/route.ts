@@ -22,8 +22,15 @@ export async function GET(req: Request) {
     return NextResponse.json({ skipped: "auto schedule disabled" });
   }
 
+  // Vercel Hobby 플랜은 최대 1시간 지연 실행 → hour 체크 제거, day만 확인
+  const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const dayKST = nowKST.getUTCDay();
+
+  if (!schedule.days.includes(dayKST)) {
+    return NextResponse.json({ skipped: `not scheduled (day=${dayKST})` });
+  }
+
   // Edge Function 직접 호출 — fire-and-forget (Hobby 10초 타임아웃 회피)
-  // TODO: 테스트 후 day 체크 복구
   const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate`;
   const cronSecret = process.env.CRON_SECRET ?? "";
 
