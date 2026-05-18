@@ -12,6 +12,9 @@ type Props = {
 
 export default function InsightModal({ item, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // onClose를 ref로 감싸 이벤트 리스너 재등록 방지
+  const onCloseRef = useRef(onClose);
+  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -26,10 +29,10 @@ export default function InsightModal({ item, onClose }: Props) {
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;
-    const handleClose = () => onClose();
+    const handleClose = () => onCloseRef.current();
     dialog.addEventListener("close", handleClose);
     return () => dialog.removeEventListener("close", handleClose);
-  }, [onClose]);
+  }, []); // 마운트 시 1회만 등록
 
   const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
     const bounds = dialogRef.current?.getBoundingClientRect();

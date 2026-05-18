@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { NewsItem } from "@/lib/types";
 import { logEvent } from "@/lib/analytics";
 import HeroCarousel from "./HeroCarousel";
@@ -30,18 +30,22 @@ export default function NewsroomClient({ heroSlides, categoryGroups, carouselInt
     logEvent({ event_type: "view" });
   }, []);
 
-  const handleOpen = (item: NewsItem) => {
+  const handleOpen = useCallback((item: NewsItem) => {
     setActiveItem(item);
     logEvent({ event_type: "detail_view", news_id: item.id });
-  };
+  }, []);
 
-  // 레벨 필터 적용 (히어로는 필터 제외)
-  const filteredGroups = categoryGroups.map((group) => ({
-    ...group,
-    items: levelFilter === "Total"
-      ? group.items
-      : group.items.filter((item) => item.level === levelFilter),
-  })).filter((group) => group.items.length > 0);
+  // 레벨 필터 적용 (히어로는 필터 제외) — 필터·그룹 변경 시만 재계산
+  const filteredGroups = useMemo(() =>
+    categoryGroups
+      .map((group) => ({
+        ...group,
+        items: levelFilter === "Total"
+          ? group.items
+          : group.items.filter((item) => item.level === levelFilter),
+      }))
+      .filter((group) => group.items.length > 0),
+  [categoryGroups, levelFilter]);
 
 
   return (
