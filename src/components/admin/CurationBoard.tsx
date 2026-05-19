@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Eye, EyeOff, ArrowUp, ArrowDown, Trash2,
-  ExternalLink, Sparkles, Loader2, RefreshCw,
+  ExternalLink, Sparkles, Loader2, RefreshCw, TrendingUp,
 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 
@@ -22,6 +22,7 @@ type Props = {
   qualityThresholds?: { auto_publish: number; staging: number };
   displayWindowDays?: number;
   scheduleDays?: number[];
+  navCategories?: string[];
 };
 
 function makeWindowMs(days: number) {
@@ -40,6 +41,7 @@ export default function CurationBoard({
   qualityThresholds = { auto_publish: 8, staging: 5 },
   displayWindowDays = 4,
   scheduleDays = [],
+  navCategories,
 }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<NewsItem[]>(initialNews);
@@ -64,6 +66,16 @@ export default function CurationBoard({
   const live = items.filter((i) => isLive(i, windowMs));
   const staging = items.filter((i) => !i.is_published);
   const archive = items.filter((i) => isArchive(i, windowMs));
+
+  // Top News 계산 (카테고리별 display_order 가장 낮은 live 기사)
+  const categories = navCategories ?? [...new Set(live.map((i) => i.category))];
+  const topNewsMap = new Map<string, NewsItem>();
+  const sortedLive = [...live].sort((a, b) => a.display_order - b.display_order);
+  for (const cat of categories) {
+    const found = sortedLive.find((i) => i.category === cat);
+    if (found) topNewsMap.set(cat, found);
+  }
+  const topNewsIds = new Set(Array.from(topNewsMap.values()).map((i) => i.id));
 
   const tabMeta: { key: Tab; label: string; count: number }[] = [
     { key: "live",    label: "메인 표시 중", count: live.length },
@@ -250,6 +262,38 @@ export default function CurationBoard({
         </div>
       </div>
 
+      {/* ── Top News 현황 패널 ── */}
+      <div className="mb-6 p-4 rounded-xl" style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)" }}>
+        <div className="flex items-center gap-2 mb-3">
+          <TrendingUp size={14} style={{ color: "var(--primary)" }} />
+          <span className="text-xs font-bold tracking-wide uppercase" style={{ color: "var(--primary)" }}>
+            현재 Top News (히어로 슬라이드)
+          </span>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {categories.map((cat) => {
+            const top = topNewsMap.get(cat);
+            return (
+              <div key={cat} className="flex items-center gap-2 text-xs">
+                <span
+                  className="w-16 px-2 py-0.5 rounded-full text-center font-bold tracking-wide uppercase flex-shrink-0"
+                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)", fontSize: "0.6rem" }}
+                >
+                  {cat}
+                </span>
+                {top ? (
+                  <span className="truncate font-medium" style={{ color: "var(--on-surface)" }}>
+                    {top.title}
+                  </span>
+                ) : (
+                  <span style={{ color: "var(--on-surface-variant)" }}>— 표시 중인 기사 없음</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* 큐레이션 실행 결과 */}
       {runResult && (
         <div className="mb-4 px-4 py-3 rounded-lg text-sm"
@@ -339,6 +383,7 @@ export default function CurationBoard({
               idx={idx}
               tab={tab}
               qualityThresholds={qualityThresholds}
+              isTopNews={topNewsIds.has(item.id)}
               onDragStart={handleDragStart}
               onDragEnter={handleDragEnter}
               onDragEnd={handleDragEnd}
@@ -377,6 +422,7 @@ export default function CurationBoard({
                     idx={0}
                     tab="archive"
                     qualityThresholds={qualityThresholds}
+                    isTopNews={false}
                     onDragStart={() => {}}
                     onDragEnter={() => {}}
                     onDragEnd={() => {}}
@@ -399,7 +445,7 @@ export default function CurationBoard({
 
 /* ── 카드 컴포넌트 ── */
 function ArticleCard({
-  item, idx, tab, qualityThresholds,
+  item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
   onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish,
   LEVEL_STYLE,
@@ -408,6 +454,7 @@ function ArticleCard({
   idx: number;
   tab: Tab;
   qualityThresholds: { auto_publish: number; staging: number };
+  isTopNews: boolean;
   onDragStart: (i: number) => void;
   onDragEnter: (i: number) => void;
   onDragEnd: () => void;
@@ -429,8 +476,8 @@ function ArticleCard({
       onDragOver={isDraggable ? (e) => e.preventDefault() : undefined}
       className="flex items-start gap-3 p-4 rounded-lg transition-shadow"
       style={{
-        background: "var(--surface-container-lowest)",
-        boxShadow: "0 1px 3px rgba(26,28,29,0.04)",
+        background: isTopNews ? "rgba(var(--primary-rgb, 26,115,232),0.04)" : "var(--surface-container-lowest)",
+        boxShadow: isTopNews ? "0 0 0 1.5px var(--primary)" : "0 1px 3px rgba(26,28,29,0.04)",
         cursor: isDraggable ? "grab" : "default",
       }}
     >
@@ -444,6 +491,14 @@ function ArticleCard({
       {/* content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
+          {isTopNews && (
+            <span
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
+              style={{ background: "var(--primary)", color: "#fff" }}
+            >
+              <TrendingUp size={9} /> TOP
+            </span>
+          )}
           <span
             className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}

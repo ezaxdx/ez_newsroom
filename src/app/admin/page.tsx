@@ -34,14 +34,15 @@ async function fetchSettings(): Promise<{
   qualityThresholds: { auto_publish: number; staging: number };
   displayWindowDays: number;
   scheduleDays: number[];
+  navCategories: string[];
 }> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL)
-    return { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4] };
+  const defaults = { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], navCategories: [] };
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return defaults;
   try {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("quality_thresholds, auto_schedule")
+      .select("quality_thresholds, auto_schedule, nav_categories")
       .limit(1)
       .single();
     const qualityThresholds = data?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
@@ -50,12 +51,13 @@ async function fetchSettings(): Promise<{
     const displayWindowDays = schedule.enabled && scheduleDays.length > 1
       ? calcDisplayWindow(scheduleDays)
       : 4;
-    return { qualityThresholds, displayWindowDays, scheduleDays };
-  } catch { return { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4] }; }
+    const navCategories: string[] = data?.nav_categories ?? [];
+    return { qualityThresholds, displayWindowDays, scheduleDays, navCategories };
+  } catch { return defaults; }
 }
 
 export default async function AdminPage() {
-  const [news, { qualityThresholds, displayWindowDays, scheduleDays }] = await Promise.all([
+  const [news, { qualityThresholds, displayWindowDays, scheduleDays, navCategories }] = await Promise.all([
     fetchAllNews(),
     fetchSettings(),
   ]);
@@ -83,7 +85,7 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} />
+      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} navCategories={navCategories} />
     </div>
   );
 }
