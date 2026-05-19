@@ -27,7 +27,7 @@ export default function FeedBlock({ label, items, onOpen }: Props) {
       <div
         className="grid gap-6"
         style={{
-          gridTemplateColumns: `repeat(${Math.min(items.length, 4)}, 1fr)`,
+          gridTemplateColumns: "repeat(3, 1fr)",
         }}
       >
         {items.map((item) => (
