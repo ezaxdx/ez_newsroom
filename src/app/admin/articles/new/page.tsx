@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { Loader2, Sparkles, PenLine, ExternalLink, CheckCircle2 } from "lucide-react";
+import HelpPanel from "@/components/admin/HelpPanel";
 
 type Tab = "ai" | "manual";
 
@@ -267,7 +268,7 @@ export default function NewArticlePage() {
   };
 
   return (
-    <div className="p-8 max-w-[860px]">
+    <div className="p-8">
       {/* Header */}
       <div className="mb-8">
         <p className="text-[0.7rem] font-semibold tracking-[0.06em] uppercase m-0 mb-1"
@@ -433,6 +434,30 @@ export default function NewArticlePage() {
           </div>
         )}
       </div>
+
+      <HelpPanel title="기사 작성 가이드">
+        <p style={{ marginBottom: 12 }}>
+          AI 자동 생성 또는 직접 작성으로 기사를 개별 등록합니다.
+        </p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>AI 생성 탭</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>기사 URL 입력 시 Gemini가 제목·요약·분석·시사점 자동 생성</li>
+          <li>생성 후 내용 직접 수정 가능</li>
+          <li>카테고리·레벨 선택 후 대기 저장 또는 즉시 발행</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>직접 작성 탭</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>제목, 요약(120자 이내), 본문, 시사점 수동 입력</li>
+          <li>이미지 URL, 원문 URL 선택 입력</li>
+          <li>대기 상태로 저장하거나 즉시 발행 선택 가능</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>레벨 기준</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>Beginner</strong> — 업계 입문자, 배경지식 없이 이해 가능</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>Intermediate</strong> — 실무 담당자, 기본 지식 보유자</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>Advanced</strong> — 전략·기획자, 심층 분석 대상</li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }

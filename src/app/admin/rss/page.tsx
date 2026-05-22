@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Mail, Pencil, Check, X as XIcon } from "lucide-react";
+import HelpPanel from "@/components/admin/HelpPanel";
 import { RssSource, ApiConfig, GmailConfig } from "@/lib/types";
 
 const EMPTY_API_CONFIG: ApiConfig = {
@@ -139,7 +140,7 @@ export default function RssPage() {
   const meta = TYPE_META[form.source_type];
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold tracking-tight m-0">RSS 소스 매니저</h2>
@@ -529,6 +530,29 @@ export default function RssPage() {
           )}
         </div>
       )}
+
+      <HelpPanel title="RSS 소스 매니저 가이드">
+        <p style={{ marginBottom: 12 }}>
+          콘텐츠 수집 소스를 등록·관리합니다. 등록된 소스는 큐레이션 실행 시 자동으로 수집됩니다.
+        </p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>소스 타입</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>RSS 피드</strong> — URL 등록 시 최신 기사 최대 3개 자동 수집</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>직접 URL</strong> — 특정 기사 1건만 분석·등록</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>Gmail 뉴스레터</strong> — 발신자 이메일 기반 자동 파싱</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>공공 API</strong> — 한국관광공사 등 공공데이터 연동</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>가중치</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>1~10 설정, 높을수록 품질 점수에 가산</li>
+          <li>공고·홍보성 소스는 낮게, 분석·인사이트 소스는 높게 설정 권장</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>활성/비활성</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li>토글 OFF 시 큐레이션에서 해당 소스 건너뜀</li>
+          <li>소스를 삭제하지 않고 임시 중단할 때 활용</li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import CurationBoard from "@/components/admin/CurationBoard";
+import HelpPanel from "@/components/admin/HelpPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -63,7 +64,7 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <div className="p-8 max-w-4xl">
+    <div className="p-8">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
@@ -86,6 +87,30 @@ export default async function AdminPage() {
       </div>
 
       <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} navCategories={navCategories} />
+
+      <HelpPanel title="큐레이션 보드 가이드">
+        <p style={{ marginBottom: 12 }}>
+          뉴스룸의 핵심 운영 화면입니다. 수집된 기사 전체를 확인하고 발행·반려를 직접 처리합니다.
+        </p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>주요 기능</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>전체·발행됨·대기 중 기사 수 통계 확인</li>
+          <li>기사별 품질 점수(1~10), 카테고리, 레벨 확인</li>
+          <li>대기 중 기사 수동 발행 또는 삭제</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>큐레이션 즉시 실행</strong> — 스케줄 외 수동 실행</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>품질 점수 기준</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>6점 이상 → 자동 발행</li>
+          <li>4~5점 → 대기 (수동 검토 후 발행)</li>
+          <li>3점 이하 → 자동 폐기</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>자동 실행 스케줄</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li>매주 화요일·목요일 오전 9시 자동 실행</li>
+          <li>수동 실행은 [큐레이션 실행] 버튼 클릭</li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }

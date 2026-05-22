@@ -1,4 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
+import HelpPanel from "@/components/admin/HelpPanel";
 
 /* ── 빈 데이터 기본값 ── */
 const EMPTY = {
@@ -160,7 +161,7 @@ export default async function AnalyticsPage() {
   const maxCat      = Math.max(...categories.map((c) => c.detail_views));
 
   return (
-    <div className="p-8 max-w-5xl flex flex-col gap-8">
+    <div className="p-8 flex flex-col gap-8">
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold tracking-tight m-0">애널리틱스</h2>
@@ -354,6 +355,28 @@ export default async function AnalyticsPage() {
           ))}
         </div>
       </section>
+
+      <HelpPanel title="애널리틱스 가이드">
+        <p style={{ marginBottom: 12 }}>
+          뉴스룸 독자의 행동 데이터를 분석합니다. 방문자가 발생하면 자동으로 수집됩니다.
+        </p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>지표 설명</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>조회수</strong> — 기사 목록에서 노출된 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>인사이트 열람</strong> — 기사 상세(요약·분석) 펼친 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 외부 원문 링크 클릭 횟수</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>참여 퍼널</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>메인 노출 → 인사이트 열람 → 원문 클릭 순으로 전환율 확인</li>
+          <li>인사이트 열람율이 높을수록 콘텐츠 품질이 높은 것</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>트래픽 소스</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li>UTM 파라미터로 유입 채널 추적 (카카오톡, 이메일, SNS 등)</li>
+          <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }

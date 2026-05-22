@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Mail, CheckCircle, XCircle, Loader2, ExternalLink } from "lucide-react";
+import HelpPanel from "@/components/admin/HelpPanel";
 
 export default function GmailPage() {
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
@@ -27,7 +28,7 @@ export default function GmailPage() {
   }
 
   return (
-    <div style={{ maxWidth: 600, margin: "60px auto", padding: "0 24px", fontFamily: "var(--font-sans, sans-serif)" }}>
+    <div className="p-8" style={{ fontFamily: "var(--font-sans, sans-serif)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
         <Mail size={24} />
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Gmail 뉴스레터 연동</h1>
@@ -104,6 +105,29 @@ export default function GmailPage() {
           <li><code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>.env.local</code>에 <code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>GMAIL_CLIENT_ID</code>, <code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>GMAIL_CLIENT_SECRET</code> 입력</li>
         </ol>
       </div>
+
+      <HelpPanel title="Gmail 연동 가이드">
+        <p style={{ marginBottom: 12 }}>
+          Gmail로 수신된 뉴스레터를 자동으로 읽어 큐레이션 소스로 활용합니다.
+          OAuth2 인증은 1회 설정으로 지속 유지됩니다.
+        </p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>현재 상태</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>✅ Gmail 연동 완료 (2026년 5월 22일 인증)</li>
+          <li>등록된 뉴스레터: 요즘IT, MICE人</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>토큰 만료 시</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>큐레이션 실행 시 Gmail 소스 수집이 실패</li>
+          <li>이 페이지에서 [다시 인증] 버튼으로 재연동</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>뉴스레터 추가 방법</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li>뉴스레터 수신 확인 후 Gmail 발신자 이메일 주소 확인</li>
+          <li>/admin/rss → 소스 추가 → 타입: Gmail 뉴스레터</li>
+          <li>발신자 이메일 입력 후 저장</li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }

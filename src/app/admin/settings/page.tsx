@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, X, Sparkles, Save, Loader2, ChevronLeft, ChevronRight, Check, ToggleLeft, ToggleRight } from "lucide-react";
+import HelpPanel from "@/components/admin/HelpPanel";
 
 type Preset = { label: string; prompt: string };
 
@@ -217,7 +218,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
@@ -658,6 +659,30 @@ export default function SettingsPage() {
           </div>
         </>
       )}
+
+      <HelpPanel title="큐레이션 설정 가이드">
+        <p style={{ marginBottom: 12 }}>
+          AI 큐레이션의 전체 동작 방식을 설정합니다. 저장 후 다음 큐레이션 실행부터 반영됩니다.
+        </p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>주요 설정 항목</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>카테고리</strong> — 추가/삭제 시 뉴스룸 전체에 즉시 반영</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>자동 큐레이션 스케줄</strong> — 실행 요일·시각 설정 (현재: 화·목 오전 9시)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>품질 임계값</strong> — 자동 발행 기준점·대기 기준점 조정</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리별 AI 설정</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>타겟 독자</strong> — 카테고리 독자층 설명 (AI 생성 방향에 반영)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>AI 페르소나</strong> — 기사 작성 스타일 프롬프트</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>강조 키워드</strong> — 분석 시 우선 언급할 키워드</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>현재 품질 기준</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li>6점 이상 → 자동 발행</li>
+          <li>4~5점 → 대기 (수동 검토)</li>
+          <li>3점 이하 → 자동 폐기</li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }
