@@ -140,7 +140,7 @@ export default function RssPage() {
   const meta = TYPE_META[form.source_type];
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h2 className="text-xl font-bold tracking-tight m-0">RSS 소스 매니저</h2>

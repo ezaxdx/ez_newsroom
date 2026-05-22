@@ -28,7 +28,7 @@ export default function GmailPage() {
   }
 
   return (
-    <div className="p-8" style={{ fontFamily: "var(--font-sans, sans-serif)" }}>
+    <div style={{ maxWidth: 600, margin: "60px auto", padding: "0 24px", fontFamily: "var(--font-sans, sans-serif)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
         <Mail size={24} />
         <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Gmail 뉴스레터 연동</h1>

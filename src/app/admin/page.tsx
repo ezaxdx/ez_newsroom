@@ -64,7 +64,7 @@ export default async function AdminPage() {
   ]);
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-4xl">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[

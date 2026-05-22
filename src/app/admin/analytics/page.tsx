@@ -161,7 +161,7 @@ export default async function AnalyticsPage() {
   const maxCat      = Math.max(...categories.map((c) => c.detail_views));
 
   return (
-    <div className="p-8 flex flex-col gap-8">
+    <div className="p-8 max-w-5xl flex flex-col gap-8">
       {/* Header */}
       <div>
         <h2 className="text-xl font-bold tracking-tight m-0">애널리틱스</h2>

@@ -268,7 +268,7 @@ export default function NewArticlePage() {
   };
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-[860px]">
       {/* Header */}
       <div className="mb-8">
         <p className="text-[0.7rem] font-semibold tracking-[0.06em] uppercase m-0 mb-1"

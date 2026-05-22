@@ -218,7 +218,7 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-3xl">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
