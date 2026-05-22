@@ -1,4 +1,3 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* ── 빈 데이터 기본값 ── */
@@ -28,11 +27,10 @@ const SOURCE_LABEL: Record<string, string> = {
 
 async function fetchAnalytics() {
   try {
-    const supabase      = await createClient();
     const adminSupabase = createAdminClient();
 
     const [{ data: logs }, { data: articles }] = await Promise.all([
-      supabase.from("user_logs").select("event_type, news_id, utm_source, utm_campaign"),
+      adminSupabase.from("user_logs").select("event_type, news_id, utm_source, utm_campaign"),
       adminSupabase.from("news").select("id, title, category"),
     ]);
 
