@@ -415,7 +415,8 @@ async function fetchGmailNewsletters(
 async function generateArticle(
   apiKey: string, articleText: string, url: string,
   persona: string, audience: string, keywords: string[],
-  levelPrompts: Record<string, string>
+  levelPrompts: Record<string, string>,
+  companyContext?: string
 ): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
   const prompt = `${persona}
@@ -457,12 +458,18 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 ${articleText.length > 50 ? `원문:\n${articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
 
   try {
+    const body: Record<string, unknown> = {
+      contents: [{ parts: [{ text: prompt }] }],
+    };
+    if (companyContext?.trim()) {
+      body.system_instruction = { parts: [{ text: companyContext.trim() }] };
+    }
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
+        body: JSON.stringify(body),
         signal: AbortSignal.timeout(30000),
       }
     );
@@ -496,11 +503,12 @@ Deno.serve(async (req) => {
   if (!sources?.length) return new Response(JSON.stringify({ error: "활성 소스 없음" }), { status: 400 });
 
   const { data: settings } = await supabase
-    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds")
+    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context")
     .limit(1).single();
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> = settings?.category_settings ?? {};
   const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const qualityThresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
+  const companyContext: string = settings?.company_context ?? "";
 
   await supabase.from("news").delete().eq("is_published", false);
 
@@ -525,7 +533,7 @@ Deno.serve(async (req) => {
         existingUrls.add(url);
         return;
       }
-      const generated = await generateArticle(apiKey, articleText, url, setting.persona, setting.audience, setting.keywords, catLevelPrompts);
+      const generated = await generateArticle(apiKey, articleText, url, setting.persona, setting.audience, setting.keywords, catLevelPrompts, companyContext);
       if (!generated) { results.failed++; return; }
       const score = generated.quality_score ?? 5;
       if (score < qualityThresholds.staging) { results.skipped++; existingUrls.add(url); return; }

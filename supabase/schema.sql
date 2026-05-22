@@ -52,7 +52,8 @@ create table if not exists public.user_logs (
 -- ── curation_settings 컬럼 마이그레이션 (이미 테이블 있을 때) ──────────
 alter table public.curation_settings
   add column if not exists nav_categories        text[] default array['AI','MICE','TOURISM'],
-  add column if not exists carousel_interval_sec integer default 5;
+  add column if not exists carousel_interval_sec integer default 5,
+  add column if not exists company_context       text;
 
 -- ── gmail_tokens ──────────────────────────────────────────────────────
 create table if not exists public.gmail_tokens (

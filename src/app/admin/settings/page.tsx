@@ -76,6 +76,7 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("AI");
   const [autoSchedule, setAutoSchedule] = useState<{ enabled: boolean; days: number[]; hour: number }>({ enabled: false, days: [], hour: 9 });
   const [qualityThresholds, setQualityThresholds] = useState({ auto_publish: 8, staging: 5 });
+  const [companyContext, setCompanyContext] = useState("");
 
   const [newCat, setNewCat] = useState("");
   const [newKeyword, setNewKeyword] = useState("");
@@ -96,6 +97,7 @@ export default function SettingsPage() {
         setActiveTab(cats[0] ?? "AI");
         setAutoSchedule(d.autoSchedule ?? { enabled: false, days: [], hour: 9 });
         setQualityThresholds(d.qualityThresholds ?? { auto_publish: 8, staging: 5 });
+        setCompanyContext(d.companyContext ?? "");
 
         const savedSettings: SettingsMap = d.categorySettings ?? {};
         const merged: SettingsMap = {};
@@ -197,7 +199,7 @@ export default function SettingsPage() {
       await fetch("/api/admin/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories: navCategories, carouselSec, categorySettings: settings, levelPrompts, autoSchedule, qualityThresholds }),
+        body: JSON.stringify({ categories: navCategories, carouselSec, categorySettings: settings, levelPrompts, autoSchedule, qualityThresholds, companyContext }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -236,6 +238,38 @@ export default function SettingsPage() {
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
           {saving ? "저장 중..." : saved ? "저장됨 ✓" : "전체 저장"}
         </button>
+      </div>
+
+      {/* ── 회사 컨텍스트 ── */}
+      <div className="p-5 rounded-lg mb-8 flex flex-col gap-3" style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)" }}>
+        <div>
+          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0 mb-0.5"
+            style={{ color: "var(--on-surface-variant)" }}>
+            🏢 회사 컨텍스트 — AI 판단 기준
+          </p>
+          <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>
+            모든 카테고리에 공통으로 적용되는 회사 시각. 기사 평가 기준과 시사점 작성 방향에 반영됩니다.
+          </p>
+        </div>
+        <textarea
+          value={companyContext}
+          onChange={(e) => setCompanyContext(e.target.value)}
+          rows={12}
+          placeholder={"당신은 [회사명]의 뉴스 큐레이션 AI입니다.\n\n【회사 소개】\n...\n\n【사업영역】\n...\n\n【시사점 작성 기준】\n시사점은 반드시 우리 회사 사업 관점에서 작성하세요."}
+          className="px-3 py-2.5 rounded-md text-sm outline-none resize-y leading-relaxed font-mono"
+          style={{
+            background: "var(--surface-container-low)",
+            border: "1px solid transparent",
+            color: "var(--on-surface)",
+            fontFamily: "inherit",
+            fontSize: 13,
+          }}
+          onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
+          onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
+        />
+        <p className="text-[0.7rem] m-0" style={{ color: "var(--on-surface-variant)" }}>
+          {companyContext.length > 0 ? `${companyContext.length}자 입력됨` : "비어 있으면 회사 컨텍스트 없이 기사 생성"}
+        </p>
       </div>
 
       {/* ── 카테고리 관리 ── */}
