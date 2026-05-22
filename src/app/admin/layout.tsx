@@ -76,7 +76,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       </aside>
 
       {/* ── Main ── */}
-      <main className="flex-1 overflow-auto">{children}</main>
+      <main className="flex-1 overflow-auto">
+        <div style={{ maxWidth: 1280, margin: "0 auto" }}>{children}</div>
+      </main>
     </div>
   );
 }
