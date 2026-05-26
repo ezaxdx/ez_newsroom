@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, Calendar } from "lucide-react";
+import { logEvent } from "@/lib/analytics";
 
 export type ConventionEvent = {
   id: string;
@@ -682,7 +683,8 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
   if (e.website) {
     return (
       <a href={e.website} target="_blank" rel="noopener noreferrer"
-        style={{ textDecoration: "none" }}>
+        style={{ textDecoration: "none" }}
+        onClick={() => logEvent({ event_type: "event_click", event_id: e.id })}>
         {content}
       </a>
     );
@@ -815,7 +817,8 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
 
   const card = e.website ? (
     <a href={e.website} target="_blank" rel="noopener noreferrer"
-      style={{ textDecoration: "none" }}>
+      style={{ textDecoration: "none" }}
+      onClick={() => logEvent({ event_type: "event_click", event_id: e.id })}>
       {cardContent}
     </a>
   ) : cardContent;
