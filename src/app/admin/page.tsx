@@ -5,19 +5,6 @@ import HelpPanel from "@/components/admin/HelpPanel";
 
 export const dynamic = "force-dynamic";
 
-/** 스케줄된 요일 배열로 최대 노출 기간(일) 계산 */
-function calcDisplayWindow(days: number[]): number {
-  if (!days || days.length <= 1) return 7;
-  const sorted = [...days].sort((a, b) => a - b);
-  let maxGap = 0;
-  for (let i = 0; i < sorted.length - 1; i++) {
-    maxGap = Math.max(maxGap, sorted[i + 1] - sorted[i]);
-  }
-  // wrap-around: 마지막 요일 → 다음 주 첫 요일
-  maxGap = Math.max(maxGap, sorted[0] + 7 - sorted[sorted.length - 1]);
-  return maxGap;
-}
-
 
 async function fetchAllNews(): Promise<NewsItem[]> {
   try {
@@ -35,9 +22,11 @@ async function fetchSettings(): Promise<{
   qualityThresholds: { auto_publish: number; staging: number };
   displayWindowDays: number;
   scheduleDays: number[];
+  scheduleHour: number;
+  scheduleEnabled: boolean;
   navCategories: string[];
 }> {
-  const defaults = { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], navCategories: [] };
+  const defaults = { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], scheduleHour: 9, scheduleEnabled: true, navCategories: [] };
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return defaults;
   try {
     const supabase = createAdminClient();
@@ -49,16 +38,18 @@ async function fetchSettings(): Promise<{
     const qualityThresholds = data?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
     const schedule = data?.auto_schedule ?? { enabled: false, days: [] };
     const scheduleDays: number[] = schedule.days ?? [];
-    const displayWindowDays = schedule.enabled && scheduleDays.length > 1
-      ? calcDisplayWindow(scheduleDays)
-      : 4;
+    const scheduleHour: number = schedule.hour ?? 9;
+    const scheduleEnabled: boolean = schedule.enabled ?? false;
+    // displayWindowDays: CurationBoard의 스케줄 없을 때 폴백용
+    // 실제 live/archive 분류는 CurationBoard에서 calcLastScheduledRun 사용
+    const displayWindowDays = 4;
     const navCategories: string[] = data?.nav_categories ?? [];
-    return { qualityThresholds, displayWindowDays, scheduleDays, navCategories };
+    return { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories };
   } catch { return defaults; }
 }
 
 export default async function AdminPage() {
-  const [news, { qualityThresholds, displayWindowDays, scheduleDays, navCategories }] = await Promise.all([
+  const [news, { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories }] = await Promise.all([
     fetchAllNews(),
     fetchSettings(),
   ]);
@@ -86,7 +77,7 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} navCategories={navCategories} />
+      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} scheduleHour={scheduleHour} scheduleEnabled={scheduleEnabled} navCategories={navCategories} />
 
       <HelpPanel title="큐레이션 보드 가이드">
         <p style={{ marginBottom: 12 }}>
@@ -106,9 +97,22 @@ export default async function AdminPage() {
           <li>3점 이하 → 자동 폐기</li>
         </ul>
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>자동 실행 스케줄</p>
-        <ul style={{ paddingLeft: 16 }}>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li>매주 화요일·목요일 오전 9시 자동 실행</li>
           <li>수동 실행은 [큐레이션 실행] 버튼 클릭</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>탭 분류 기준</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>메인 표시 중</strong> — 가장 최근 큐레이션 실행 이후 발행된 기사. 홈 페이지에 노출됨</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>대기열</strong> — 품질 점수 미달로 자동 발행 보류 중인 기사. 수동으로 발행·삭제 가능</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>아카이브</strong> — 이전 큐레이션 배치의 기사. 홈에서 내려간 상태이며 카테고리 아카이브 페이지에 표시됨</li>
+        </ul>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>아카이브 기준</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li>기준 시각: 가장 최근 스케줄 실행일 오전 9시 KST (화·목 기준)</li>
+          <li>기준 시각 <strong style={{ color: "var(--on-surface)" }}>이전</strong> 발행 → 아카이브 / <strong style={{ color: "var(--on-surface)" }}>이후</strong> 발행 → 메인 표시 중</li>
+          <li>예) 목요일 큐레이션 실행 후 → 목요일 오전 9시 이전 기사는 전부 아카이브로 이동</li>
+          <li>아카이브 기사는 [재발행] 버튼으로 오늘 날짜 기준 메인에 다시 올릴 수 있음</li>
         </ul>
       </HelpPanel>
     </div>

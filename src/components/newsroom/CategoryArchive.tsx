@@ -17,13 +17,18 @@ function toDateStr(d: Date) {
 }
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString("ko-KR", { year: "numeric", month: "long", day: "numeric" });
+  return new Date(iso).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric" });
+}
+
+/** KST 기준 YYYY-MM-DD 반환 */
+function toKSTDateStr(iso: string) {
+  return new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Seoul" }).format(new Date(iso)); // sv-SE → YYYY-MM-DD
 }
 
 function groupByDate(items: NewsItem[]) {
   const map = new Map<string, NewsItem[]>();
   for (const item of items) {
-    const day = item.published_at.slice(0, 10);
+    const day = toKSTDateStr(item.published_at); // KST 기준 날짜
     if (!map.has(day)) map.set(day, []);
     map.get(day)!.push(item);
   }

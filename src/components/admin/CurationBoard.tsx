@@ -7,6 +7,7 @@ import {
   ExternalLink, Sparkles, Loader2, RefreshCw, TrendingUp,
 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
+import { calcLastScheduledRun } from "@/lib/schedule";
 
 type Tab = "live" | "staging" | "archive";
 
@@ -22,18 +23,17 @@ type Props = {
   qualityThresholds?: { auto_publish: number; staging: number };
   displayWindowDays?: number;
   scheduleDays?: number[];
+  scheduleHour?: number;
+  scheduleEnabled?: boolean;
   navCategories?: string[];
 };
 
-function makeWindowMs(days: number) {
-  return days * 24 * 60 * 60 * 1000;
-}
 
-function isLive(item: NewsItem, windowMs: number) {
-  return item.is_published && Date.now() - new Date(item.published_at).getTime() < windowMs;
+function isLive(item: NewsItem, lastRunMs: number) {
+  return item.is_published && new Date(item.published_at).getTime() >= lastRunMs;
 }
-function isArchive(item: NewsItem, windowMs: number) {
-  return item.is_published && Date.now() - new Date(item.published_at).getTime() >= windowMs;
+function isArchive(item: NewsItem, lastRunMs: number) {
+  return item.is_published && new Date(item.published_at).getTime() < lastRunMs;
 }
 
 export default function CurationBoard({
@@ -41,6 +41,8 @@ export default function CurationBoard({
   qualityThresholds = { auto_publish: 8, staging: 5 },
   displayWindowDays = 4,
   scheduleDays = [],
+  scheduleHour = 9,
+  scheduleEnabled = false,
   navCategories,
 }: Props) {
   const router = useRouter();
@@ -62,10 +64,14 @@ export default function CurationBoard({
   const dragOverIdx = useRef<number | null>(null);
 
   // 탭별 기사 분류
-  const windowMs = makeWindowMs(displayWindowDays);
-  const live = items.filter((i) => isLive(i, windowMs));
+  // 스케줄이 활성화된 경우: 마지막 예약 실행 이후 발행분 = LIVE
+  // 스케줄 없는 경우: 최근 displayWindowDays일 이내 발행분 = LIVE
+  const lastRunMs = scheduleEnabled && scheduleDays.length > 0
+    ? calcLastScheduledRun(scheduleDays, scheduleHour).getTime()
+    : Date.now() - displayWindowDays * 24 * 60 * 60 * 1000;
+  const live = items.filter((i) => isLive(i, lastRunMs));
   const staging = items.filter((i) => !i.is_published);
-  const archive = items.filter((i) => isArchive(i, windowMs));
+  const archive = items.filter((i) => isArchive(i, lastRunMs));
 
   // Top News 계산 (카테고리별 display_order 가장 낮은 live 기사)
   const categories = navCategories ?? [...new Set(live.map((i) => i.category))];
@@ -97,7 +103,7 @@ export default function CurationBoard({
     reordered.splice(to, 0, moved);
 
     setItems((prev) => {
-      const otherIds = prev.filter((i) => !isLive(i, windowMs)).map((i) => i.id);
+      const otherIds = prev.filter((i) => !isLive(i, lastRunMs)).map((i) => i.id);
       const allOrdered = [...reordered, ...otherIds];
       const idxMap = new Map(allOrdered.map((id, i) => [id, i + 1]));
       return prev
@@ -209,14 +215,16 @@ export default function CurationBoard({
   const [filterCat, setFilterCat] = useState("ALL");
   const filtered = activeList.filter((i) => filterCat === "ALL" || i.category === filterCat);
 
-  // 아카이브 날짜별 그룹핑 (최신순)
+  // 아카이브 날짜별 그룹핑 (KST 기준, 최신순)
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
   const archiveGroups: { dateLabel: string; dateMs: number; items: NewsItem[] }[] = [];
   if (tab === "archive") {
     const grouped: Record<string, { dateMs: number; items: NewsItem[] }> = {};
     for (const item of filtered) {
-      const d = new Date(item.published_at);
-      const dateMs = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-      const key = `${d.getFullYear()}년 ${d.getMonth() + 1}월 ${d.getDate()}일`;
+      const dKST = new Date(new Date(item.published_at).getTime() + KST_OFFSET_MS);
+      // KST 자정 기준으로 그룹핑
+      const dateMs = new Date(dKST.getUTCFullYear(), dKST.getUTCMonth(), dKST.getUTCDate()).getTime();
+      const key = `${dKST.getUTCFullYear()}년 ${dKST.getUTCMonth() + 1}월 ${dKST.getUTCDate()}일`;
       if (!grouped[key]) grouped[key] = { dateMs, items: [] };
       grouped[key].items.push(item);
     }
@@ -338,8 +346,8 @@ export default function CurationBoard({
         <div className="mb-4 px-3 py-2 rounded-md text-xs flex items-center gap-2"
           style={{ background: "rgba(var(--primary-rgb, 26,115,232),0.07)", color: "var(--primary)" }}>
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--primary)" }} />
-          {scheduleDays.length > 0
-            ? `${formatScheduleDays(scheduleDays)} 큐레이션 기준 최근 ${displayWindowDays}일 기사가 메인 페이지에 표시됩니다 · 현재 ${live.length}건 노출 중`
+          {scheduleEnabled && scheduleDays.length > 0
+            ? `가장 최근 ${formatScheduleDays(scheduleDays)} 큐레이션(${new Date(lastRunMs).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}) 이후 기사가 표시됩니다 · 현재 ${live.length}건 노출 중`
             : `발행 후 ${displayWindowDays}일 이내 기사가 메인 페이지에 표시됩니다 · 현재 ${live.length}건 노출 중`
           }
         </div>
@@ -350,7 +358,10 @@ export default function CurationBoard({
         <div className="mb-4 px-3 py-2 rounded-md text-xs flex items-center gap-2"
           style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
           <RefreshCw size={11} />
-          메인 페이지에서 내려간 기사입니다. 재발행하면 오늘 날짜로 메인에 다시 올라갑니다.
+          <span>
+            {new Date(lastRunMs).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} 이전 발행 기사입니다 (이전 큐레이션 배치).
+            재발행하면 오늘 날짜로 메인에 다시 올라갑니다.
+          </span>
         </div>
       )}
 
@@ -548,7 +559,7 @@ function ArticleCard({
           )}
           {tab === "archive" && (
             <span className="text-[0.65rem]" style={{ color: "var(--on-surface-variant)" }}>
-              {new Date(item.published_at).toLocaleDateString("ko-KR", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {new Date(item.published_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
         </div>

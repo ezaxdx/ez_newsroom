@@ -73,6 +73,18 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
           </label>
 
           <Link
+            href="/events"
+            className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
+            style={{
+              background: "var(--surface-container)",
+              color: "var(--on-surface)",
+              border: "1px solid var(--surface-container-high)",
+            }}
+          >
+            행사 캘린더
+          </Link>
+
+          <Link
             href="/admin"
             className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
             style={{

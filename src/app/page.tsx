@@ -1,7 +1,7 @@
-import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
+import { calcLastScheduledRun } from "@/lib/schedule";
 import TopBar from "@/components/newsroom/TopBar";
 import NewsroomClient from "@/components/newsroom/NewsroomClient";
 import Footer from "@/components/newsroom/Footer";
@@ -21,36 +21,43 @@ function groupByCategory(items: NewsItem[]) {
     .map((cat) => ({ label: cat, items: map.get(cat)! }));
 }
 
-type SiteSettings = { navCategories: string[]; carouselIntervalMs: number };
+const FALLBACK_LAST_RUN_ISO = () => new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+type SiteSettings = { navCategories: string[]; carouselIntervalMs: number; lastRunISO: string };
 
 async function fetchSiteSettings(): Promise<SiteSettings> {
-  const defaults = { navCategories: DEFAULT_NAV_CATEGORIES, carouselIntervalMs: 5000 };
+  const defaults = { navCategories: DEFAULT_NAV_CATEGORIES, carouselIntervalMs: 5000, lastRunISO: FALLBACK_LAST_RUN_ISO() };
   try {
-    const supabase = await createClient();
+    const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("nav_categories, carousel_interval_sec")
+      .select("nav_categories, carousel_interval_sec, auto_schedule")
       .limit(1)
       .single();
+    const schedule = data?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
+    const scheduleDays: number[] = schedule.days ?? [];
+    const scheduleHour: number = schedule.hour ?? 9;
+    const lastRunISO = schedule.enabled && scheduleDays.length > 0
+      ? calcLastScheduledRun(scheduleDays, scheduleHour).toISOString()
+      : FALLBACK_LAST_RUN_ISO();
     return {
       navCategories: data?.nav_categories?.length ? data.nav_categories : defaults.navCategories,
       carouselIntervalMs: data?.carousel_interval_sec ? data.carousel_interval_sec * 1000 : defaults.carouselIntervalMs,
+      lastRunISO,
     };
   } catch { /* fallback */ }
   return defaults;
 }
 
-async function fetchNews(): Promise<NewsItem[]> {
+async function fetchNews(lastRunISO: string): Promise<NewsItem[]> {
   try {
     const supabase = createAdminClient(); // service role → RLS 우회, 서버 전용
-    const fourDaysAgo = new Date();
-    fourDaysAgo.setDate(fourDaysAgo.getDate() - 4);
 
     const { data, error } = await supabase
       .from("news")
       .select("*")
       .eq("is_published", true)
-      .gte("published_at", fourDaysAgo.toISOString())
+      .gte("published_at", lastRunISO)
       .order("display_order", { ascending: true });
 
     if (error) console.error("[fetchNews] Supabase error:", error);
@@ -62,7 +69,8 @@ async function fetchNews(): Promise<NewsItem[]> {
 }
 
 export default async function NewsroomPage() {
-  const [news, { navCategories, carouselIntervalMs }] = await Promise.all([fetchNews(), fetchSiteSettings()]);
+  const { navCategories, carouselIntervalMs, lastRunISO } = await fetchSiteSettings();
+  const [news] = await Promise.all([fetchNews(lastRunISO)]);
 
   // One top article per nav category → hero carousel
   const heroSlides = navCategories

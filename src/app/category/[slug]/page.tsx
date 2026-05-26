@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { NewsItem } from "@/lib/types";
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { calcLastScheduledRun } from "@/lib/schedule";
 import TopBar from "@/components/newsroom/TopBar";
 import Footer from "@/components/newsroom/Footer";
 import CategoryArchive from "@/components/newsroom/CategoryArchive";
@@ -57,7 +58,7 @@ function makeMockItems(category: string): NewsItem[] {
   return items;
 }
 
-async function fetchCategoryItems(category: string): Promise<NewsItem[]> {
+async function fetchCategoryItems(category: string, lastRunISO: string): Promise<NewsItem[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return makeMockItems(category);
   try {
     const supabase = createAdminClient();
@@ -69,6 +70,7 @@ async function fetchCategoryItems(category: string): Promise<NewsItem[]> {
       .eq("is_published", true)
       .ilike("category", category)
       .gte("published_at", twoWeeksAgo.toISOString())
+      .lt("published_at", lastRunISO)   // 현재 라이브 배치(홈 표시 중) 제외
       .order("published_at", { ascending: false });
     if (error) throw error;
     return (data ?? []) as NewsItem[];
@@ -77,18 +79,27 @@ async function fetchCategoryItems(category: string): Promise<NewsItem[]> {
   }
 }
 
-async function fetchNavCategories(): Promise<string[]> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return DEFAULT_NAV_CATEGORIES;
+/** curation_settings 한 번만 조회 → navCategories + lastRunISO 동시에 반환 */
+async function fetchPageSettings(): Promise<{ navCategories: string[]; lastRunISO: string }> {
+  const fallbackISO = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) {
+    return { navCategories: DEFAULT_NAV_CATEGORIES, lastRunISO: fallbackISO };
+  }
   try {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("nav_categories")
+      .select("nav_categories, auto_schedule")
       .limit(1)
       .single();
-    if (data?.nav_categories?.length) return data.nav_categories;
+    const navCategories = data?.nav_categories?.length ? data.nav_categories : DEFAULT_NAV_CATEGORIES;
+    const schedule = data?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
+    const lastRunISO = schedule.enabled && schedule.days?.length > 0
+      ? calcLastScheduledRun(schedule.days, schedule.hour ?? 9).toISOString()
+      : fallbackISO;
+    return { navCategories, lastRunISO };
   } catch { /* fallback */ }
-  return DEFAULT_NAV_CATEGORIES;
+  return { navCategories: DEFAULT_NAV_CATEGORIES, lastRunISO: fallbackISO };
 }
 
 type Props = { params: Promise<{ slug: string }> };
@@ -99,10 +110,10 @@ export default async function CategoryPage({ params }: Props) {
   const { slug } = await params;
   const category = slug.toUpperCase();
 
-  const navCategories = await fetchNavCategories();
+  const { navCategories, lastRunISO } = await fetchPageSettings();
   if (!navCategories.includes(category)) notFound();
 
-  const items = await fetchCategoryItems(category);
+  const items = await fetchCategoryItems(category, lastRunISO);
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "var(--surface)" }}>

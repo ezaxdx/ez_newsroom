@@ -55,7 +55,7 @@ export default function GmailPage() {
           </div>
           {updatedAt && (
             <div style={{ fontSize: 13, color: "var(--on-surface-variant, #666)" }}>
-              마지막 인증: {new Date(updatedAt).toLocaleString("ko-KR")}
+              마지막 인증: {new Date(updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
             </div>
           )}
         </div>

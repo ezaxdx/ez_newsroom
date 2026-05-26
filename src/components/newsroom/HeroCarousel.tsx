@@ -13,14 +13,13 @@ type Props = {
 };
 
 function formatFeaturedDate(iso: string) {
-  const d = new Date(iso);
-  const today = new Date();
-  const isToday =
-    d.getFullYear() === today.getFullYear() &&
-    d.getMonth() === today.getMonth() &&
-    d.getDate() === today.getDate();
-  if (isToday) return "Featured Today";
-  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const TZ = "Asia/Seoul";
+  const fmt = (date: string | number | Date, opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("ko-KR", { timeZone: TZ, ...opts }).format(new Date(date));
+  const dStr = fmt(iso, { year: "numeric", month: "2-digit", day: "2-digit" });
+  const todayStr = fmt(Date.now(), { year: "numeric", month: "2-digit", day: "2-digit" });
+  if (dStr === todayStr) return "오늘의 뉴스";
+  return fmt(iso, { month: "short", day: "numeric" });
 }
 
 export default function HeroCarousel({ slides, onOpen, interval = 5000 }: Props) {
