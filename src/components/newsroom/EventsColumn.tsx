@@ -19,7 +19,12 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
-type TooltipState = { dateStr: string; top: number; left: number } | null;
+type TooltipState = {
+  dateStr: string;
+  cellTop: number;
+  cellBottom: number;
+  cellCenterX: number;
+} | null;
 
 export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
   // Init in useEffect to avoid SSR/client hydration mismatch
@@ -278,9 +283,10 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                 onMouseEnter={hasEvent ? (ev) => {
                   const rect = ev.currentTarget.getBoundingClientRect();
                   setTooltip({
-                    dateStr: cell.dateStr,
-                    top:  rect.bottom + 6,
-                    left: rect.left + rect.width / 2,
+                    dateStr:     cell.dateStr,
+                    cellTop:     rect.top,
+                    cellBottom:  rect.bottom,
+                    cellCenterX: rect.left + rect.width / 2,
                   });
                 } : undefined}
                 onMouseLeave={hasEvent ? () => setTooltip(null) : undefined}
@@ -421,22 +427,37 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
       {/* ── 날짜 호버 툴팁 (position:fixed로 overflow 탈출) ── */}
       {tooltip && (() => {
         const tooltipEvents = eventsByDate.get(tooltip.dateStr) ?? [];
-        const [y, m, d] = tooltip.dateStr.split("-").map(Number);
+        const [, m, d] = tooltip.dateStr.split("-").map(Number);
+
+        const TIP_W   = 240;
+        const TIP_EST = 40 + tooltipEvents.length * 52; // 대략적인 높이 추정
+        const MARGIN  = 8;
+        const vw = typeof window !== "undefined" ? window.innerWidth  : 1200;
+        const vh = typeof window !== "undefined" ? window.innerHeight : 800;
+
+        // 좌우 보정: 중앙 정렬 기준으로 뷰포트 벗어나지 않게 클램핑
+        const rawLeft   = tooltip.cellCenterX - TIP_W / 2;
+        const clampLeft = Math.max(MARGIN, Math.min(rawLeft, vw - TIP_W - MARGIN));
+
+        // 위아래 보정: 아래 공간 부족하면 셀 위쪽으로 플립
+        const showAbove = tooltip.cellBottom + TIP_EST + MARGIN > vh;
+        const top       = showAbove
+          ? tooltip.cellTop - TIP_EST - 6
+          : tooltip.cellBottom + 6;
+
         return (
           <div
             style={{
               position: "fixed",
-              top:  tooltip.top,
-              left: tooltip.left,
-              transform: "translateX(-50%)",
-              zIndex: 9999,
+              top,
+              left:    clampLeft,
+              zIndex:  9999,
               background: "var(--surface-container-lowest)",
               border: "1px solid var(--surface-container-high)",
               borderRadius: 10,
               boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
               padding: "10px 14px",
-              minWidth: 180,
-              maxWidth: 240,
+              width:   TIP_W,
               pointerEvents: "none",
             }}
           >
