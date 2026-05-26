@@ -41,4 +41,4 @@ yarn-error.log*
 next-env.d.ts
 
 # 회사 내부 정보 (git 제외)
-docs/company_context.md
+docs/
