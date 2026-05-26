@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { logEvent } from "@/lib/analytics";
 
 export type CalendarEvent = {
   id: string;
@@ -8,6 +9,7 @@ export type CalendarEvent = {
   venue: string;
   start_date: string;
   end_date: string | null;
+  website?: string | null;
 };
 
 const DAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -117,6 +119,13 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
       })
       .slice(0, 20);
   }, [events, todayStr]);
+
+  const handleEventClick = useCallback((e: CalendarEvent) => {
+    logEvent({ event_type: "event_click", event_id: e.id });
+    if (e.website) {
+      window.open(e.website, "_blank", "noopener,noreferrer");
+    }
+  }, []);
 
   const monthLabel =
     viewYear !== null && viewMonth !== null
@@ -309,6 +318,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
           return (
             <div
               key={e.id}
+              onClick={() => handleEventClick(e)}
               style={{
                 display: "flex",
                 gap: 10,
@@ -317,10 +327,10 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                   idx < upcoming.length - 1
                     ? "1px solid var(--surface-container-high)"
                     : "none",
-                cursor: "pointer",
+                cursor: e.website ? "pointer" : "default",
                 transition: "opacity 0.15s",
               }}
-              onMouseEnter={(el) => (el.currentTarget.style.opacity = "0.65")}
+              onMouseEnter={(el) => { if (e.website) el.currentTarget.style.opacity = "0.65"; }}
               onMouseLeave={(el) => (el.currentTarget.style.opacity = "1")}
             >
               {/* Date box */}

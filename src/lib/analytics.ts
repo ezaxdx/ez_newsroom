@@ -1,10 +1,11 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type EventType = "view" | "detail_view" | "outbound_click";
+export type EventType = "view" | "detail_view" | "outbound_click" | "event_click";
 
 type LogPayload = {
   event_type: EventType;
   news_id?: string;
+  event_id?: string;
 };
 
 function getUtmParams() {
@@ -23,7 +24,8 @@ export async function logEvent(payload: LogPayload) {
     const supabase = createClient();
     await supabase.from("user_logs").insert({
       event_type: payload.event_type,
-      news_id: payload.news_id ?? null,
+      news_id:    payload.news_id  ?? null,
+      event_id:   payload.event_id ?? null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       entry_path: typeof window !== "undefined" ? window.location.pathname : null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,

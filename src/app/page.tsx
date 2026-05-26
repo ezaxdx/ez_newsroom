@@ -126,7 +126,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       .split("T")[0];
     const { data } = await supabase
       .from("convention_events")
-      .select("id, event_name, event_name_en, venue, start_date, end_date, organizer, category, industry")
+      .select("id, event_name, event_name_en, venue, start_date, end_date, organizer, category, industry, website")
       .eq("is_published", true)
       .gte("start_date", from)
       .order("start_date", { ascending: true })
@@ -136,12 +136,13 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
 
     // EZPMP 픽 스코어링: 최소 점수 이상만, 스코어 내림차순 top 8
     const today = new Date();
-    const scored = (data as (CalendarEvent & {
+    type RawEvent = CalendarEvent & {
       event_name_en?: string | null;
       organizer?: string | null;
       category?: string | null;
       industry?: string | null;
-    })[])
+    };
+    const scored = (data as RawEvent[])
       .map((e) => ({
         event: e,
         score: scoreEvent(
@@ -166,6 +167,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
         venue:      event.venue,
         start_date: event.start_date,
         end_date:   event.end_date,
+        website:    event.website ?? null,
       }));
 
     return scored;

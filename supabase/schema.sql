@@ -38,8 +38,9 @@ create table if not exists public.curation_settings (
 -- ── user_logs ─────────────────────────────────────────────────────────
 create table if not exists public.user_logs (
   id           uuid primary key default gen_random_uuid(),
-  event_type   text check (event_type in ('view','detail_view','outbound_click')),
+  event_type   text check (event_type in ('view','detail_view','outbound_click','event_click')),
   news_id      uuid references public.news(id) on delete set null,
+  event_id     uuid references public.convention_events(id) on delete set null,
   referrer     text,
   utm_source   text,
   utm_medium   text,
