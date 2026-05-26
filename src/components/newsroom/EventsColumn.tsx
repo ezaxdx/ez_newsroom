@@ -19,11 +19,14 @@ function pad2(n: number) {
   return String(n).padStart(2, "0");
 }
 
+type TooltipState = { dateStr: string; top: number; left: number } | null;
+
 export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
   // Init in useEffect to avoid SSR/client hydration mismatch
   const [viewYear, setViewYear]   = useState<number | null>(null);
   const [viewMonth, setViewMonth] = useState<number | null>(null); // 0-indexed
   const [todayStr, setTodayStr]   = useState<string | null>(null);
+  const [tooltip, setTooltip]     = useState<TooltipState>(null);
 
   useEffect(() => {
     const now = new Date();
@@ -45,24 +48,27 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
     else setViewMonth(viewMonth + 1);
   }
 
-  // Dates that have at least one event (for dot markers)
-  const eventDates = useMemo(() => {
-    const set = new Set<string>();
+  // 날짜 → 해당 행사 목록 맵 (툴팁용)
+  const eventsByDate = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
     for (const e of events) {
       const start = new Date(e.start_date);
       const end   = e.end_date ? new Date(e.end_date) : new Date(e.start_date);
       const cur   = new Date(start);
       let guard   = 0;
       while (cur <= end && guard < 60) {
-        set.add(
-          `${cur.getFullYear()}-${pad2(cur.getMonth() + 1)}-${pad2(cur.getDate())}`
-        );
+        const key = `${cur.getFullYear()}-${pad2(cur.getMonth() + 1)}-${pad2(cur.getDate())}`;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(e);
         cur.setDate(cur.getDate() + 1);
         guard++;
       }
     }
-    return set;
+    return map;
   }, [events]);
+
+  // Dates that have at least one event (for dot markers)
+  const eventDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
 
   // Calendar grid cells
   const calCells = useMemo(() => {
@@ -267,7 +273,17 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                     ? "var(--on-surface)"
                     : "var(--surface-container-high)",
                   fontWeight: isToday ? 700 : 400,
+                  cursor: hasEvent ? "pointer" : "default",
                 }}
+                onMouseEnter={hasEvent ? (ev) => {
+                  const rect = ev.currentTarget.getBoundingClientRect();
+                  setTooltip({
+                    dateStr: cell.dateStr,
+                    top:  rect.bottom + 6,
+                    left: rect.left + rect.width / 2,
+                  });
+                } : undefined}
+                onMouseLeave={hasEvent ? () => setTooltip(null) : undefined}
               >
                 {cell.day}
                 {hasEvent && (
@@ -401,6 +417,76 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
           );
         })}
       </div>
+
+      {/* ── 날짜 호버 툴팁 (position:fixed로 overflow 탈출) ── */}
+      {tooltip && (() => {
+        const tooltipEvents = eventsByDate.get(tooltip.dateStr) ?? [];
+        const [y, m, d] = tooltip.dateStr.split("-").map(Number);
+        return (
+          <div
+            style={{
+              position: "fixed",
+              top:  tooltip.top,
+              left: tooltip.left,
+              transform: "translateX(-50%)",
+              zIndex: 9999,
+              background: "var(--surface-container-lowest)",
+              border: "1px solid var(--surface-container-high)",
+              borderRadius: 10,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.12)",
+              padding: "10px 14px",
+              minWidth: 180,
+              maxWidth: 240,
+              pointerEvents: "none",
+            }}
+          >
+            {/* 날짜 헤더 */}
+            <p style={{
+              margin: "0 0 8px",
+              fontSize: "0.65rem",
+              fontWeight: 700,
+              color: "var(--on-surface-variant)",
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+            }}>
+              {m}월 {d}일 · {tooltipEvents.length}건
+            </p>
+            {/* 행사 목록 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {tooltipEvents.map((ev) => (
+                <div key={ev.id}>
+                  <p style={{
+                    margin: 0,
+                    fontSize: "0.76rem",
+                    fontWeight: 600,
+                    lineHeight: 1.35,
+                    color: "var(--on-surface)",
+                    display: "-webkit-box",
+                    WebkitLineClamp: 2,
+                    WebkitBoxOrient: "vertical",
+                    overflow: "hidden",
+                  }}>
+                    {ev.event_name}
+                  </p>
+                  <p style={{
+                    margin: "2px 0 0",
+                    fontSize: "0.64rem",
+                    color: "var(--on-surface-variant)",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}>
+                    📍 {ev.venue}
+                    {ev.end_date && ev.end_date !== ev.start_date
+                      ? ` · ~${parseInt(ev.end_date.split("-")[1])}.${parseInt(ev.end_date.split("-")[2])}`
+                      : ""}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
