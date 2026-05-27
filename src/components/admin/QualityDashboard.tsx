@@ -572,6 +572,193 @@ function RssSourcesPanel({
   );
 }
 
+// ── 수동 관리 패널 ────────────────────────────────────────────────
+type DedupPreview = { noise: number; dup: number; foreign: number; total_delete: number; dup_groups: number } | null;
+
+function ManualOpsPanel() {
+  const [scrapeStatus, setScrapeStatus] = useState<"idle" | "running" | "done" | "error">("idle");
+  const [dedupPreview, setDedupPreview] = useState<DedupPreview>(null);
+  const [dedupStatus, setDedupStatus] = useState<"idle" | "loading" | "ready" | "running" | "done" | "error">("idle");
+  const [dedupMsg, setDedupMsg]   = useState("");
+  const [open, setOpen] = useState(false);
+
+  async function handleScrape() {
+    setScrapeStatus("running");
+    try {
+      const res = await fetch("/api/admin/scrape-events", { method: "POST" });
+      setScrapeStatus(res.ok ? "done" : "error");
+    } catch {
+      setScrapeStatus("error");
+    }
+  }
+
+  async function loadDedupPreview() {
+    setDedupStatus("loading");
+    setDedupPreview(null);
+    try {
+      const res = await fetch("/api/admin/dedup-events");
+      const data = await res.json();
+      setDedupPreview(data);
+      setDedupStatus("ready");
+    } catch {
+      setDedupStatus("error");
+      setDedupMsg("미리보기 로드 실패");
+    }
+  }
+
+  async function runDedup() {
+    setDedupStatus("running");
+    try {
+      const res = await fetch("/api/admin/dedup-events", { method: "POST" });
+      const data = await res.json();
+      if (data.ok) {
+        setDedupMsg(`삭제 ${data.total_delete}건, 비공개 ${data.foreign}건 처리 완료`);
+        setDedupStatus("done");
+      } else {
+        setDedupMsg(data.error ?? "오류 발생");
+        setDedupStatus("error");
+      }
+    } catch {
+      setDedupStatus("error");
+      setDedupMsg("실행 실패");
+    }
+  }
+
+  const scrapeColor: Record<string, string> = {
+    idle: "#64748b", running: "#f59e0b", done: "#10b981", error: "#ef4444",
+  };
+  const scrapeLabel: Record<string, string> = {
+    idle: "스크래핑 실행", running: "실행 중...", done: "완료 ✓", error: "오류 — 재시도",
+  };
+
+  return (
+    <div style={{ marginBottom: 24 }}>
+      <button
+        onClick={() => setOpen((v) => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8, background: "none",
+          border: "none", cursor: "pointer", padding: "0 0 12px", width: "100%",
+        }}
+      >
+        <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--on-surface)" }}>
+          🛠 수동 관리
+        </span>
+        <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
+          {open ? "▲" : "▼"}
+        </span>
+      </button>
+
+      {open && (
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16,
+          padding: 20, borderRadius: 12,
+          border: "1px solid var(--surface-container-high)",
+          background: "var(--surface-container-lowest)",
+          marginBottom: 4,
+        }}>
+          {/* ── 스크래핑 ── */}
+          <div>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.82rem" }}>
+              📡 행사 데이터 수집
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: "0.73rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
+              쇼알라 + 한국전시주최자협회에서 최신 행사를 수집합니다.
+              수집은 백그라운드에서 진행되며 약 1~2분 소요됩니다.
+            </p>
+            <button
+              onClick={handleScrape}
+              disabled={scrapeStatus === "running"}
+              style={{
+                padding: "7px 18px", borderRadius: 8, fontSize: "0.78rem",
+                fontWeight: 700, cursor: scrapeStatus === "running" ? "wait" : "pointer",
+                border: `1px solid ${scrapeColor[scrapeStatus]}40`,
+                background: scrapeColor[scrapeStatus] + "18",
+                color: scrapeColor[scrapeStatus],
+                transition: "all 0.2s",
+              }}
+            >
+              {scrapeLabel[scrapeStatus]}
+            </button>
+            {scrapeStatus === "done" && (
+              <p style={{ margin: "8px 0 0", fontSize: "0.72rem", color: "#10b981" }}>
+                백그라운드에서 실행 중입니다. 1~2분 후 새로고침하면 결과를 확인할 수 있습니다.
+              </p>
+            )}
+          </div>
+
+          {/* ── 중복/불량 정리 ── */}
+          <div>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.82rem" }}>
+              🧹 중복 / 불량 데이터 정리
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: "0.73rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
+              노이즈 행사명 삭제, 중복 제거(정보량 낮은 쪽), 해외 venue 비공개 처리를 수행합니다.
+            </p>
+
+            {/* 미리보기 */}
+            {dedupPreview && dedupStatus === "ready" && (
+              <div style={{
+                padding: "10px 12px", borderRadius: 8, marginBottom: 10,
+                background: "var(--surface-container)",
+                border: "1px solid var(--surface-container-high)",
+                fontSize: "0.73rem", color: "var(--on-surface-variant)",
+              }}>
+                <p style={{ margin: "0 0 4px", fontWeight: 700, color: "var(--on-surface)", fontSize: "0.75rem" }}>
+                  미리보기 결과
+                </p>
+                <span style={{ marginRight: 14 }}>노이즈 삭제 <b style={{ color: "#ef4444" }}>{dedupPreview.noise}건</b></span>
+                <span style={{ marginRight: 14 }}>중복 삭제 <b style={{ color: "#ef4444" }}>{dedupPreview.dup}건</b> ({dedupPreview.dup_groups}그룹)</span>
+                <span>해외 비공개 <b style={{ color: "#d97706" }}>{dedupPreview.foreign}건</b></span>
+              </div>
+            )}
+
+            {dedupStatus === "done" && (
+              <p style={{ margin: "0 0 10px", fontSize: "0.73rem", color: "#10b981", fontWeight: 600 }}>
+                ✅ {dedupMsg}
+              </p>
+            )}
+            {dedupStatus === "error" && (
+              <p style={{ margin: "0 0 10px", fontSize: "0.73rem", color: "#ef4444" }}>
+                ⚠️ {dedupMsg}
+              </p>
+            )}
+
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                onClick={loadDedupPreview}
+                disabled={dedupStatus === "loading" || dedupStatus === "running"}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, fontSize: "0.78rem",
+                  fontWeight: 600, cursor: "pointer",
+                  border: "1px solid var(--surface-container-high)",
+                  background: "transparent", color: "var(--on-surface-variant)",
+                  transition: "all 0.2s",
+                }}
+              >
+                {dedupStatus === "loading" ? "분석 중..." : "미리보기"}
+              </button>
+              <button
+                onClick={runDedup}
+                disabled={dedupStatus === "running" || dedupStatus === "loading"}
+                style={{
+                  padding: "7px 14px", borderRadius: 8, fontSize: "0.78rem",
+                  fontWeight: 700, cursor: dedupStatus === "running" ? "wait" : "pointer",
+                  border: "1px solid #ef444440",
+                  background: "#ef444418", color: "#ef4444",
+                  transition: "all 0.2s",
+                  opacity: dedupStatus === "running" ? 0.6 : 1,
+                }}
+              >
+                {dedupStatus === "running" ? "실행 중..." : "정리 실행"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── 행사 관리 탭 ─────────────────────────────────────────────────
 function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [events, setEvents] = useState(initialEvents);
@@ -633,6 +820,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
   return (
     <div>
+      {/* 수동 관리 패널 */}
+      <ManualOpsPanel />
+
       {/* 통계 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 20 }}>
         {[
