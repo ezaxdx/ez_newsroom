@@ -32,7 +32,7 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
     >
       {/* ── Row 1: branding + actions ── */}
       <div className="max-w-[1280px] mx-auto px-8 pt-3 pb-2 flex items-center justify-between gap-4">
-        <div>
+        <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
           <p
             className="m-0 text-[0.75rem] font-semibold tracking-[0.05em] uppercase"
             style={{ color: "var(--on-surface-variant)" }}
@@ -40,12 +40,12 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
             Daily Briefing
           </p>
           <h1
-            className="m-0 leading-[1.1] tracking-[-0.02em]"
-            style={{ fontSize: "clamp(1.4rem, 2.5vw, 1.9rem)" }}
+            className="m-0 leading-[1.1] tracking-[-0.02em] transition-opacity hover:opacity-70"
+            style={{ fontSize: "clamp(1.4rem, 2.5vw, 1.9rem)", cursor: "pointer" }}
           >
             The Daily Monolith
           </h1>
-        </div>
+        </Link>
 
         <div className="flex items-center gap-3">
           <label className="relative flex items-center">
