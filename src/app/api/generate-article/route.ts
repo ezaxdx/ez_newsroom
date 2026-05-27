@@ -35,6 +35,22 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "GOOGLE_AI_API_KEY not configured" }, { status: 500 });
   }
 
+  // 네이버 블로그 URL → PostView.naver 변환
+  function resolveNaverBlogUrl(u: string): string {
+    const m = u.match(/(?:m\.)?blog\.naver\.com\/([^/?#]+)\/(\d+)/);
+    if (!m) return u;
+    return `https://blog.naver.com/PostView.naver?blogId=${m[1]}&logNo=${m[2]}&isRedirectFromMobile=true`;
+  }
+  const fetchUrl = resolveNaverBlogUrl(url);
+  const isNaver = fetchUrl !== url;
+  const fetchHeaders: Record<string, string> = isNaver
+    ? {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "ko-KR,ko;q=0.9",
+        "Referer": "https://blog.naver.com/",
+      }
+    : { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" };
+
   // OG 이미지와 원문 병렬 fetch
   const ogImagePromise = fetch(
     `${req.nextUrl.origin}/api/og-image?url=${encodeURIComponent(url)}`
@@ -45,9 +61,10 @@ export async function POST(req: NextRequest) {
 
   let articleText = "";
   try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
+    const res = await fetch(fetchUrl, {
+      headers: fetchHeaders,
       signal: AbortSignal.timeout(8000),
+      redirect: "follow",
     });
     const html = await res.text();
     articleText = html
