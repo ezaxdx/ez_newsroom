@@ -30,8 +30,112 @@ const EMPTY: ArticleFields = {
   level: "Intermediate",
 };
 
-/* ── Shared field editor ── */
+/* ── 레벨 메타 ── */
 const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
+
+const LEVEL_META: Record<string, {
+  label: string;
+  color: string;
+  bg: string;
+  audience: string;
+  tone: string;
+  tips: string[];
+}> = {
+  Beginner: {
+    label: "Beginner",
+    color: "#16a34a",
+    bg: "#f0fdf4",
+    audience: "업계 입문자 · 비전공자",
+    tone: "쉬운 언어, 짧은 문장, 비유 활용",
+    tips: [
+      "전문 용어는 반드시 괄호 안에 풀어서 설명",
+      "\"왜 중요한가\"를 일상적인 예시로 설명",
+      "문장은 2줄 이내로, 결론을 먼저",
+    ],
+  },
+  Intermediate: {
+    label: "Intermediate",
+    color: "#2563eb",
+    bg: "#eff6ff",
+    audience: "실무 담당자 · 기본 지식 보유자",
+    tone: "업계 용어 사용 가능, 실용적 관점",
+    tips: [
+      "현장에서 바로 쓸 수 있는 정보 위주",
+      "수치·사례로 신뢰도 강화",
+      "\"그래서 어떻게 하면 되는가\" 중심으로 마무리",
+    ],
+  },
+  Advanced: {
+    label: "Advanced",
+    color: "#9333ea",
+    bg: "#faf5ff",
+    audience: "전략·기획자 · 의사결정자",
+    tone: "심층 분석, 거시적 시각, 논리적 구조",
+    tips: [
+      "산업 구조 변화와 경쟁 구도까지 분석",
+      "인과관계와 데이터 중심으로 작성",
+      "\"다음 스텝은 무엇인가\" 전략 시사점 필수",
+    ],
+  },
+};
+
+/* ── 레벨 선택 카드 ── */
+function LevelPicker({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (l: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--on-surface-variant)" }}>
+        독자 레벨 선택
+      </span>
+      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+        {LEVELS.map((l) => {
+          const m = LEVEL_META[l];
+          const selected = value === l;
+          return (
+            <button
+              key={l}
+              type="button"
+              onClick={() => onChange(l)}
+              style={{
+                textAlign: "left",
+                padding: "14px 16px",
+                borderRadius: 10,
+                border: `2px solid ${selected ? m.color : "var(--surface-container-high)"}`,
+                background: selected ? m.bg : "var(--surface-container-lowest)",
+                cursor: "pointer",
+                transition: "all 0.15s",
+              }}
+            >
+              <p style={{ margin: "0 0 4px", fontSize: "0.78rem", fontWeight: 700, color: m.color }}>
+                {m.label}
+              </p>
+              <p style={{ margin: "0 0 8px", fontSize: "0.68rem", color: "var(--on-surface-variant)" }}>
+                {m.audience}
+              </p>
+              <p style={{ margin: "0 0 8px", fontSize: "0.68rem", fontStyle: "italic", color: m.color, opacity: 0.8 }}>
+                {m.tone}
+              </p>
+              {selected && (
+                <ul style={{ margin: 0, padding: "0 0 0 14px", display: "flex", flexDirection: "column", gap: 3 }}>
+                  {m.tips.map((tip) => (
+                    <li key={tip} style={{ fontSize: "0.65rem", color: "var(--on-surface-variant)", lineHeight: 1.4 }}>
+                      {tip}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 function Fields({
   fields,
@@ -56,7 +160,7 @@ function Fields({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr 1fr" }}>
+      <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
         {/* Category */}
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--on-surface-variant)" }}>
@@ -69,22 +173,6 @@ function Fields({
           >
             {categories.map((c) => (
               <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
-        </label>
-
-        {/* Level */}
-        <label className="flex flex-col gap-1.5">
-          <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--on-surface-variant)" }}>
-            레벨
-          </span>
-          <select
-            value={fields.level}
-            onChange={(e) => onChange({ level: e.target.value })}
-            style={inputStyle}
-          >
-            {LEVELS.map((l) => (
-              <option key={l} value={l}>{l}</option>
             ))}
           </select>
         </label>
@@ -214,7 +302,7 @@ export default function NewArticlePage() {
       const res = await fetch("/api/generate-article", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: aiUrl.trim(), category: fields.category }),
+        body: JSON.stringify({ url: aiUrl.trim(), category: fields.category, level: fields.level }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail ?? data.error ?? "생성 실패");
@@ -302,7 +390,15 @@ export default function NewArticlePage() {
         ))}
       </div>
 
-      <div className="flex flex-col gap-8">
+      <div className="flex flex-col gap-6">
+        {/* ── 레벨 선택 (탭 공통, 항상 맨 위) ── */}
+        <div
+          className="p-5 rounded-xl"
+          style={{ background: "var(--surface-container-low)" }}
+        >
+          <LevelPicker value={fields.level} onChange={(l) => update({ level: l })} />
+        </div>
+
         {/* AI URL input (only on AI tab, before generation) */}
         {tab === "ai" && (
           <div
@@ -312,7 +408,7 @@ export default function NewArticlePage() {
             <div>
               <p className="m-0 font-semibold text-sm">원문 URL 입력</p>
               <p className="m-0 text-xs mt-1" style={{ color: "var(--on-surface-variant)" }}>
-                URL을 입력하면 AI가 원문을 분석해 제목·요약·시사점을 자동으로 작성합니다.
+                URL을 입력하면 AI가 원문을 분석해 <strong>{fields.level}</strong> 독자 수준에 맞게 제목·요약·시사점을 작성합니다.
               </p>
             </div>
 
@@ -376,7 +472,7 @@ export default function NewArticlePage() {
             {aiGenerated && (
               <p className="m-0 text-xs flex items-center gap-1.5"
                 style={{ color: "#16a34a" }}>
-                <CheckCircle2 size={13} /> AI 생성 완료 — 아래에서 내용을 검토·수정하세요.
+                <CheckCircle2 size={13} /> AI 생성 완료 ({fields.level} 수준) — 아래에서 내용을 검토·수정하세요.
               </p>
             )}
           </div>

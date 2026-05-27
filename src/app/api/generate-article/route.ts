@@ -11,11 +11,20 @@ const PERSONA_PROMPTS: Record<string, string> = {
   INDUSTRY: "당신은 산업 분석 전문 에디터입니다. 거시적 산업 트렌드와 시장 구조 변화를 심층 분석합니다.",
 };
 
+const LEVEL_PROMPTS: Record<string, string> = {
+  Beginner:
+    "【독자 수준: 입문】 업계 배경지식이 없는 독자를 위해 전문 용어는 쉽게 풀어 설명하고, 짧고 명확한 문장으로 작성하세요. 왜 중요한지를 일상적인 비유로 전달하세요.",
+  Intermediate:
+    "【독자 수준: 실무】 업계 기본 지식을 보유한 실무 담당자를 위해 업계 용어를 자연스럽게 사용하고, 현장에서 즉시 적용 가능한 관점으로 작성하세요.",
+  Advanced:
+    "【독자 수준: 전략】 전략·기획자를 위해 산업 구조 변화와 거시적 시사점을 심층 분석하세요. 데이터, 인과관계, 경쟁 구도 변화 중심으로 논리적으로 작성하세요.",
+};
+
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const { url, category, persona_override } = await req.json();
+  const { url, category, level, persona_override } = await req.json();
 
   if (!url || !category) {
     return NextResponse.json({ error: "url and category are required" }, { status: 400 });
@@ -53,8 +62,10 @@ export async function POST(req: NextRequest) {
   }
 
   const persona = persona_override ?? PERSONA_PROMPTS[category.toUpperCase()] ?? PERSONA_PROMPTS.AI;
+  const levelGuide = LEVEL_PROMPTS[level] ?? LEVEL_PROMPTS.Intermediate;
 
   const prompt = `${persona}
+${levelGuide}
 
 다음 기사를 분석해 아래 JSON 형식으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.
 
