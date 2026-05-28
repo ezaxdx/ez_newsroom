@@ -94,14 +94,14 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
     : `<div style="width:255px;height:129px;background:${C.gray};display:table-cell;vertical-align:middle;text-align:center;">
          <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
        </div>`;
-  const summary = item.summary.length > 60 ? item.summary.slice(0, 60) + "…" : item.summary;
+  const summary = item.summary;
   return `
 <td width="255" valign="top">
   <a href="${withUTM(item.url, vol)}" style="text-decoration:none;color:inherit;display:block;">
     <table cellpadding="0" cellspacing="0" width="255">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
       <tr><td style="padding:3px 4px 0;">
-        <p style="margin:0 0 6px;font-size:16px;font-weight:500;color:#000000;line-height:1.3;text-align:center;font-family:${FONT_NOTO};">${item.title}</p>
+        <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#000000;line-height:1.3;text-align:center;font-family:${FONT_NOTO};">${item.title}</p>
         <p style="margin:0;font-size:13px;font-weight:300;color:#000000;line-height:1.5;text-align:center;font-family:${FONT_NOTO};">${summary}</p>
       </td></tr>
     </table>
