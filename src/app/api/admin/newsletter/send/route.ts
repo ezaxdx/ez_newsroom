@@ -50,53 +50,43 @@ export async function POST(req: NextRequest) {
   const send_date = `${y}.${mo}.${d}`;
 
   // ── 뉴스 수집 헬퍼 ──
-  function toNewsCard(n: { title: string; summary_short: string; image_url: string | null; original_url: string }): NewsCard {
+  type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
+  function toNewsCard(n: RawNews): NewsCard {
     return { title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url };
   }
 
-  // MICE (없으면 빈 배열 → 섹션 자동 제거)
-  const { data: miceRaw } = await supabase
-    .from("news")
-    .select("title, summary_short, image_url, original_url")
-    .eq("is_published", true)
-    .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%")
-    .order("published_at", { ascending: false })
-    .limit(2);
-  const miceNews: NewsCard[] = (miceRaw ?? []).map(toNewsCard);
+  // TOPNEWS 1건 + 최근 발행순 1건 수집
+  async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
+    // ① TOPNEWS: display_order 가장 낮은 1건
+    const { data: topRaw } = await supabase
+      .from("news")
+      .select("id, title, summary_short, image_url, original_url")
+      .eq("is_published", true)
+      .or(orFilter)
+      .order("display_order", { ascending: true })
+      .limit(1);
+    const top = (topRaw ?? []) as RawNews[];
 
-  // Tourism
-  const { data: tourismRaw } = await supabase
-    .from("news")
-    .select("title, summary_short, image_url, original_url")
-    .eq("is_published", true)
-    .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%")
-    .order("published_at", { ascending: false })
-    .limit(2);
-  const tourismNews: NewsCard[] = (tourismRaw ?? []).map(toNewsCard);
+    // ② 최근 발행순 1건 (TOPNEWS와 중복 제외)
+    const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    const { data: latestRaw } = await supabase
+      .from("news")
+      .select("id, title, summary_short, image_url, original_url")
+      .eq("is_published", true)
+      .gte("published_at", twoWeeksAgo)
+      .or(orFilter)
+      .neq("id", excludeId)
+      .order("published_at", { ascending: false })
+      .limit(1);
+    const latest = (latestRaw ?? []) as RawNews[];
 
-  // AI
-  const { data: aiRaw } = await supabase
-    .from("news")
-    .select("title, summary_short, image_url, original_url")
-    .eq("is_published", true)
-    .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%")
-    .order("published_at", { ascending: false })
-    .limit(2);
-  const aiNews: NewsCard[] = (aiRaw ?? []).map(toNewsCard);
+    return [...top, ...latest].map(toNewsCard);
+  }
 
-  // EZPMP
-  const { data: ezpmpRaw } = await supabase
-    .from("news")
-    .select("title, summary_short, image_url, original_url")
-    .eq("is_published", true)
-    .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%")
-    .order("published_at", { ascending: false })
-    .limit(2);
-  const ezpmpNews: NewsCard[] = (ezpmpRaw ?? []).map(toNewsCard);
+  const miceNews    = await fetchCategoryNews("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%");
+  const tourismNews = await fetchCategoryNews("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%");
+  const aiNews      = await fetchCategoryNews("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%");
+  const ezpmpNews   = await fetchCategoryNews("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%");
 
   // ez letter Pick (featured 4개) — image_url은 없을 수 있으므로 제외
   const { data: featuredRaw } = await supabase

@@ -22,84 +22,28 @@ export async function GET() {
     .select("*", { count: "exact", head: true });
   const vol_number = (issueCount ?? 0) + 1;
 
-  // MICE news
-  const { data: miceRaw } = await supabase
-    .from("news")
-    .select("id, title, summary_short, image_url, original_url, category, published_at")
-    .eq("is_published", true)
-    .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%")
-    .order("published_at", { ascending: false })
-    .limit(2);
+  type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
+  const toCard = (n: RawNews): NewsCard => ({ title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
 
-  let miceNews: NewsCard[] = (miceRaw ?? []).map((n) => ({
-    title: n.title,
-    summary: n.summary_short,
-    image_url: n.image_url,
-    url: n.original_url,
-  }));
-
-  // Fill MICE if needed
-  if (miceNews.length < 2) {
-    const needed = 2 - miceNews.length;
-    const existingIds = (miceRaw ?? []).map((n) => n.id);
-    const { data: fallback } = await supabase
-      .from("news")
-      .select("id, title, summary_short, image_url, original_url, category, published_at")
-      .eq("is_published", true)
-      .not("id", "in", existingIds.length > 0 ? `(${existingIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
-      .order("published_at", { ascending: false })
-      .limit(needed);
-
-    const extra: NewsCard[] = (fallback ?? []).map((n) => ({
-      title: n.title,
-      summary: n.summary_short,
-      image_url: n.image_url,
-      url: n.original_url,
-    }));
-    miceNews = [...miceNews, ...extra];
+  async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
+    const { data: topRaw } = await supabase.from("news")
+      .select("id, title, summary_short, image_url, original_url")
+      .eq("is_published", true).or(orFilter)
+      .order("display_order", { ascending: true }).limit(1);
+    const top = (topRaw ?? []) as RawNews[];
+    const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    const { data: latestRaw } = await supabase.from("news")
+      .select("id, title, summary_short, image_url, original_url")
+      .eq("is_published", true).gte("published_at", twoWeeksAgo)
+      .or(orFilter).neq("id", excludeId)
+      .order("published_at", { ascending: false }).limit(1);
+    return [...top, ...(latestRaw ?? []) as RawNews[]].map(toCard);
   }
 
-  // Tourism news
-  const { data: tourismRaw } = await supabase
-    .from("news")
-    .select("id, title, summary_short, image_url, original_url, category, published_at")
-    .eq("is_published", true)
-    .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%")
-    .order("published_at", { ascending: false })
-    .limit(2);
-
-  let tourismNews: NewsCard[] = (tourismRaw ?? []).map((n) => ({
-    title: n.title,
-    summary: n.summary_short,
-    image_url: n.image_url,
-    url: n.original_url,
-  }));
-
-  // Fill Tourism if needed
-  if (tourismNews.length < 2) {
-    const needed = 2 - tourismNews.length;
-    const existingIds = [
-      ...(miceRaw ?? []).map((n) => n.id),
-      ...(tourismRaw ?? []).map((n) => n.id),
-    ];
-    const { data: fallback } = await supabase
-      .from("news")
-      .select("id, title, summary_short, image_url, original_url, category, published_at")
-      .eq("is_published", true)
-      .not("id", "in", existingIds.length > 0 ? `(${existingIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
-      .order("published_at", { ascending: false })
-      .limit(needed);
-
-    const extra: NewsCard[] = (fallback ?? []).map((n) => ({
-      title: n.title,
-      summary: n.summary_short,
-      image_url: n.image_url,
-      url: n.original_url,
-    }));
-    tourismNews = [...tourismNews, ...extra];
-  }
+  const miceNews    = await fetchCategoryNews("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%");
+  const tourismNews = await fetchCategoryNews("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%");
+  const aiNews      = await fetchCategoryNews("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%");
+  const ezpmpNews   = await fetchCategoryNews("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%");
 
   // Featured events (top 2)
   const { data: featuredRaw } = await supabase
@@ -148,6 +92,8 @@ export async function GET() {
     send_date,
     mice_news: miceNews,
     tourism_news: tourismNews,
+    ai_news: aiNews,
+    ezpmp_news: ezpmpNews,
     featured_events: featuredEvents,
     upcoming_events: upcomingEvents,
   });
