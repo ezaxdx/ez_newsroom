@@ -65,6 +65,8 @@
   --color-input:        var(--input);
   --color-ring:         var(--ring);
   --font-sans:          var(--font-inter);
+  --font-rubik:         var(--font-rubik);
+  --font-dm-sans:       var(--font-dm-sans);
 
   /* newsroom custom */
   --color-surface:                var(--surface);
