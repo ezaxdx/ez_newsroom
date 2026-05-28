@@ -87,7 +87,7 @@ function newsCard(item: NewsCard, vol: number): string {
   <a href="${withUTM(item.url, vol)}" style="text-decoration:none;color:inherit;display:block;">
     <table cellpadding="0" cellspacing="0" width="255">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
-      <tr><td style="padding:8px 4px 0;">
+      <tr><td style="padding:3px 4px 0;">
         <p style="margin:0 0 6px;font-size:16px;font-weight:500;color:#000000;line-height:1.3;text-align:center;font-family:${FONT_NOTO};">${item.title}</p>
         <p style="margin:0;font-size:13px;font-weight:300;color:#000000;line-height:1.5;text-align:center;font-family:${FONT_NOTO};">${summary}</p>
       </td></tr>
