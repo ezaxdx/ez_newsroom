@@ -1358,6 +1358,29 @@ export default function QualityDashboard({ news, events, sources }: Props) {
         <ul style={{ paddingLeft: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>행사 데이터 수집</strong> — 쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤 새로고침하면 결과를 확인할 수 있습니다.</li>
           <li><strong style={{ color: "var(--on-surface)" }}>중복/불량 정리</strong> — 미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명 삭제, 중복 그룹에서 정보량이 낮은 행 삭제, 해외 venue 비공개 처리를 한번에 수행합니다. <strong style={{ color: "#ef4444" }}>실행 후 복원 불가.</strong></li>
+          <li style={{ marginTop: 8 }}><strong style={{ color: "var(--on-surface)" }}>AKEI 엑셀 가져오기 (UI)</strong> — 한국전시산업진흥회(AKEI) 엑셀 파일을 업로드해 행사를 추가합니다.
+            <ol style={{ paddingLeft: 16, marginTop: 4, lineHeight: 1.8 }}>
+              <li>AKEI 사이트에서 전시행사 일정 엑셀을 다운로드합니다.</li>
+              <li>수동 관리 패널 &gt; <em>AKEI 엑셀 가져오기</em> 영역에 파일을 업로드합니다.</li>
+              <li><em>미리보기</em>로 신규·보강·중복 건수를 확인합니다.</li>
+              <li><em>DB에 저장</em> 버튼을 눌러 확정합니다.</li>
+            </ol>
+            <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
+              중복 처리 기준: (행사명 + 시작일)이 같으면 <strong>빈 필드만 보강</strong>하고 이미 채워진 데이터는 건드리지 않습니다.
+            </span>
+          </li>
+          <li style={{ marginTop: 8 }}><strong style={{ color: "var(--on-surface)" }}>AKEI Python 스크립트 (직접 크롤링)</strong> — UI 없이 터미널에서 AKEI 사이트를 직접 크롤링해 Supabase에 저장합니다.
+            <ol style={{ paddingLeft: 16, marginTop: 4, lineHeight: 1.8 }}>
+              <li><code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>cd app-src/docs</code> 로 이동합니다.</li>
+              <li>먼저 <strong>미리보기</strong>로 확인: <code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>py exhibition_crawler.py --dry-run</code></li>
+              <li>확인 후 <strong>실제 저장</strong>: <code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>py exhibition_crawler.py</code></li>
+            </ol>
+            <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)", display: "block", marginTop: 4 }}>
+              기본값: 현재 연도 · 이번 달부터 크롤링 (과거 데이터 재수집 불필요).
+              특정 월부터 지정하려면 <code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>--from-month 3</code> 옵션을 추가하세요.
+              중복 처리 기준은 UI와 동일 (빈 필드 보강, 기존 데이터 보존).
+            </span>
+          </li>
         </ul>
       </HelpPanel>
     </div>
