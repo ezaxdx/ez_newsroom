@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_DARK } from "@/lib/news-ui";
+import { LEVEL_STYLE_DARK, getArticleImage } from "@/lib/news-ui";
 
 type Props = {
   items: NewsItem[];
@@ -35,14 +35,18 @@ export default function InsightGrid({ items, onOpen }: Props) {
             }}
             onClick={() => onOpen(item)}
           >
-            {item.image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.image_url}
-                alt=""
-                className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-20"
-              />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={getArticleImage(item.image_url)}
+              alt=""
+              className="absolute inset-0 w-full h-full"
+              style={{
+                objectFit: item.image_url ? "cover" : "contain",
+                mixBlendMode: item.image_url ? "overlay" : "normal",
+                opacity: item.image_url ? 0.2 : 0.15,
+                padding: item.image_url ? 0 : "25%",
+              }}
+            />
 
             {/* Level badge */}
             {item.level && (

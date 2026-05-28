@@ -29,3 +29,11 @@ export function getCategoryBg(category: string, imageUrl: string | null): string
   if (imageUrl) return "var(--surface-container-highest)";
   return CATEGORY_GRADIENT[category.toUpperCase()] ?? "var(--surface-container-highest)";
 }
+
+/** 이미지 없을 때 사용할 EZpmp 로고 폴백 */
+export const FALLBACK_IMAGE = "/ez-fallback.png";
+
+/** image_url이 없으면 EZpmp 로고로 대체 */
+export function getArticleImage(imageUrl: string | null | undefined): string {
+  return imageUrl || FALLBACK_IMAGE;
+}

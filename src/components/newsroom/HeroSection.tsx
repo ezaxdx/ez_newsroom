@@ -1,6 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
+import { getArticleImage } from "@/lib/news-ui";
 
 type Props = {
   topNews: NewsItem;
@@ -23,14 +24,18 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
         }}
         onClick={() => onOpen(topNews)}
       >
-        {topNews.image_url && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={topNews.image_url}
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover mix-blend-overlay opacity-30"
-          />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={getArticleImage(topNews.image_url)}
+          alt=""
+          className="absolute inset-0 w-full h-full"
+          style={{
+            objectFit: topNews.image_url ? "cover" : "contain",
+            mixBlendMode: topNews.image_url ? "overlay" : "normal",
+            opacity: topNews.image_url ? 0.3 : 0.15,
+            padding: topNews.image_url ? 0 : "25%",
+          }}
+        />
 
         <span
           className="inline-flex self-start mb-3 px-3 py-1 rounded-full text-xs font-bold tracking-[0.05em] uppercase"

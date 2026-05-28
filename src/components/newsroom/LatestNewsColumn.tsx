@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_LIGHT, getCategoryBg } from "@/lib/news-ui";
+import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage } from "@/lib/news-ui";
 
 type Props = {
   news: NewsItem[];
@@ -77,14 +77,16 @@ export default function LatestNewsColumn({ news, onOpen }: Props) {
               position: "relative",
             }}
           >
-            {item.image_url && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={item.image_url}
-                alt=""
-                style={{ width: "100%", height: "100%", objectFit: "cover" }}
-              />
-            )}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={getArticleImage(item.image_url)}
+              alt=""
+              style={{
+                width: "100%", height: "100%",
+                objectFit: item.image_url ? "cover" : "contain",
+                padding: item.image_url ? 0 : "15%",
+              }}
+            />
           </div>
 
           {/* Badges */}

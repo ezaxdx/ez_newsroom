@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { Search, Calendar, Loader2 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import { logEvent } from "@/lib/analytics";
-import { LEVEL_STYLE_LIGHT, getCategoryBg } from "@/lib/news-ui";
+import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage } from "@/lib/news-ui";
 import InsightModal from "./InsightModal";
 
 type Props = {
@@ -217,10 +217,13 @@ export default function CategoryArchive({ category, items: initialItems }: Props
                       className="relative w-full mb-3 rounded overflow-hidden"
                       style={{ aspectRatio: "16/9", background: getCategoryBg(item.category, item.image_url) }}
                     >
-                      {item.image_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={item.image_url} alt="" className="w-full h-full object-cover" />
-                      )}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={getArticleImage(item.image_url)}
+                        alt=""
+                        className="w-full h-full"
+                        style={{ objectFit: item.image_url ? "cover" : "contain", padding: item.image_url ? 0 : "18%" }}
+                      />
                       {item.level && (
                         <span
                           className="absolute top-2 right-2 px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
