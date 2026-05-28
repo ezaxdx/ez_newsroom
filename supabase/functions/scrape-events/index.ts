@@ -230,6 +230,32 @@ async function upsertEvents(events: object[], source: string) {
   return newEvents.length;
 }
 
+// ── 기존 KEOA 레코드 website 일괄 수정 ────────────────────────────
+// 구 URL(keoa.org/directory/schedule) 또는 null → 행사명 구글 검색 링크로 교체
+
+async function fixKeoaWebsites() {
+  // 구 URL이거나 null인 레코드 조회 (쇼알라 URL 제외)
+  const { data, error } = await supabase
+    .from("convention_events")
+    .select("id, event_name")
+    .or("website.eq.https://www.keoa.org/directory/schedule,website.is.null");
+
+  if (error) { console.warn("fixKeoaWebsites 조회 오류:", error.message); return 0; }
+  if (!data?.length) { console.log("fixKeoaWebsites: 수정 대상 없음"); return 0; }
+
+  console.log(`fixKeoaWebsites: ${data.length}건 수정 중...`);
+  let fixed = 0;
+  for (const row of data) {
+    const { error: ue } = await supabase
+      .from("convention_events")
+      .update({ website: `https://www.google.com/search?q=${encodeURIComponent(row.event_name)}` })
+      .eq("id", row.id);
+    if (!ue) fixed++;
+  }
+  console.log(`fixKeoaWebsites: ${fixed}건 완료`);
+  return fixed;
+}
+
 // ── 메인 핸들러 ───────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -248,6 +274,9 @@ Deno.serve(async (req: Request) => {
   console.log("scrape-events 시작");
 
   try {
+    // 기존 KEOA 레코드 website 먼저 정리
+    const fixed = await fixKeoaWebsites();
+
     const [showalaEvents, keoaEvents] = await Promise.all([
       scrapeShowala(),
       scrapeKeoa(),
@@ -259,10 +288,10 @@ Deno.serve(async (req: Request) => {
     ]);
 
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(`완료: 쇼알라 ${showalaNew}건, KEOA ${keoaNew}건 신규 삽입 (${elapsed}s)`);
+    console.log(`완료: 쇼알라 ${showalaNew}건, KEOA ${keoaNew}건 신규, 기존 ${fixed}건 URL 수정 (${elapsed}s)`);
 
     return new Response(
-      JSON.stringify({ ok: true, showala: showalaNew, keoa: keoaNew, elapsed }),
+      JSON.stringify({ ok: true, showala: showalaNew, keoa: keoaNew, fixed, elapsed }),
       { headers: { "Content-Type": "application/json" } }
     );
   } catch (e) {
