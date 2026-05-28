@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%관광%,category.ilike.%여행%")
+    .or("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%")
     .order("published_at", { ascending: false })
     .limit(2);
   const tourismNews: NewsCard[] = (tourismRaw ?? []).map(toNewsCard);

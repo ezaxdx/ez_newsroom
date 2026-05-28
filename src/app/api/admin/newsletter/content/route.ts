@@ -66,7 +66,7 @@ export async function GET() {
     .select("id, title, summary_short, image_url, original_url, category, published_at")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
-    .or("category.ilike.%관광%,category.ilike.%여행%")
+    .or("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%")
     .order("published_at", { ascending: false })
     .limit(2);
 

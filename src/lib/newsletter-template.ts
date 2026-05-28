@@ -225,11 +225,11 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <!-- ── NEWS 섹션 구분선 ── -->
     ${sectionDivider("News")}
 
-    <!-- MICE / Tourism / AI / EZPMP 뉴스 (없으면 섹션 자동 제거) -->
+    <!-- MICE / Tourism / EZPMP / AI 뉴스 (없으면 섹션 자동 제거) -->
     ${newsSection("MICE", mice_news, vol, site_url)}
     ${newsSection("Tourism", tourism_news, vol, site_url)}
-    ${newsSection("AI", ai_news, vol, site_url)}
     ${newsSection("EZPMP", ezpmp_news, vol, site_url)}
+    ${newsSection("AI", ai_news, vol, site_url)}
 
     <!-- ── EZ LETTER PICK 섹션 구분선 ── -->
     ${sectionDivider("ez letter Pick !")}
