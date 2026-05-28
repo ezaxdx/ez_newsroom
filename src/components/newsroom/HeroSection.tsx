@@ -28,12 +28,20 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
         <img
           src={getArticleImage(topNews.image_url)}
           alt=""
-          className="absolute inset-0 w-full h-full"
-          style={{
-            objectFit: hasRealImage(topNews.image_url) ? "cover" : "contain",
-            mixBlendMode: hasRealImage(topNews.image_url) ? "overlay" : "normal",
-            opacity: hasRealImage(topNews.image_url) ? 0.3 : 0.15,
-            padding: hasRealImage(topNews.image_url) ? 0 : "35%",
+          className={hasRealImage(topNews.image_url) ? "absolute inset-0 w-full h-full" : ""}
+          style={hasRealImage(topNews.image_url) ? {
+            objectFit: "cover",
+            mixBlendMode: "overlay",
+            opacity: 0.3,
+          } : {
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "38%",
+            height: "auto",
+            objectFit: "contain",
+            opacity: 0.7,
           }}
           onError={onImgError}
         />

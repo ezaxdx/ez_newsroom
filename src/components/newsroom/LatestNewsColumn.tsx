@@ -81,10 +81,13 @@ export default function LatestNewsColumn({ news, onOpen }: Props) {
             <img
               src={getArticleImage(item.image_url)}
               alt=""
-              style={{
-                width: "100%", height: "100%",
-                objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
-                padding: hasRealImage(item.image_url) ? 0 : "33%",
+              style={hasRealImage(item.image_url) ? {
+                width: "100%", height: "100%", objectFit: "cover",
+              } : {
+                position: "absolute",
+                top: "50%", left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "40%", height: "auto", objectFit: "contain",
               }}
               onError={onImgError}
             />

@@ -42,11 +42,18 @@ export function hasRealImage(imageUrl: string | null | undefined): boolean {
   return !!imageUrl && imageUrl !== FALLBACK_IMAGE;
 }
 
-/** img onError 핸들러 — 로드 실패 시 EZpmp 로고로 교체 + contain 스타일 적용 */
+/** img onError 핸들러 — 로드 실패 시 EZpmp 로고로 교체 + 중앙 정렬 소형 표시 */
 export function onImgError(e: { currentTarget: HTMLImageElement }) {
   const img = e.currentTarget;
   if (img.src.endsWith(FALLBACK_IMAGE)) return; // 무한 루프 방지
   img.src = FALLBACK_IMAGE;
+  img.style.position = "absolute";
+  img.style.inset = "auto";
+  img.style.top = "50%";
+  img.style.left = "50%";
+  img.style.transform = "translate(-50%, -50%)";
+  img.style.width = "38%";
+  img.style.height = "auto";
   img.style.objectFit = "contain";
-  img.style.padding = "35%";
+  img.style.padding = "0";
 }

@@ -54,14 +54,21 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
             <img
               src={getArticleImage(item.image_url)}
               alt=""
-              style={{
+              style={hasRealImage(item.image_url) ? {
                 position: "absolute",
                 inset: 0,
                 width: "100%",
                 height: "100%",
-                objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
-                padding: hasRealImage(item.image_url) ? 0 : "30%",
+                objectFit: "cover",
                 background: "rgba(18,18,20,0.95)",
+              } : {
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "38%",
+                height: "auto",
+                objectFit: "contain",
               }}
               onError={onImgError}
             />

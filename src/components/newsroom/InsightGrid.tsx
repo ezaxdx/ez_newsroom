@@ -39,12 +39,20 @@ export default function InsightGrid({ items, onOpen }: Props) {
             <img
               src={getArticleImage(item.image_url)}
               alt=""
-              className="absolute inset-0 w-full h-full"
-              style={{
-                objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
-                mixBlendMode: hasRealImage(item.image_url) ? "overlay" : "normal",
-                opacity: hasRealImage(item.image_url) ? 0.2 : 0.15,
-                padding: hasRealImage(item.image_url) ? 0 : "32%",
+              className={hasRealImage(item.image_url) ? "absolute inset-0 w-full h-full" : ""}
+              style={hasRealImage(item.image_url) ? {
+                objectFit: "cover",
+                mixBlendMode: "overlay",
+                opacity: 0.2,
+              } : {
+                position: "absolute",
+                top: "50%",
+                left: "50%",
+                transform: "translate(-50%, -50%)",
+                width: "38%",
+                height: "auto",
+                objectFit: "contain",
+                opacity: 0.6,
               }}
               onError={onImgError}
             />
