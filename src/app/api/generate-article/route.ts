@@ -91,17 +91,6 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // meta charset 태그에서 2차 감지 (Content-Type 헤더에 없는 경우)
-    if (charset === "utf-8") {
-      const metaCharset = html.match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1]?.toLowerCase();
-      if (metaCharset && !["utf-8", "utf8"].includes(metaCharset)) {
-        const buf = Buffer.from(html, "binary");
-        try {
-          html = new TextDecoder(metaCharset).decode(buf);
-        } catch { /* fallback: 그대로 사용 */ }
-      }
-    }
-
     articleText = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -110,10 +99,11 @@ export async function POST(req: NextRequest) {
       .trim()
       .slice(0, 8000);
 
-    // 내용이 너무 짧으면 스크래핑 실패로 판단
-    if (articleText.length < 200) {
+    // 내용이 너무 짧거나 바이너리처럼 보이면 스크래핑 실패로 판단
+    const printableRatio = (articleText.match(/[ -~가-힣぀-ヿ]/g) ?? []).length / (articleText.length || 1);
+    if (articleText.length < 200 || printableRatio < 0.5) {
       return NextResponse.json(
-        { error: "원문 내용을 충분히 읽을 수 없습니다. JavaScript 렌더링 페이지이거나 접근이 차단된 URL일 수 있습니다." },
+        { error: "원문 내용을 읽을 수 없습니다. JavaScript 렌더링 페이지이거나 접근이 차단된 URL일 수 있습니다." },
         { status: 422 }
       );
     }

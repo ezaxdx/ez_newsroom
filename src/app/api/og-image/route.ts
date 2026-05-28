@@ -43,41 +43,58 @@ function extractImage(html: string, baseUrl: string): string | null {
   }
 }
 
+const FALLBACK_IMAGE = "/ez-fallback.svg";
+
+async function fetchImage(fetchUrl: string, isNaver: boolean): Promise<string | null> {
+  const res = await fetch(fetchUrl, {
+    headers: isNaver
+      ? { ...BROWSER_HEADERS, Referer: "https://blog.naver.com/" }
+      : BROWSER_HEADERS,
+    signal: AbortSignal.timeout(8000),
+    redirect: "follow",
+  });
+
+  // EUC-KR 등 non-UTF-8 인코딩 대응
+  const contentType = res.headers.get("content-type") ?? "";
+  const charsetMatch = contentType.match(/charset=["']?([\w-]+)/i);
+  let charset = charsetMatch?.[1]?.toLowerCase() ?? "utf-8";
+  if (["euc-kr", "ks_c_5601-1987", "ks_c_5601", "cp949", "x-windows-949"].includes(charset)) {
+    charset = "euc-kr";
+  }
+
+  let html: string;
+  if (charset === "utf-8" || charset === "utf8") {
+    html = await res.text();
+  } else {
+    const buffer = await res.arrayBuffer();
+    try { html = new TextDecoder(charset).decode(buffer); }
+    catch { html = new TextDecoder("utf-8").decode(buffer); }
+  }
+
+  return extractImage(html, fetchUrl);
+}
+
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
-  if (!url) return NextResponse.json({ image: null }, { status: 400 });
+  if (!url) return NextResponse.json({ image: FALLBACK_IMAGE }, { status: 400 });
 
   // 네이버 블로그는 PostView.naver로 변환해서 fetch
   const fetchUrl = resolveNaverBlogUrl(url);
   const isNaver = fetchUrl !== url;
 
+  // 1차 시도
   try {
-    const res = await fetch(fetchUrl, {
-      headers: isNaver
-        ? { ...BROWSER_HEADERS, Referer: "https://blog.naver.com/" }
-        : BROWSER_HEADERS,
-      signal: AbortSignal.timeout(8000),
-      redirect: "follow",
-    });
-    // EUC-KR 등 non-UTF-8 인코딩 대응
-    const contentType = res.headers.get("content-type") ?? "";
-    const charsetMatch = contentType.match(/charset=["']?([\w-]+)/i);
-    let charset = charsetMatch?.[1]?.toLowerCase() ?? "utf-8";
-    if (["euc-kr", "ks_c_5601-1987", "ks_c_5601", "cp949", "x-windows-949"].includes(charset)) {
-      charset = "euc-kr";
-    }
-    let html: string;
-    if (charset === "utf-8" || charset === "utf8") {
-      html = await res.text();
-    } else {
-      const buffer = await res.arrayBuffer();
-      try { html = new TextDecoder(charset).decode(buffer); }
-      catch { html = new TextDecoder("utf-8").decode(buffer); }
-    }
+    const image = await fetchImage(fetchUrl, isNaver);
+    if (image) return NextResponse.json({ image });
+  } catch { /* 1차 실패 → 재시도 */ }
 
-    const image = extractImage(html, fetchUrl);
-    return NextResponse.json({ image });
-  } catch {
-    return NextResponse.json({ image: null });
-  }
+  // 2차 재시도 (3초 후)
+  await new Promise((r) => setTimeout(r, 3000));
+  try {
+    const image = await fetchImage(fetchUrl, isNaver);
+    if (image) return NextResponse.json({ image });
+  } catch { /* 2차도 실패 → 폴백 */ }
+
+  // 둘 다 실패 → 회사 로고 폴백
+  return NextResponse.json({ image: FALLBACK_IMAGE });
 }
