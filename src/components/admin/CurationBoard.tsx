@@ -176,7 +176,9 @@ export default function CurationBoard({
         body: JSON.stringify({ items, deletedIds, republishIds }),
       });
       if (!res.ok) throw new Error("저장 실패");
+      setDeletedIds([]);
       setRepublishIds([]);
+      router.refresh(); // 홈 페이지 캐시 무효화 + 어드민 데이터 갱신
     } catch (e) {
       alert("저장 중 오류가 발생했습니다.");
       console.error(e);

@@ -7,6 +7,16 @@ const BROWSER_HEADERS = {
   "Referer": "https://www.google.com/",
 };
 
+/** URL 도메인 기반으로 적절한 Referer 반환 */
+function getSiteReferer(url: string): string {
+  try {
+    const { origin } = new URL(url);
+    return origin + "/";
+  } catch {
+    return "https://www.google.com/";
+  }
+}
+
 /**
  * 네이버 블로그 URL → PostView.naver URL로 변환
  * blog.naver.com/{blogId}/{logNo} 또는 m.blog.naver.com/{blogId}/{logNo}
@@ -49,7 +59,7 @@ async function fetchImage(fetchUrl: string, isNaver: boolean): Promise<string | 
   const res = await fetch(fetchUrl, {
     headers: isNaver
       ? { ...BROWSER_HEADERS, Referer: "https://blog.naver.com/" }
-      : BROWSER_HEADERS,
+      : { ...BROWSER_HEADERS, Referer: getSiteReferer(fetchUrl) },
     signal: AbortSignal.timeout(8000),
     redirect: "follow",
   });
