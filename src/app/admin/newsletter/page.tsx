@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2 } from "lucide-react";
+import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles } from "lucide-react";
 
 type Subscriber = {
   id: string;
@@ -61,6 +61,10 @@ export default function NewsletterPage() {
   const excelFileRef = useRef<HTMLInputElement>(null);
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number } | null>(null);
+
+  // ── AI 인사말 생성 ──
+  const [generatingEditorial, setGeneratingEditorial] = useState(false);
+  const [editorialError, setEditorialError] = useState<string | null>(null);
 
   // ── 자동 발송 설정 ──
   const [cronSettings, setCronSettings] = useState<CronSettings>({ enabled: false, send_day: 1, default_editorial: "" });
@@ -125,6 +129,24 @@ export default function NewsletterPage() {
       }
     } catch {
       // ignore
+    }
+  }
+
+  async function handleGenerateEditorial() {
+    setGeneratingEditorial(true);
+    setEditorialError(null);
+    try {
+      const res = await fetch("/api/admin/newsletter/generate-editorial", { method: "POST" });
+      const json = await res.json();
+      if (res.ok && json.editorial) {
+        setEditorialText(json.editorial);
+      } else {
+        setEditorialError(json.error ?? "AI 생성 실패");
+      }
+    } catch {
+      setEditorialError("네트워크 오류");
+    } finally {
+      setGeneratingEditorial(false);
     }
   }
 
@@ -363,13 +385,36 @@ export default function NewsletterPage() {
         {tab === "send" && (
           <div>
             <div style={cardStyle}>
-              <label style={{ display: "block", fontSize: 13, fontWeight: 600, marginBottom: 8, color: "var(--on-surface-variant)" }}>
-                에디터 인사말
-              </label>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                <label style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                  에디터 인사말
+                </label>
+                <button
+                  onClick={handleGenerateEditorial}
+                  disabled={generatingEditorial}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "5px 12px", borderRadius: 6,
+                    border: "1px solid #6366f1",
+                    background: generatingEditorial ? "var(--surface-container)" : "#ede9fe",
+                    color: "#6366f1", fontWeight: 600, fontSize: 12,
+                    cursor: generatingEditorial ? "not-allowed" : "pointer",
+                    opacity: generatingEditorial ? 0.7 : 1, transition: "all 0.15s",
+                  }}
+                >
+                  {generatingEditorial
+                    ? <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
+                    : <Sparkles size={12} />}
+                  {generatingEditorial ? "생성 중..." : "AI로 작성"}
+                </button>
+              </div>
+              {editorialError && (
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#c0392b" }}>{editorialError}</p>
+              )}
               <textarea
                 value={editorialText}
                 onChange={(e) => setEditorialText(e.target.value)}
-                placeholder="이번 호 에디터 인사말을 입력하세요..."
+                placeholder="이번 호 에디터 인사말을 입력하거나 AI로 생성하세요..."
                 rows={5}
                 style={{
                   width: "100%",
