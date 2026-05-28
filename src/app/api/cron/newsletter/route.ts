@@ -55,7 +55,7 @@ export async function GET(req: NextRequest) {
     ({ title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
 
   // MICE 뉴스
-  const { data: miceRaw } = await supabase.from("news_items")
+  const { data: miceRaw } = await supabase.from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true).gte("published_at", twoWeeksAgo)
     .or("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%")
@@ -63,7 +63,7 @@ export async function GET(req: NextRequest) {
   const miceNews: NewsCard[] = (miceRaw ?? []).map(toCard);
 
   // Tourism 뉴스
-  const { data: tourismRaw } = await supabase.from("news_items")
+  const { data: tourismRaw } = await supabase.from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true).gte("published_at", twoWeeksAgo)
     .or("category.ilike.%관광%,category.ilike.%여행%")
@@ -71,7 +71,7 @@ export async function GET(req: NextRequest) {
   const tourismNews: NewsCard[] = (tourismRaw ?? []).map(toCard);
 
   // AI 뉴스
-  const { data: aiRaw } = await supabase.from("news_items")
+  const { data: aiRaw } = await supabase.from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true).gte("published_at", twoWeeksAgo)
     .or("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%")
@@ -79,7 +79,7 @@ export async function GET(req: NextRequest) {
   const aiNews: NewsCard[] = (aiRaw ?? []).map(toCard);
 
   // EZPMP 뉴스
-  const { data: ezpmpRaw } = await supabase.from("news_items")
+  const { data: ezpmpRaw } = await supabase.from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true).gte("published_at", twoWeeksAgo)
     .or("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%")

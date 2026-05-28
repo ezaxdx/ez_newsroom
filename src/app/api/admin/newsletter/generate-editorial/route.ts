@@ -18,7 +18,7 @@ export async function POST() {
   // 최근 7일 뉴스 제목 수집
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const { data: recentNews } = await supabase
-    .from("news_items")
+    .from("news")
     .select("title, category")
     .eq("is_published", true)
     .gte("published_at", sevenDaysAgo)

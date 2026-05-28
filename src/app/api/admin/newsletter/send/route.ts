@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
 
   // MICE (없으면 빈 배열 → 섹션 자동 제거)
   const { data: miceRaw } = await supabase
-    .from("news_items")
+    .from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
   // Tourism
   const { data: tourismRaw } = await supabase
-    .from("news_items")
+    .from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
 
   // AI
   const { data: aiRaw } = await supabase
-    .from("news_items")
+    .from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
 
   // EZPMP
   const { data: ezpmpRaw } = await supabase
-    .from("news_items")
+    .from("news")
     .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)

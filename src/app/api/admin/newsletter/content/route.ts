@@ -24,7 +24,7 @@ export async function GET() {
 
   // MICE news
   const { data: miceRaw } = await supabase
-    .from("news_items")
+    .from("news")
     .select("id, title, summary_short, image_url, original_url, category, published_at")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
@@ -44,7 +44,7 @@ export async function GET() {
     const needed = 2 - miceNews.length;
     const existingIds = (miceRaw ?? []).map((n) => n.id);
     const { data: fallback } = await supabase
-      .from("news_items")
+      .from("news")
       .select("id, title, summary_short, image_url, original_url, category, published_at")
       .eq("is_published", true)
       .not("id", "in", existingIds.length > 0 ? `(${existingIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
@@ -62,7 +62,7 @@ export async function GET() {
 
   // Tourism news
   const { data: tourismRaw } = await supabase
-    .from("news_items")
+    .from("news")
     .select("id, title, summary_short, image_url, original_url, category, published_at")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
@@ -85,7 +85,7 @@ export async function GET() {
       ...(tourismRaw ?? []).map((n) => n.id),
     ];
     const { data: fallback } = await supabase
-      .from("news_items")
+      .from("news")
       .select("id, title, summary_short, image_url, original_url, category, published_at")
       .eq("is_published", true)
       .not("id", "in", existingIds.length > 0 ? `(${existingIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
