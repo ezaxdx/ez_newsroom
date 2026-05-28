@@ -189,7 +189,7 @@ async function scrapeKeoa(): Promise<object[]> {
           location: venueRaw || null, category: "전시",
           industry: fields["출품품목"] || null,
           organizer: cleanOrganizer(fields["주최/주관"] ?? null),
-          website: "https://www.keoa.org/directory/schedule",
+          website: null, // KEOA는 개별 행사 URL 없음 (모달 기반 사이트)
           is_published: true,
         });
       } catch (e) {
