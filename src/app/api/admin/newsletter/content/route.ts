@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsCard, EventCard } from "@/lib/newsletter-template";
+import { scoreEvent } from "@/lib/event-score";
 
 export const dynamic = "force-dynamic";
 
@@ -45,41 +46,40 @@ export async function GET() {
   const aiNews      = await fetchCategoryNews("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%");
   const ezpmpNews   = await fetchCategoryNews("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%");
 
-  // Featured events (top 2)
-  const { data: featuredRaw } = await supabase
+  // ── 행사 스코어링 ──
+  const nowKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+  const dayOfWeek = nowKST.getUTCDay();
+  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const endOfWeek = new Date(nowKST);
+  endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
+  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
+
+  const { data: eventsPool } = await supabase
     .from("convention_events")
-    .select("id, event_name, start_date, venue, website")
+    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer")
     .eq("is_published", true)
     .gte("start_date", todayStr)
+    .lte("start_date", new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
     .order("start_date", { ascending: true })
-    .limit(2);
+    .limit(200);
 
-  const featuredEvents: EventCard[] = (featuredRaw ?? []).map((e) => ({
-    name: e.event_name,
-    start_date: e.start_date,
-    venue: e.venue ?? null,
-    image_url: null,
-    website: e.website ?? null,
+  const scored = (eventsPool ?? [])
+    .map((e) => ({ ...e, _score: scoreEvent(e, today) }))
+    .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
+
+  const featuredRaw = scored.slice(0, 4);
+  const featuredEvents: EventCard[] = featuredRaw.map((e) => ({
+    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+    venue: e.venue ?? null, image_url: null, website: e.website ?? null,
   }));
 
-  const featuredIds = (featuredRaw ?? []).map((e) => e.id);
-
-  // Upcoming events (next 7, excluding featured)
-  const { data: upcomingRaw } = await supabase
-    .from("convention_events")
-    .select("id, event_name, start_date, venue, website")
-    .eq("is_published", true)
-    .gte("start_date", todayStr)
-    .not("id", "in", featuredIds.length > 0 ? `(${featuredIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
-    .order("start_date", { ascending: true })
-    .limit(7);
-
-  const upcomingEvents: EventCard[] = (upcomingRaw ?? []).map((e) => ({
-    name: e.event_name,
-    start_date: e.start_date,
-    venue: e.venue ?? null,
-    website: e.website ?? null,
-  }));
+  const featuredIds = new Set(featuredRaw.map((e) => e.id));
+  const upcomingEvents: EventCard[] = scored
+    .filter((e) => !featuredIds.has(e.id) && e.start_date <= endOfWeekStr)
+    .map((e) => ({
+      name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+      venue: e.venue ?? null, website: e.website ?? null,
+    }));
 
   // Format send_date
   const y = today.getFullYear();

@@ -3,6 +3,7 @@ import nodemailer from "nodemailer";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
+import { scoreEvent } from "@/lib/event-score";
 
 export const maxDuration = 60;
 
@@ -88,21 +89,7 @@ export async function POST(req: NextRequest) {
   const aiNews      = await fetchCategoryNews("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%");
   const ezpmpNews   = await fetchCategoryNews("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%");
 
-  // ez letter Pick (featured 4개) — image_url은 없을 수 있으므로 제외
-  const { data: featuredRaw } = await supabase
-    .from("convention_events")
-    .select("id, event_name, start_date, end_date, venue, website")
-    .eq("is_published", true)
-    .gte("start_date", todayStr)
-    .order("start_date", { ascending: true })
-    .limit(4);
-
-  const featuredEvents: EventCard[] = (featuredRaw ?? []).map((e) => ({
-    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null, image_url: null, website: e.website ?? null,
-  }));
-
-  // Weekly Event List — 이번 주 (start_date 기준, end_date 없어도 동작)
+  // ── 행사 스코어링 공통 ──
   const nowKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
   const dayOfWeek = nowKST.getUTCDay();
   const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
@@ -110,21 +97,35 @@ export async function POST(req: NextRequest) {
   endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
   const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
-  const featuredIds = (featuredRaw ?? []).map((e) => e.id);
-  const { data: upcomingRaw } = await supabase
+  // 후보 행사 풀 (90일 이내, score 계산용 컬럼 포함)
+  const { data: eventsPool } = await supabase
     .from("convention_events")
-    .select("id, event_name, start_date, end_date, venue, website")
+    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer")
     .eq("is_published", true)
     .gte("start_date", todayStr)
-    .lte("start_date", endOfWeekStr)
-    .not("id", "in", featuredIds.length > 0 ? `(${featuredIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
+    .lte("start_date", new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
     .order("start_date", { ascending: true })
-    .limit(20);
+    .limit(200);
 
-  const upcomingEvents: EventCard[] = (upcomingRaw ?? []).map((e) => ({
+  const scored = (eventsPool ?? [])
+    .map((e) => ({ ...e, _score: scoreEvent(e, today) }))
+    .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
+
+  // ez letter Pick: 스코어 top 4
+  const featuredRaw = scored.slice(0, 4);
+  const featuredEvents: EventCard[] = featuredRaw.map((e) => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null, website: e.website ?? null,
+    venue: e.venue ?? null, image_url: null, website: e.website ?? null,
   }));
+
+  // Weekly Event List: 이번 주 행사 중 스코어 순 (Pick 제외)
+  const featuredIds = new Set(featuredRaw.map((e) => e.id));
+  const upcomingEvents: EventCard[] = scored
+    .filter((e) => !featuredIds.has(e.id) && e.start_date <= endOfWeekStr)
+    .map((e) => ({
+      name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+      venue: e.venue ?? null, website: e.website ?? null,
+    }));
 
   const html = generateNewsletterHTML({
     vol_number,

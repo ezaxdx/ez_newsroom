@@ -451,6 +451,8 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 [Intermediate] ${levelPrompts["Intermediate"] ?? "실무 담당자 관점에서 작성하세요."}
 [Advanced] ${levelPrompts["Advanced"] ?? "전략적 심층 분석으로 작성하세요."}
 
+문체 규칙: 모든 문장은 반드시 '~다' 체(예: ~했다, ~이다, ~한다)로 통일하세요. '~습니다', '~입니다', '~합니다' 등 경어체 사용 금지.
+
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
 {"quality_score":점수,"level":"레벨","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
 
