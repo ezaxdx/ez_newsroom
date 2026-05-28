@@ -59,7 +59,6 @@ ${newsTitles || "뉴스 정보 없음"}
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
         generationConfig: { temperature: 0.85, maxOutputTokens: 1024 },
-        thinkingConfig: { thinkingBudget: 0 },
       }),
     }
   );
