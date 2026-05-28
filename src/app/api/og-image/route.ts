@@ -43,7 +43,7 @@ function extractImage(html: string, baseUrl: string): string | null {
   }
 }
 
-const FALLBACK_IMAGE = "/ez-fallback.svg";
+const FALLBACK_IMAGE = "/ez-fallback.png";
 
 async function fetchImage(fetchUrl: string, isNaver: boolean): Promise<string | null> {
   const res = await fetch(fetchUrl, {
