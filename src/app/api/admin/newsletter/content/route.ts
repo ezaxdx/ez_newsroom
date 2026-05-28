@@ -76,6 +76,7 @@ export async function GET() {
   const featuredIds = new Set(featuredRaw.map((e) => e.id));
   const upcomingEvents: EventCard[] = scored
     .filter((e) => !featuredIds.has(e.id) && e.start_date <= endOfWeekStr)
+    .slice(0, 7)
     .map((e) => ({
       name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
       venue: e.venue ?? null, website: e.website ?? null,
