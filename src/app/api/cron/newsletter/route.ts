@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent } from "@/lib/event-score";
-import nodemailer from "nodemailer";
+import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 
 export const maxDuration = 60;
 
@@ -92,7 +92,18 @@ export async function GET(req: NextRequest) {
     .order("start_date", { ascending: true }).limit(200);
 
   const scored = (eventsPool ?? [])
-    .map((e) => ({ ...e, _score: scoreEvent(e, today) }))
+    .map((e) => ({
+      ...e,
+      _score: scoreEvent({
+        event_name: e.event_name ?? "",
+        event_name_en: e.event_name_en ?? null,
+        category: e.category ?? null,
+        industry: e.industry ?? null,
+        organizer: e.organizer ?? null,
+        venue: e.venue ?? "",
+        start_date: e.start_date ?? todayStr,
+      }, today),
+    }))
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
   const featuredRaw = scored.slice(0, 4);
@@ -124,28 +135,27 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ skipped: true, reason: "no active subscribers" });
   }
 
-  const gmailUser = process.env.GMAIL_USER;
-  const gmailPass = process.env.GMAIL_APP_PASSWORD;
-  if (!gmailUser || !gmailPass) return NextResponse.json({ error: "Gmail env not set" }, { status: 500 });
-
-  const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com", port: 587, secure: false,
-    auth: { user: gmailUser, pass: gmailPass },
-  });
-
   const subject = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+  const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+
   let total_sent = 0, total_failed = 0;
   const logEntries: { email: string; status: string; error_message: string | null }[] = [];
 
-  for (const sub of subscribers) {
-    try {
-      await transporter.sendMail({ from: `"EZ Letter" <${gmailUser}>`, to: sub.email, subject, html });
-      total_sent++;
-      logEntries.push({ email: sub.email, status: "success", error_message: null });
-    } catch (err) {
-      total_failed++;
-      logEntries.push({ email: sub.email, status: "failed", error_message: err instanceof Error ? err.message : String(err) });
+  try {
+    const { results } = await sendNewsletterViaGmail({
+      fromName: "EZ Letter",
+      fromEmail,
+      subject,
+      html,
+      recipients: subscribers.map(s => s.email),
+    });
+    for (const r of results) {
+      if (r.status === "success") total_sent++;
+      else total_failed++;
+      logEntries.push(r);
     }
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 
   const { data: issue } = await supabase.from("newsletter_issues")

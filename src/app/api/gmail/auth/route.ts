@@ -21,7 +21,10 @@ export async function GET() {
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent", // refresh_token을 매번 발급받기 위해
-    scope: ["https://www.googleapis.com/auth/gmail.readonly"],
+    scope: [
+      "https://www.googleapis.com/auth/gmail.readonly",
+      "https://www.googleapis.com/auth/gmail.send",
+    ],
   });
 
   return NextResponse.redirect(authUrl);
