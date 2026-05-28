@@ -62,11 +62,15 @@ function sectionDivider(title: string): string {
   <td style="background:${C.white};padding:28px 32px 20px;">
     <table width="100%" cellpadding="0" cellspacing="0" border="0">
       <tr>
-        <td style="border-top:1px solid ${C.border};font-size:0;line-height:0;padding:0;">&nbsp;</td>
+        <td style="vertical-align:middle;padding:0;">
+          <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
+        </td>
         <td style="text-align:center;white-space:nowrap;padding:0 20px;width:1%;">
           <span style="font-size:48px;font-weight:400;color:${C.dark};font-family:${FONT_TOKKI};letter-spacing:0;">${title}</span>
         </td>
-        <td style="border-top:1px solid ${C.border};font-size:0;line-height:0;padding:0;">&nbsp;</td>
+        <td style="vertical-align:middle;padding:0;">
+          <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
+        </td>
       </tr>
     </table>
   </td>
