@@ -77,10 +77,19 @@ function sectionDivider(title: string): string {
 </tr>`;
 }
 
+// ── 외부 이미지 → 프록시 URL 변환 ────────────────────────
+function proxyImg(image_url: string | null, site_url: string): string | null {
+  if (!image_url) return null;
+  // 이미 자체 도메인 이미지거나 data URI면 그대로 사용
+  if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
+  return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
+}
+
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
-function newsCard(item: NewsCard, vol: number): string {
-  const img = item.image_url
-    ? `<img src="${item.image_url}" alt="" width="255" height="129"
+function newsCard(item: NewsCard, vol: number, site_url: string): string {
+  const proxied = proxyImg(item.image_url, site_url);
+  const img = proxied
+    ? `<img src="${proxied}" alt="" width="255" height="129"
            style="display:block;width:255px;height:129px;object-fit:cover;">`
     : `<div style="width:255px;height:129px;background:${C.gray};display:table-cell;vertical-align:middle;text-align:center;">
          <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
@@ -141,9 +150,9 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
 }
 
 // ── 뉴스 카테고리 블록 ────────────────────────────────────
-function newsSection(label: string, items: NewsCard[], vol: number): string {
+function newsSection(label: string, items: NewsCard[], vol: number, site_url: string): string {
   if (items.length === 0) return "";
-  const cards = items.slice(0, 2).map(n => newsCard(n, vol)).join(`<td width="22"></td>`);
+  const cards = items.slice(0, 2).map(n => newsCard(n, vol, site_url)).join(`<td width="22"></td>`);
   return `
 <tr>
   <td style="background:${C.white};padding:0 32px 24px;">
@@ -217,10 +226,10 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     ${sectionDivider("News")}
 
     <!-- MICE / Tourism / AI / EZPMP 뉴스 (없으면 섹션 자동 제거) -->
-    ${newsSection("MICE", mice_news, vol)}
-    ${newsSection("Tourism", tourism_news, vol)}
-    ${newsSection("AI", ai_news, vol)}
-    ${newsSection("EZPMP", ezpmp_news, vol)}
+    ${newsSection("MICE", mice_news, vol, site_url)}
+    ${newsSection("Tourism", tourism_news, vol, site_url)}
+    ${newsSection("AI", ai_news, vol, site_url)}
+    ${newsSection("EZPMP", ezpmp_news, vol, site_url)}
 
     <!-- ── EZ LETTER PICK 섹션 구분선 ── -->
     ${sectionDivider("ez letter Pick !")}
