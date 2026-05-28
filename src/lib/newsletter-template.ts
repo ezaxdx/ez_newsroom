@@ -111,8 +111,9 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
 
 // ── Pick 행사 카드 ────────────────────────────────────────
 function pickCard(ev: EventCard, vol: number, site_url: string): string {
-  const img = ev.image_url
-    ? `<img src="${ev.image_url}" alt="" width="255" height="129"
+  const proxied = proxyImg(ev.image_url ?? null, site_url);
+  const img = proxied
+    ? `<img src="${proxied}" alt="" width="255" height="129"
            style="display:block;width:255px;height:129px;object-fit:cover;">`
     : `<div style="width:255px;height:129px;background:${C.gray};display:table-cell;vertical-align:middle;text-align:center;">
          <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>

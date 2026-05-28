@@ -85,7 +85,7 @@ export async function GET(req: NextRequest) {
   const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
   const { data: eventsPool } = await supabase.from("convention_events")
-    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer")
+    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url")
     .eq("is_published", true)
     .gte("start_date", todayStr)
     .lte("start_date", new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
@@ -109,7 +109,7 @@ export async function GET(req: NextRequest) {
   const featuredRaw = scored.slice(0, 4);
   const featuredEvents: EventCard[] = featuredRaw.map(e => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null, image_url: null, website: e.website ?? null,
+    venue: e.venue ?? null, image_url: e.image_url ?? null, website: e.website ?? null,
   }));
 
   const featuredIds = new Set(featuredRaw.map(e => e.id));

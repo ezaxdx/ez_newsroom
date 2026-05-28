@@ -106,11 +106,16 @@ async function scrapeShowala(): Promise<object[]> {
     const indM     = item.match(/class="only_line ex_buss_cate">([\s\S]*?)<\/div>/);
     const industry = indM ? indM[1].replace(/<[^>]+>/g, "").replace(/산업분야/g, "").replace(/\s+/g, " ").trim() || null : null;
 
+    // 대표 이미지
+    const imgM = item.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
+    const image_url = imgM ? (imgM[1].startsWith("http") ? imgM[1] : `https://www.showala.com${imgM[1]}`) : null;
+
     events.push({
       venue, venue_region, event_name, event_name_en,
       start_date: dates.start, end_date: dates.end,
       location, category: "전시", industry,
       organizer: null,
+      image_url,
       website: `https://www.showala.com${hrefM[1]}`,
       is_published: true,
     });
@@ -183,12 +188,21 @@ async function scrapeKeoa(): Promise<object[]> {
         const event_name_en = enM ? enM[1].trim() : null;
         const { venue, venue_region } = parseVenueInfo(venueRaw);
 
+        // KEOA 상세 페이지 이미지
+        const keImgM = detailHtml.match(/<img[^>]+src="([^"]+)"[^>]*class="[^"]*poster[^"]*"|<img[^>]+class="[^"]*poster[^"]*"[^>]+src="([^"]+)"/i)
+          ?? detailHtml.match(/<img[^>]+src="(\/uploads\/[^"]+\.(jpg|jpeg|png|webp))"[^>]*>/i);
+        const keImageRaw = keImgM ? (keImgM[1] || keImgM[2]) : null;
+        const keImageUrl = keImageRaw
+          ? (keImageRaw.startsWith("http") ? keImageRaw : `https://www.keoa.org${keImageRaw}`)
+          : null;
+
         events.push({
           venue, venue_region, event_name, event_name_en,
           start_date: dates.start, end_date: dates.end,
           location: venueRaw || null, category: "전시",
           industry: fields["출품품목"] || null,
           organizer: cleanOrganizer(fields["주최/주관"] ?? null),
+          image_url: keImageUrl,
           website: `https://www.google.com/search?q=${encodeURIComponent(event_name)}`,
           is_published: true,
         });
