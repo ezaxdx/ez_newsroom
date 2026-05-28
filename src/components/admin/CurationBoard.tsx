@@ -18,6 +18,20 @@ function formatScheduleDays(days: number[]): string {
   return [...days].sort((a, b) => a - b).map((d) => DAY_KO[d] ?? "").join("·");
 }
 
+/** KST 날짜+시간을 서버/클라이언트 동일하게 포맷 (locale 의존 없음) */
+function formatKSTDateTime(ms: number): string {
+  // UTC+9 offset 적용
+  const d = new Date(ms + 9 * 60 * 60 * 1000);
+  const month = d.getUTCMonth() + 1;
+  const day = d.getUTCDate();
+  const hours = d.getUTCHours();
+  const minutes = d.getUTCMinutes();
+  const ampm = hours < 12 ? "오전" : "오후";
+  const h = hours % 12 || 12;
+  const mm = String(minutes).padStart(2, "0");
+  return `${month}월 ${day}일 ${ampm} ${h}:${mm}`;
+}
+
 type Props = {
   initialNews: NewsItem[];
   qualityThresholds?: { auto_publish: number; staging: number };
@@ -349,7 +363,7 @@ export default function CurationBoard({
           style={{ background: "rgba(var(--primary-rgb, 26,115,232),0.07)", color: "var(--primary)" }}>
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--primary)" }} />
           {scheduleEnabled && scheduleDays.length > 0
-            ? `가장 최근 ${formatScheduleDays(scheduleDays)} 큐레이션(${new Date(lastRunMs).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}) 이후 기사가 표시됩니다 · 현재 ${live.length}건 노출 중`
+            ? `가장 최근 ${formatScheduleDays(scheduleDays)} 큐레이션(${formatKSTDateTime(lastRunMs)}) 이후 기사가 표시됩니다 · 현재 ${live.length}건 노출 중`
             : `발행 후 ${displayWindowDays}일 이내 기사가 메인 페이지에 표시됩니다 · 현재 ${live.length}건 노출 중`
           }
         </div>
@@ -361,7 +375,7 @@ export default function CurationBoard({
           style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
           <RefreshCw size={11} />
           <span>
-            {new Date(lastRunMs).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })} 이전 발행 기사입니다 (이전 큐레이션 배치).
+            {formatKSTDateTime(lastRunMs)} 이전 발행 기사입니다 (이전 큐레이션 배치).
             재발행하면 오늘 날짜로 메인에 다시 올라갑니다.
           </span>
         </div>
@@ -561,7 +575,7 @@ function ArticleCard({
           )}
           {tab === "archive" && (
             <span className="text-[0.65rem]" style={{ color: "var(--on-surface-variant)" }}>
-              {new Date(item.published_at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+              {formatKSTDateTime(new Date(item.published_at).getTime())}
             </span>
           )}
         </div>
