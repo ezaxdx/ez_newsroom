@@ -45,5 +45,5 @@ export function onImgError(e: React.SyntheticEvent<HTMLImageElement>) {
   if (img.src.endsWith(FALLBACK_IMAGE)) return; // 무한 루프 방지
   img.src = FALLBACK_IMAGE;
   img.style.objectFit = "contain";
-  img.style.padding = "28%";
+  img.style.padding = "35%";
 }
