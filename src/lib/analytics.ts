@@ -6,6 +6,7 @@ type LogPayload = {
   event_type: EventType;
   news_id?: string;
   event_id?: string;
+  category?: string;
 };
 
 function getUtmParams() {
@@ -26,6 +27,7 @@ export async function logEvent(payload: LogPayload) {
       event_type: payload.event_type,
       news_id:    payload.news_id  ?? null,
       event_id:   payload.event_id ?? null,
+      category:   payload.category ?? null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       entry_path: typeof window !== "undefined" ? window.location.pathname : null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,

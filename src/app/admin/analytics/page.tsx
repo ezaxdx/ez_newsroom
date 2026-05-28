@@ -5,9 +5,9 @@ import HelpPanel from "@/components/admin/HelpPanel";
 const EMPTY = {
   totals: { view: 0, detail_view: 0, outbound_click: 0 },
   funnel: [
-    { label: "메인 노출",    count: 0, pct: 100 },
-    { label: "인사이트 열람", count: 0, pct: 0 },
-    { label: "원문 클릭",    count: 0, pct: 0 },
+    { label: "메인 접속",  count: 0, pct: 100 },
+    { label: "기사 클릭",  count: 0, pct: 0 },
+    { label: "원문 클릭",  count: 0, pct: 0 },
   ],
   referrers:    [] as { source: string; count: number }[],
   utmCampaigns: [] as { campaign: string; count: number }[],
@@ -108,9 +108,9 @@ async function fetchAnalytics() {
     return {
       totals: { view, detail_view, outbound_click: outbound },
       funnel: [
-        { label: "메인 노출",    count: view,        pct: 100 },
-        { label: "인사이트 열람", count: detail_view, pct: view ? +((detail_view / view) * 100).toFixed(1) : 0 },
-        { label: "원문 클릭",    count: outbound,    pct: view ? +((outbound    / view) * 100).toFixed(1) : 0 },
+        { label: "메인 접속",  count: view,        pct: 100 },
+        { label: "기사 클릭",  count: detail_view, pct: view ? +((detail_view / view) * 100).toFixed(1) : 0 },
+        { label: "원문 클릭",  count: outbound,    pct: view ? +((outbound    / view) * 100).toFixed(1) : 0 },
       ],
       referrers:    referrers.length    ? referrers    : [{ source: "직접 접속", count: logs.length }],
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [{ campaign: "(없음)", count: logs.length }],
@@ -172,13 +172,13 @@ export default async function AnalyticsPage() {
 
       {/* ── KPI 카드 ── */}
       <div className="grid grid-cols-4 gap-4">
-        <StatCard label="총 노출" value={totals.view} />
-        <StatCard label="인사이트 열람" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
+        <StatCard label="총 접속 수" value={totals.view} />
+        <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard
           label="전체 전환율"
           value={`${outboundRate}%`}
-          sub="노출 → 원문 클릭"
+          sub="접속 → 원문 클릭"
         />
       </div>
 

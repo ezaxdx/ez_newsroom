@@ -97,6 +97,14 @@ export default function CurationBoard({
   }
   const topNewsIds = new Set(Array.from(topNewsMap.values()).map((i) => i.id));
 
+  // live 탭: 카테고리 순서(navCategories) → 카테고리 내 display_order
+  const liveSortedByCat = [...live].sort((a, b) => {
+    const ai = categories.indexOf(a.category);
+    const bi = categories.indexOf(b.category);
+    if (ai !== bi) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+    return a.display_order - b.display_order;
+  });
+
   const tabMeta: { key: Tab; label: string; count: number }[] = [
     { key: "live",    label: "메인 표시 중", count: live.length },
     { key: "staging", label: "대기열",       count: staging.length },
@@ -111,7 +119,7 @@ export default function CurationBoard({
     const to = dragOverIdx.current;
     if (from === null || to === null || from === to) return;
 
-    const liveIds = live.map((i) => i.id);
+    const liveIds = liveSortedByCat.map((i) => i.id);
     const reordered = [...liveIds];
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
@@ -226,7 +234,7 @@ export default function CurationBoard({
   };
 
   // ── 카테고리 필터 ──
-  const activeList = tab === "live" ? live : tab === "staging" ? staging : archive;
+  const activeList = tab === "live" ? liveSortedByCat : tab === "staging" ? staging : archive;
   const CATEGORIES = [...new Set(items.map((i) => i.category))];
   const [filterCat, setFilterCat] = useState("ALL");
   const filtered = activeList.filter((i) => filterCat === "ALL" || i.category === filterCat);
@@ -403,28 +411,66 @@ export default function CurationBoard({
       {/* ── 메인 표시 중 / 대기열 카드 목록 ── */}
       {tab !== "archive" && (
         <div className="flex flex-col gap-2">
-          {filtered.map((item, idx) => (
-            <ArticleCard
-              key={item.id}
-              item={item}
-              idx={idx}
-              tab={tab}
-              qualityThresholds={qualityThresholds}
-              isTopNews={topNewsIds.has(item.id)}
-              onDragStart={handleDragStart}
-              onDragEnter={handleDragEnter}
-              onDragEnd={handleDragEnd}
-              onCycleLevel={cycleLevel}
-              onTogglePublish={togglePublish}
-              onMove={moveItem}
-              onRemove={remove}
-              onRepublish={republish}
-              LEVEL_STYLE={LEVEL_STYLE}
-            />
-          ))}
-          {filtered.length === 0 && (
-            <EmptyState tab={tab} />
-          )}
+          {tab === "live" && filtered.length > 0
+            ? (() => {
+                let prevCat = "";
+                return filtered.map((item, idx) => {
+                  const showHeader = item.category !== prevCat && filterCat === "ALL";
+                  if (showHeader) prevCat = item.category;
+                  return (
+                    <div key={item.id}>
+                      {showHeader && (
+                        <div className="flex items-center gap-3 mt-3 mb-1 first:mt-0">
+                          <span
+                            className="text-[0.65rem] font-bold tracking-[0.1em] uppercase"
+                            style={{ color: "var(--on-surface-variant)" }}
+                          >
+                            {item.category}
+                          </span>
+                          <div className="flex-1 h-px" style={{ background: "var(--surface-container-highest)" }} />
+                        </div>
+                      )}
+                      <ArticleCard
+                        item={item}
+                        idx={idx}
+                        tab={tab}
+                        qualityThresholds={qualityThresholds}
+                        isTopNews={topNewsIds.has(item.id)}
+                        onDragStart={handleDragStart}
+                        onDragEnter={handleDragEnter}
+                        onDragEnd={handleDragEnd}
+                        onCycleLevel={cycleLevel}
+                        onTogglePublish={togglePublish}
+                        onMove={moveItem}
+                        onRemove={remove}
+                        onRepublish={republish}
+                        LEVEL_STYLE={LEVEL_STYLE}
+                      />
+                    </div>
+                  );
+                });
+              })()
+            : filtered.map((item, idx) => (
+                <ArticleCard
+                  key={item.id}
+                  item={item}
+                  idx={idx}
+                  tab={tab}
+                  qualityThresholds={qualityThresholds}
+                  isTopNews={topNewsIds.has(item.id)}
+                  onDragStart={handleDragStart}
+                  onDragEnter={handleDragEnter}
+                  onDragEnd={handleDragEnd}
+                  onCycleLevel={cycleLevel}
+                  onTogglePublish={togglePublish}
+                  onMove={moveItem}
+                  onRemove={remove}
+                  onRepublish={republish}
+                  LEVEL_STYLE={LEVEL_STYLE}
+                />
+              ))
+          }
+          {filtered.length === 0 && <EmptyState tab={tab} />}
         </div>
       )}
 

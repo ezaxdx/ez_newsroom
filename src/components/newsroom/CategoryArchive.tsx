@@ -40,6 +40,12 @@ const TWO_WEEKS_AGO = toDateStr(new Date(Date.now() - 14 * 24 * 60 * 60 * 1000))
 
 export default function CategoryArchive({ category, items: initialItems }: Props) {
   const [allItems, setAllItems] = useState<NewsItem[]>(initialItems);
+
+  // 카테고리 페이지 접속 로깅
+  useEffect(() => {
+    logEvent({ event_type: "view", category });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [search, setSearch] = useState("");
   const [dateFrom, setDateFrom] = useState(TWO_WEEKS_AGO);
   const [dateTo, setDateTo] = useState("");
