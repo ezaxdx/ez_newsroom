@@ -16,6 +16,23 @@ export default function InsightModal({ item, onClose }: Props) {
   const onCloseRef = useRef(onClose);
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
+  // ── 열람 시간 측정 ──
+  const openTimeRef  = useRef<number | null>(null);
+  const prevItemRef  = useRef<NewsItem | null>(null);
+  useEffect(() => {
+    if (item) {
+      openTimeRef.current = Date.now();
+    } else if (openTimeRef.current && prevItemRef.current) {
+      const sec = Math.round((Date.now() - openTimeRef.current) / 1000);
+      if (sec >= 1) {
+        logEvent({ event_type: "read_time", news_id: prevItemRef.current.id, read_sec: sec });
+      }
+      openTimeRef.current = null;
+    }
+    prevItemRef.current = item;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item]);
+
   useEffect(() => {
     const dialog = dialogRef.current;
     if (!dialog) return;

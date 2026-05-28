@@ -11,8 +11,9 @@ const EMPTY = {
   ],
   referrers:    [] as { source: string; count: number }[],
   utmCampaigns: [] as { campaign: string; count: number }[],
-  categories:   [] as { category: string; views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
+  categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
   topArticles:  [] as { title: string; category: string; detail_views: number; outbound: number }[],
+  topSearches:  [] as { query: string; count: number }[],
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -31,7 +32,7 @@ async function fetchAnalytics() {
     const adminSupabase = createAdminClient();
 
     const [{ data: logs }, { data: articles }] = await Promise.all([
-      adminSupabase.from("user_logs").select("event_type, news_id, utm_source, utm_campaign"),
+      adminSupabase.from("user_logs").select("event_type, news_id, utm_source, utm_campaign, category, read_sec, search_query"),
       adminSupabase.from("news").select("id, title, category"),
     ]);
 
@@ -65,28 +66,44 @@ async function fetchAnalytics() {
       .slice(0, 10);
 
     // ── 카테고리별 성과 ──
-    const articleMap  = new Map((articles ?? []).map((a) => [a.id, a]));
-    const catViews:   Record<string, number> = {};
-    const catDetails: Record<string, number> = {};
-    const catOut:     Record<string, number> = {};
+    const articleMap   = new Map((articles ?? []).map((a) => [a.id, a]));
+    const catPageViews: Record<string, number>   = {};  // 아카이브 페이지 접속
+    const catDetails:   Record<string, number>   = {};  // 기사 클릭
+    const catOut:       Record<string, number>   = {};  // 원문 클릭
+    const catReadSecs:  Record<string, number[]> = {};  // 열람 시간
 
     for (const log of logs) {
-      if (!log.news_id) continue;
-      const art = articleMap.get(log.news_id);
-      if (!art) continue;
-      const c = art.category;
-      if (log.event_type === "view")           catViews[c]   = (catViews[c]   ?? 0) + 1;
-      if (log.event_type === "detail_view")    catDetails[c] = (catDetails[c] ?? 0) + 1;
-      if (log.event_type === "outbound_click") catOut[c]     = (catOut[c]     ?? 0) + 1;
+      // 카테고리 아카이브 페이지 접속 (view + category 태그)
+      if (log.event_type === "view" && log.category) {
+        catPageViews[log.category] = (catPageViews[log.category] ?? 0) + 1;
+      }
+      // 기사 클릭 / 원문 클릭 / 열람 시간 — news_id 기반으로 카테고리 매핑
+      if (log.news_id) {
+        const art = articleMap.get(log.news_id);
+        if (art) {
+          const c = art.category;
+          if (log.event_type === "detail_view")    catDetails[c] = (catDetails[c] ?? 0) + 1;
+          if (log.event_type === "outbound_click") catOut[c]     = (catOut[c]     ?? 0) + 1;
+          if (log.event_type === "read_time" && log.read_sec) {
+            if (!catReadSecs[c]) catReadSecs[c] = [];
+            catReadSecs[c].push(Number(log.read_sec));
+          }
+        }
+      }
     }
 
-    const allCats  = new Set([...Object.keys(catViews), ...Object.keys(catDetails)]);
+    const allCats = new Set([
+      ...Object.keys(catPageViews),
+      ...Object.keys(catDetails),
+    ]);
     const categories = Array.from(allCats).map((cat) => ({
       category:     cat,
-      views:        catViews[cat]   ?? 0,
-      detail_views: catDetails[cat] ?? 0,
-      outbound:     catOut[cat]     ?? 0,
-      avg_read_sec: 0,
+      page_views:   catPageViews[cat] ?? 0,
+      detail_views: catDetails[cat]   ?? 0,
+      outbound:     catOut[cat]       ?? 0,
+      avg_read_sec: catReadSecs[cat]?.length
+        ? Math.round(catReadSecs[cat].reduce((a, b) => a + b, 0) / catReadSecs[cat].length)
+        : 0,
     })).sort((a, b) => b.detail_views - a.detail_views);
 
     // ── 인기 기사 TOP 5 ──
@@ -105,6 +122,19 @@ async function fetchAnalytics() {
       .sort((a, b) => b.detail_views - a.detail_views)
       .slice(0, 5);
 
+    // ── 인기 검색어 ──
+    const queryMap: Record<string, number> = {};
+    for (const log of logs) {
+      if (log.event_type === "search" && log.search_query) {
+        const q = log.search_query.trim().toLowerCase();
+        if (q) queryMap[q] = (queryMap[q] ?? 0) + 1;
+      }
+    }
+    const topSearches = Object.entries(queryMap)
+      .map(([query, count]) => ({ query, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     return {
       totals: { view, detail_view, outbound_click: outbound },
       funnel: [
@@ -116,6 +146,7 @@ async function fetchAnalytics() {
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [{ campaign: "(없음)", count: logs.length }],
       categories,
       topArticles,
+      topSearches,
     };
   } catch {
     return EMPTY;
@@ -149,16 +180,19 @@ async function fetchNavCategories(): Promise<string[]> {
 
 export default async function AnalyticsPage() {
   const [data, navCategories] = await Promise.all([fetchAnalytics(), fetchNavCategories()]);
-  const { totals, funnel, referrers, utmCampaigns, topArticles } = data;
-  // 카테고리 성과: DB nav_categories 기준으로 필터
-  const categories = data.categories.filter((c) =>
-    navCategories.includes(c.category)
-  );
+  const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches } = data;
 
-  const detailRate  = totals.view ? ((totals.detail_view / totals.view) * 100).toFixed(1) : "0";
+  // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
+  const categories = navCategories.map((cat) => {
+    const found = data.categories.find((c) => c.category === cat);
+    return found ?? { category: cat, page_views: 0, detail_views: 0, outbound: 0, avg_read_sec: 0 };
+  });
+
+  const detailRate   = totals.view ? ((totals.detail_view    / totals.view) * 100).toFixed(1) : "0";
   const outboundRate = totals.view ? ((totals.outbound_click / totals.view) * 100).toFixed(1) : "0";
-  const maxRef      = Math.max(...referrers.map((r) => r.count));
-  const maxCat      = Math.max(...categories.map((c) => c.detail_views));
+  const maxRef       = Math.max(1, ...referrers.map((r) => r.count));
+  const maxSearch    = Math.max(1, ...topSearches.map((s) => s.count));
+  const maxCat       = Math.max(1, ...categories.map((c) => c.detail_views));
 
   return (
     <div className="p-8 max-w-5xl flex flex-col gap-8">
@@ -175,11 +209,7 @@ export default async function AnalyticsPage() {
         <StatCard label="총 접속 수" value={totals.view} />
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
-        <StatCard
-          label="전체 전환율"
-          value={`${outboundRate}%`}
-          sub="접속 → 원문 클릭"
-        />
+        <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
       {/* ── 인게이지먼트 퍼널 ── */}
@@ -269,15 +299,18 @@ export default async function AnalyticsPage() {
         </section>
       </div>
 
-      {/* ── 카테고리 성과 ── */}
+      {/* ── 카테고리별 성과 ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
+        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
+        <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+          접속 수 = 카테고리 아카이브 페이지 방문 / 관심도 = 기사 클릭 기준 상대적 참여 비율
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "노출", "열람", "열람 전환율", "원문 클릭", "평균 체류(초)", "관심도"].map((h) => (
+                {["카테고리", "접속 수", "기사 클릭", "전환율", "원문 클릭", "평균 체류", "관심도"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -285,7 +318,9 @@ export default async function AnalyticsPage() {
             </thead>
             <tbody>
               {categories.map((cat) => {
-                const convRate = cat.views ? ((cat.detail_views / cat.views) * 100).toFixed(1) : "0";
+                const convRate = cat.page_views
+                  ? ((cat.detail_views / cat.page_views) * 100).toFixed(1)
+                  : "-";
                 return (
                   <tr key={cat.category} style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
                     <td className="py-3 pr-4 font-semibold">
@@ -294,11 +329,13 @@ export default async function AnalyticsPage() {
                         {cat.category}
                       </span>
                     </td>
-                    <td className="py-3 pr-4">{cat.views.toLocaleString()}</td>
+                    <td className="py-3 pr-4">{cat.page_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.detail_views.toLocaleString()}</td>
-                    <td className="py-3 pr-4">{convRate}%</td>
-                    <td className="py-3 pr-4">{cat.outbound}</td>
-                    <td className="py-3 pr-4">{cat.avg_read_sec}s</td>
+                    <td className="py-3 pr-4">{convRate === "-" ? "-" : `${convRate}%`}</td>
+                    <td className="py-3 pr-4">{cat.outbound.toLocaleString()}</td>
+                    <td className="py-3 pr-4">
+                      {cat.avg_read_sec > 0 ? `${cat.avg_read_sec}s` : "-"}
+                    </td>
                     <td className="py-3 pr-4 w-28">
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
                         <div className="h-full rounded-full"
@@ -310,12 +347,41 @@ export default async function AnalyticsPage() {
               })}
             </tbody>
           </table>
-          {categories.length === 0 && (
-            <p className="text-sm text-center py-8 m-0" style={{ color: "var(--on-surface-variant)" }}>
-              아직 카테고리 데이터가 없습니다.
-            </p>
-          )}
         </div>
+      </section>
+
+      {/* ── 인기 검색어 ── */}
+      <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
+        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
+          style={{ color: "var(--on-surface-variant)" }}>인기 검색어 TOP 10</p>
+        {topSearches.length === 0 ? (
+          <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
+            아직 검색 데이터가 없습니다.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {topSearches.map((s, idx) => (
+              <div key={s.query}>
+                <div className="flex items-center justify-between mb-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[0.65rem] font-bold w-4 flex-shrink-0"
+                      style={{ color: "var(--on-surface-variant)" }}>
+                      {idx + 1}
+                    </span>
+                    <span className="text-sm font-medium">{s.query}</span>
+                  </div>
+                  <span className="text-sm font-semibold">{s.count.toLocaleString()}회</span>
+                </div>
+                <div className="h-1.5 rounded-full overflow-hidden ml-6" style={{ background: "var(--surface-container-highest)" }}>
+                  <div
+                    className="h-full rounded-full"
+                    style={{ width: `${(s.count / maxSearch) * 100}%`, background: "var(--primary)" }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── 인기 기사 ── */}
@@ -343,7 +409,7 @@ export default async function AnalyticsPage() {
               </div>
               <div className="flex gap-5 flex-shrink-0 text-right">
                 <div>
-                  <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>열람</p>
+                  <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>클릭</p>
                   <p className="text-sm font-bold m-0">{art.detail_views}</p>
                 </div>
                 <div>
@@ -357,23 +423,44 @@ export default async function AnalyticsPage() {
       </section>
 
       <HelpPanel title="애널리틱스 가이드">
-        <p style={{ marginBottom: 12 }}>
-          뉴스룸 독자의 행동 데이터를 분석합니다. 방문자가 발생하면 자동으로 수집됩니다.
+        <p style={{ marginBottom: 16 }}>
+          뉴스룸 독자의 행동 데이터를 자동 수집·분석합니다. 별도 설정 없이 방문자 발생 시 즉시 기록됩니다.
         </p>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>지표 설명</p>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>KPI 카드</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>조회수</strong> — 기사 목록에서 노출된 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>인사이트 열람</strong> — 기사 상세(요약·분석) 펼친 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 외부 원문 링크 클릭 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>총 접속 수</strong> — 메인 페이지(뉴스룸 홈) 방문 횟수. 새로고침·재방문 포함</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 모달 내 "VIEW ORIGINAL SOURCE" 클릭 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>전체 전환율</strong> — 메인 접속 대비 원문 클릭 비율 (접속 → 원문 클릭)</li>
         </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>참여 퍼널</p>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>인게이지먼트 퍼널</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>메인 노출 → 인사이트 열람 → 원문 클릭 순으로 전환율 확인</li>
-          <li>인사이트 열람율이 높을수록 콘텐츠 품질이 높은 것</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 순으로 전환율 확인</li>
+          <li>기사 클릭률이 높을수록 콘텐츠 제목·요약의 흡입력이 좋은 것</li>
+          <li>원문 클릭률이 높을수록 인사이트 콘텐츠 품질이 높은 것</li>
         </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리별 성과</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>접속 수</strong> — 해당 카테고리 아카이브 페이지(/category/AI 등) 방문 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>전환율</strong> — 카테고리 접속 대비 기사 클릭 비율. 접속 데이터가 없으면 "-"</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류</strong> — 기사 모달을 열고 닫기까지의 평균 시간(초). 1초 미만은 집계 제외</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>관심도</strong> — 기사 클릭 수 기준 카테고리 간 상대 비율. 가장 높은 카테고리가 100%</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>인기 검색어</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>뉴스룸 상단 검색창에서 실행된 검색어를 빈도순으로 집계</li>
+          <li>독자가 관심 갖는 키워드 파악 및 콘텐츠 기획에 활용</li>
+        </ul>
+
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>트래픽 소스</p>
         <ul style={{ paddingLeft: 16 }}>
-          <li>UTM 파라미터로 유입 채널 추적 (카카오톡, 이메일, SNS 등)</li>
+          <li>UTM 파라미터로 유입 채널 추적 (카카오톡, 뉴스레터, SNS 등)</li>
           <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
         </ul>
       </HelpPanel>

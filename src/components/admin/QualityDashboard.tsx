@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { NewsItem } from "@/lib/types";
 import type { RssSource } from "@/app/admin/quality/page";
+import HelpPanel from "@/components/admin/HelpPanel";
 
 type EventRow = {
   id: string;
@@ -29,6 +30,7 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
       "스마트 관광", "관광 DX", "지역 관광", "맞춤형 여행", "관광 데이터",
       "체류형 관광", "로컬 콘텐츠", "지자체 관광", "관광 앱", "방문객 경험",
       "지역 상권", "SMARTRIP", "스마트립",
+      "여행 플랫폼", "여행 앱", "숙박 플랫폼", "호텔 기술", "여행 테크",
     ],
   },
   {
@@ -37,7 +39,7 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
     keywords: [
       "글로컬", "글로벌 관광객", "다국어 관광", "로컬 브랜딩", "K-관광",
       "지역 체류", "국제행사 연계", "관광 스토리텔링", "지역 상생",
-      "외래 관광객", "인바운드",
+      "외래 관광객", "인바운드", "해외 관광객", "관광 브랜딩",
     ],
   },
   {
@@ -46,7 +48,7 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
     keywords: [
       "AI 관광", "관광 챗봇", "개인화 추천", "여행 AI", "다국어 안내",
       "관광 데이터 분석", "스마트 관광 안내", "생성형 AI", "관광 운영 자동화",
-      "여행 일정 추천", "AI 안내",
+      "여행 일정 추천", "AI 안내", "관광 AI", "여행 추천 AI",
     ],
   },
   {
@@ -56,6 +58,7 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
       "MICE", "마이스", "O2MEET", "LeadX", "리드엑스", "행사 자동화",
       "전시 DX", "비즈니스 매칭", "하이브리드 행사", "컨벤션", "전시회",
       "박람회", "PCO", "컨퍼런스", "포럼", "행사 플랫폼", "SaaS", "CSAP",
+      "이벤트 테크", "행사 기획", "전시 기획", "세미나 운영", "엑스포 운영",
     ],
   },
   {
@@ -64,7 +67,7 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
     keywords: [
       "All That Travel", "ATT", "관광 박람회", "관광 비즈니스", "관광 산업",
       "여행 트렌드", "관광 스타트업", "관광 네트워킹", "관광 B2B", "관광 체험",
-      "지역 관광 홍보",
+      "지역 관광 홍보", "관광 엑스포", "여행 박람회",
     ],
   },
   {
@@ -74,6 +77,18 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
       "MEeT", "Medical Emerging Technology", "의료기술", "디지털헬스",
       "의료기기", "헬스케어", "바이오", "메디컬 테크", "의료 컨퍼런스",
       "의료 전시", "글로벌 바이어", "투자 매칭", "의료", "healthcare",
+      "헬스테크", "의료 AI", "바이오테크", "디지털 의료",
+    ],
+  },
+  {
+    label: "AXDX",
+    color: "#8b5cf6",
+    keywords: [
+      "AXDX", "인공지능", "AI 솔루션", "AI 서비스", "AI 에이전트", "AI 플랫폼",
+      "AI 기업", "AI 스타트업", "AI 도입", "AI 활용", "AI 개발", "AI 투자",
+      "AI 모델", "OpenAI", "ChatGPT", "GPT", "Claude", "Gemini", "Anthropic",
+      "LLM", "언어 모델", "멀티모달", "파운데이션 모델",
+      "디지털 전환", "DX 전략", "자동화 솔루션", "데이터 분석",
     ],
   },
 ];
@@ -87,7 +102,7 @@ function getDomains(text: string): string[] {
 
 // EZPMP 카테고리 → 사업영역 연관도
 const CATEGORY_RELEVANCE: Record<string, { level: "high" | "mid" | "low"; label: string }> = {
-  AI:         { level: "high", label: "AI 관광 · MICE Tech" },
+  AI:         { level: "high", label: "AXDX · AI 관광 · MICE Tech" },
   MICE:       { level: "high", label: "MICE Tech · ATT" },
   TOURISM:    { level: "high", label: "스마트립 · 글로컬 · ATT" },
   STARTUP:    { level: "mid",  label: "간접 연관 가능" },
@@ -95,6 +110,76 @@ const CATEGORY_RELEVANCE: Record<string, { level: "high" | "mid" | "low"; label:
   OPERATIONS: { level: "low",  label: "사업영역 외 가능성" },
   INDUSTRY:   { level: "low",  label: "사업영역 외 가능성" },
 };
+
+// ── 도메인 툴팁 (viewport 경계 자동 감지) ──────────────────────────
+function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color: string; label: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [flipUp, setFlipUp] = useState(false);
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const rect = ref.current.getBoundingClientRect();
+    if (rect.bottom > window.innerHeight - 16) setFlipUp(true);
+  }, []);
+
+  const preview = articles.slice(0, 8);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        position: "absolute",
+        right: 0,
+        ...(flipUp ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }),
+        zIndex: 50,
+        width: 300,
+        maxHeight: 320,
+        overflowY: "auto",
+        background: "var(--surface-container-lowest)",
+        border: "1px solid var(--surface-container-high)",
+        borderRadius: 8,
+        boxShadow: "0 8px 24px rgba(26,28,29,0.14)",
+        pointerEvents: "none",
+      }}
+    >
+      <p style={{
+        margin: 0, padding: "8px 12px 6px",
+        fontSize: "0.65rem", fontWeight: 700,
+        letterSpacing: "0.05em", textTransform: "uppercase",
+        color, borderBottom: "1px solid var(--surface-container-high)",
+        position: "sticky", top: 0,
+        background: "var(--surface-container-lowest)",
+      }}>
+        {label} · {articles.length}건
+      </p>
+      {preview.map((a) => (
+        <div key={a.id} style={{
+          padding: "6px 12px",
+          borderBottom: "1px solid var(--surface-container-high)",
+        }}>
+          <p style={{
+            margin: 0, fontSize: "0.73rem", color: "var(--on-surface)",
+            overflow: "hidden", textOverflow: "ellipsis",
+            whiteSpace: "nowrap", lineHeight: 1.4,
+          }}>
+            {a.title}
+          </p>
+          <p style={{ margin: 0, fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>
+            {a.category}
+          </p>
+        </div>
+      ))}
+      {articles.length > 8 && (
+        <p style={{
+          margin: 0, padding: "6px 12px",
+          fontSize: "0.65rem", color: "var(--on-surface-variant)",
+        }}>
+          외 {articles.length - 8}건 더 있음
+        </p>
+      )}
+    </div>
+  );
+}
 
 // ── 뉴스 정합성 탭 ─────────────────────────────────────────────────
 function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) {
@@ -106,8 +191,9 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
   const stats = useMemo(() => {
     const published = news.filter((n) => n.is_published);
     const pending = news.filter((n) => !n.is_published);
+    // 이미지 없음은 제외 — ArticleImg 컴포넌트가 로고로 자동 대체하므로 이슈 아님
     const missingField = news.filter(
-      (n) => !n.image_url || !n.category || !n.summary_short
+      (n) => !n.category || !n.summary_short
     );
     const urlMap = new Map<string, number>();
     news.forEach((n) => urlMap.set(n.original_url, (urlMap.get(n.original_url) ?? 0) + 1));
@@ -124,15 +210,22 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
   const domainCoverage = useMemo(() => {
     const published = news.filter((n) => n.is_published);
     const counts: Record<string, number> = {};
+    const articles: Record<string, NewsItem[]> = {};
     const unclassifiedItems: NewsItem[] = [];
     for (const n of published) {
       const text = `${n.title} ${n.summary_short ?? ""} ${n.category ?? ""}`;
       const domains = getDomains(text);
       if (domains.length === 0) unclassifiedItems.push(n);
-      domains.forEach((d) => { counts[d] = (counts[d] ?? 0) + 1; });
+      domains.forEach((d) => {
+        counts[d] = (counts[d] ?? 0) + 1;
+        if (!articles[d]) articles[d] = [];
+        articles[d].push(n);
+      });
     }
-    return { counts, unclassifiedItems, total: published.length };
+    return { counts, articles, unclassifiedItems, total: published.length };
   }, [news]);
+
+  const [hoveredDomain, setHoveredDomain] = useState<string | null>(null);
 
   // 이슈 목록
   const issueItems = useMemo(() => {
@@ -146,7 +239,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
     return news
       .map((n) => {
         const issues: string[] = [];
-        if (!n.image_url) issues.push("이미지 없음");
+        // 이미지 없음은 제외 — ArticleImg 가 로고로 자동 대체
         if (!n.category) issues.push("카테고리 없음");
         if (!n.summary_short) issues.push("요약 없음");
         if ((urlMap.get(n.original_url)?.length ?? 0) > 1) issues.push("URL 중복");
@@ -206,12 +299,28 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
           {DOMAINS.map((d) => {
             const cnt = domainCoverage.counts[d.label] ?? 0;
             const pct = domainCoverage.total ? Math.round((cnt / domainCoverage.total) * 100) : 0;
+            const domainArticles = domainCoverage.articles[d.label] ?? [];
+            const isHovered = hoveredDomain === d.label;
             return (
-              <div key={d.label} style={{ marginBottom: 10 }}>
+              <div key={d.label} style={{ marginBottom: 10, position: "relative" }}>
                 <div style={{ display: "flex", justifyContent: "space-between",
                   fontSize: "0.75rem", marginBottom: 3 }}>
                   <span style={{ color: d.color, fontWeight: 600 }}>{d.label}</span>
-                  <span style={{ color: "var(--on-surface-variant)" }}>{cnt}건 ({pct}%)</span>
+                  <span
+                    onMouseEnter={() => cnt > 0 && setHoveredDomain(d.label)}
+                    onMouseLeave={() => setHoveredDomain(null)}
+                    style={{
+                      color: "var(--on-surface-variant)",
+                      cursor: cnt > 0 ? "pointer" : "default",
+                      textDecoration: isHovered ? "underline" : "none",
+                      position: "relative",
+                    }}
+                  >
+                    {cnt}건 ({pct}%)
+                    {isHovered && domainArticles.length > 0 && (
+                      <DomainTooltip articles={domainArticles} color={d.color} label={d.label} />
+                    )}
+                  </span>
                 </div>
                 <div style={{ height: 6, borderRadius: 3,
                   background: "var(--surface-container-high)" }}>
@@ -299,7 +408,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
           </p>
           {[
             { key: "all" as const, label: "전체 이슈", count: issueItems.length, color: "#64748b" },
-            { key: "missing" as const, label: "빠진 필드", count: news.filter(n => !n.image_url || !n.category || !n.summary_short).length, color: "#ef4444" },
+            { key: "missing" as const, label: "빠진 필드", count: news.filter(n => !n.category || !n.summary_short).length, color: "#ef4444" },
             { key: "dup" as const, label: "URL 중복", count: stats.duplicates, color: "#dc2626" },
             { key: "mismatch" as const, label: "점수 불일치", count: stats.mismatch, color: "#9333ea" },
           ].map(({ key, label, count, color }) => (
@@ -575,12 +684,82 @@ function RssSourcesPanel({
 // ── 수동 관리 패널 ────────────────────────────────────────────────
 type DedupPreview = { noise: number; dup: number; foreign: number; total_delete: number; dup_groups: number } | null;
 
+type ImportPreview = {
+  new_count: number; merge_count: number; skip_count: number;
+  preview_new:   { name: string; date: string; venue: string }[];
+  preview_merge: { name: string; date: string; fields: string[] }[];
+} | null;
+
 function ManualOpsPanel() {
   const [scrapeStatus, setScrapeStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [dedupPreview, setDedupPreview] = useState<DedupPreview>(null);
   const [dedupStatus, setDedupStatus] = useState<"idle" | "loading" | "ready" | "running" | "done" | "error">("idle");
   const [dedupMsg, setDedupMsg]   = useState("");
   const [open, setOpen] = useState(false);
+
+  // AKEI 가져오기
+  const importFileRef = useRef<HTMLInputElement>(null);
+  const [importRows,   setImportRows]   = useState<unknown[] | null>(null);
+  const [importPreview, setImportPreview] = useState<ImportPreview>(null);
+  const [importStatus, setImportStatus] = useState<"idle" | "parsing" | "previewing" | "ready" | "running" | "done" | "error">("idle");
+  const [importMsg,    setImportMsg]    = useState("");
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImportStatus("parsing");
+    setImportPreview(null);
+    setImportMsg("");
+    try {
+      const XLSX = await import("xlsx");
+      const buf  = await file.arrayBuffer();
+      const wb   = XLSX.read(buf, { type: "array" });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws);
+      setImportRows(rows);
+      // 자동으로 미리보기 요청
+      const res  = await fetch("/api/admin/import-exhibitions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows, dry_run: true }),
+      });
+      const data = await res.json();
+      setImportPreview(data);
+      setImportStatus("ready");
+    } catch (err) {
+      setImportStatus("error");
+      setImportMsg(err instanceof Error ? err.message : "파일 파싱 오류");
+    }
+  }
+
+  async function runImport() {
+    if (!importRows) return;
+    setImportStatus("running");
+    try {
+      const res  = await fetch("/api/admin/import-exhibitions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: importRows, dry_run: false }),
+      });
+      const data = await res.json();
+      if (data.ok) {
+        setImportMsg(`신규 ${data.inserted}건 추가 · ${data.updated}건 보강 · ${data.skipped}건 스킵`);
+        setImportStatus("done");
+      } else {
+        setImportMsg(data.error ?? "오류 발생");
+        setImportStatus("error");
+      }
+    } catch {
+      setImportStatus("error");
+      setImportMsg("실행 실패");
+    }
+  }
+
+  function resetImport() {
+    setImportRows(null); setImportPreview(null);
+    setImportStatus("idle"); setImportMsg("");
+    if (importFileRef.current) importFileRef.current.value = "";
+  }
 
   async function handleScrape() {
     setScrapeStatus("running");
@@ -650,7 +829,7 @@ function ManualOpsPanel() {
 
       {open && (
         <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16,
+          display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 16,
           padding: 20, borderRadius: 12,
           border: "1px solid var(--surface-container-high)",
           background: "var(--surface-container-lowest)",
@@ -752,6 +931,119 @@ function ManualOpsPanel() {
                 {dedupStatus === "running" ? "실행 중..." : "정리 실행"}
               </button>
             </div>
+          </div>
+
+          {/* ── AKEI 엑셀 가져오기 ── */}
+          <div>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.82rem" }}>
+              📥 AKEI 엑셀 가져오기
+            </p>
+            <p style={{ margin: "0 0 12px", fontSize: "0.73rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
+              한국전시산업진흥회 크롤러 엑셀을 업로드하면 중복 분석 후 신규 추가·빈 필드 보강을 수행합니다.
+            </p>
+
+            {importStatus === "idle" && (
+              <label style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "7px 14px", borderRadius: 8, fontSize: "0.78rem",
+                fontWeight: 600, cursor: "pointer",
+                border: "1px solid var(--surface-container-high)",
+                background: "transparent", color: "var(--on-surface-variant)",
+              }}>
+                📂 엑셀 선택
+                <input
+                  ref={importFileRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  style={{ display: "none" }}
+                  onChange={handleFileChange}
+                />
+              </label>
+            )}
+
+            {importStatus === "parsing" && (
+              <p style={{ fontSize: "0.73rem", color: "#f59e0b", margin: 0 }}>⏳ 파일 분석 중...</p>
+            )}
+
+            {importStatus === "ready" && importPreview && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{
+                  padding: "10px 12px", borderRadius: 8,
+                  background: "var(--surface-container)",
+                  border: "1px solid var(--surface-container-high)",
+                  fontSize: "0.73rem",
+                }}>
+                  <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.75rem", color: "var(--on-surface)" }}>미리보기</p>
+                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                    <span>✅ 신규 <b style={{ color: "#10b981" }}>{importPreview.new_count}건</b></span>
+                    <span>🔄 보강 <b style={{ color: "#f59e0b" }}>{importPreview.merge_count}건</b></span>
+                    <span>⏭ 스킵 <b style={{ color: "#94a3b8" }}>{importPreview.skip_count}건</b></span>
+                  </div>
+                  {importPreview.preview_new.length > 0 && (
+                    <div style={{ marginTop: 8 }}>
+                      <p style={{ margin: "0 0 3px", fontSize: "0.65rem", fontWeight: 600, color: "#10b981", textTransform: "uppercase", letterSpacing: "0.04em" }}>신규 샘플</p>
+                      {importPreview.preview_new.map((r, i) => (
+                        <p key={i} style={{ margin: "1px 0", fontSize: "0.68rem", color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {r.name} · {r.date}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  {importPreview.preview_merge.length > 0 && (
+                    <div style={{ marginTop: 6 }}>
+                      <p style={{ margin: "0 0 3px", fontSize: "0.65rem", fontWeight: 600, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.04em" }}>보강 샘플</p>
+                      {importPreview.preview_merge.map((r, i) => (
+                        <p key={i} style={{ margin: "1px 0", fontSize: "0.68rem", color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {r.name} · +{r.fields.join(", ")}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={resetImport} style={{
+                    padding: "7px 12px", borderRadius: 8, fontSize: "0.75rem",
+                    fontWeight: 600, cursor: "pointer",
+                    border: "1px solid var(--surface-container-high)",
+                    background: "transparent", color: "var(--on-surface-variant)",
+                  }}>취소</button>
+                  <button onClick={runImport} style={{
+                    padding: "7px 14px", borderRadius: 8, fontSize: "0.78rem",
+                    fontWeight: 700, cursor: "pointer",
+                    border: "1px solid #10b98140",
+                    background: "#10b98118", color: "#10b981",
+                  }}>가져오기 실행</button>
+                </div>
+              </div>
+            )}
+
+            {importStatus === "running" && (
+              <p style={{ fontSize: "0.73rem", color: "#f59e0b", margin: 0 }}>⏳ 가져오는 중...</p>
+            )}
+
+            {importStatus === "done" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <p style={{ margin: 0, fontSize: "0.73rem", color: "#10b981", fontWeight: 600 }}>✅ {importMsg}</p>
+                <button onClick={resetImport} style={{
+                  alignSelf: "flex-start", padding: "5px 12px", borderRadius: 8,
+                  fontSize: "0.73rem", cursor: "pointer",
+                  border: "1px solid var(--surface-container-high)",
+                  background: "transparent", color: "var(--on-surface-variant)",
+                }}>다시 가져오기</button>
+              </div>
+            )}
+
+            {importStatus === "error" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                <p style={{ margin: 0, fontSize: "0.73rem", color: "#ef4444" }}>⚠️ {importMsg}</p>
+                <button onClick={resetImport} style={{
+                  alignSelf: "flex-start", padding: "5px 12px", borderRadius: 8,
+                  fontSize: "0.73rem", cursor: "pointer",
+                  border: "1px solid var(--surface-container-high)",
+                  background: "transparent", color: "var(--on-surface-variant)",
+                }}>다시 시도</button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -1027,6 +1319,47 @@ export default function QualityDashboard({ news, events, sources }: Props) {
       </div>
 
       {tab === "news" ? <NewsTab news={news} sources={sources} /> : <EventsTab initialEvents={events} />}
+
+      <HelpPanel title="정합성 관리 가이드">
+        <p style={{ marginBottom: 12 }}>
+          뉴스 DB와 행사 데이터의 품질을 점검하고 관리합니다. 수치가 높을수록 콘텐츠 노출 품질에 직접 영향을 줍니다.
+        </p>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📰 뉴스 정합성 탭</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>빠진 필드</strong> — 카테고리 또는 요약(summary_short)이 없는 기사. 뉴스룸 리스트·검색에서 빈 카드로 노출될 수 있습니다. (이미지 없음은 로고 자동 대체되므로 이슈 아님)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>URL 중복</strong> — 동일한 원문 URL이 2건 이상 저장된 경우. 큐레이션 보드에서 수동 삭제하거나 하단 중복 정리 기능을 활용하세요.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>점수 불일치</strong> — 발행됐으나 품질점수 4점 미만이거나, 고품질(8점↑)이지만 미발행 상태인 기사. 검토 후 발행 여부를 조정하세요.</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📊 사업영역 커버리지</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 키워드와 얼마나 겹치는지 비율로 표시합니다.</li>
+          <li>건수/퍼센트에 마우스를 올리면 해당 도메인의 기사 목록(최대 8건)을 미리볼 수 있습니다.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>미분류</strong> — 어느 도메인 키워드에도 매칭되지 않는 기사. 비율이 높으면 큐레이션 설정의 강조 키워드를 점검하거나 도메인 키워드 확장을 검토하세요.</li>
+          <li>하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 &gt; 100% 가능).</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📡 RSS 소스 분석</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>연관도 높음(✅)</strong> — AI·MICE·TOURISM 카테고리 소스. 사업영역과 직접 연관됩니다.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>연관도 보통(⚠️)</strong> — 간접 연관 가능한 소스 (스타트업·정책 등).</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>연관도 낮음(❌)</strong> — 사업영역 외 가능성이 높은 소스. 비활성 전환을 검토하세요.</li>
+          <li>활성/비활성 버튼으로 소스별 수집을 즉시 ON/OFF 할 수 있습니다.</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📅 행사 관리 탭</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>⚠️ 아이콘이 있는 행은 주최기관 없음·이름 짧음(데이터 짤림 의심)·카테고리 없음 중 하나 이상의 이슈가 있습니다.</li>
+          <li>공개/비공개 버튼으로 뉴스룸 행사 섹션 노출 여부를 즉시 전환합니다.</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>행사 데이터 수집</strong> — 쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤 새로고침하면 결과를 확인할 수 있습니다.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>중복/불량 정리</strong> — 미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명 삭제, 중복 그룹에서 정보량이 낮은 행 삭제, 해외 venue 비공개 처리를 한번에 수행합니다. <strong style={{ color: "#ef4444" }}>실행 후 복원 불가.</strong></li>
+        </ul>
+      </HelpPanel>
     </div>
   );
 }

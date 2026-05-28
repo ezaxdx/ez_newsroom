@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { NewsItem } from "@/lib/types";
 import { logEvent } from "@/lib/analytics";
 import ArticleImg from "./ArticleImg";
@@ -56,6 +56,14 @@ function highlight(text: string, query: string) {
 
 export default function SearchResults({ items, query }: Props) {
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
+
+  // 검색어 로깅 (query가 있을 때)
+  useEffect(() => {
+    if (query.trim()) {
+      logEvent({ event_type: "search", search_query: query.trim() });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const handleOpen = (item: NewsItem) => {
     setActiveItem(item);

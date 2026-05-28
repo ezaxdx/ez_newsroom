@@ -70,7 +70,6 @@ export default function SettingsPage() {
   const [saved, setSaved] = useState(false);
 
   const [navCategories, setNavCategories] = useState<string[]>(["AI", "MICE", "TOURISM"]);
-  const [carouselSec, setCarouselSec] = useState(5);
   const [settings, setSettings] = useState<SettingsMap>({});
   const [levelPrompts, setLevelPrompts] = useState<CategoryLevelPrompts>({});
   const [activeTab, setActiveTab] = useState("AI");
@@ -93,7 +92,7 @@ export default function SettingsPage() {
       .then((d) => {
         const cats: string[] = d.categories ?? ["AI", "MICE", "TOURISM"];
         setNavCategories(cats);
-        setCarouselSec(d.carouselSec ?? 5);
+
         setActiveTab(cats[0] ?? "AI");
         setAutoSchedule(d.autoSchedule ?? { enabled: false, days: [], hour: 9 });
         setQualityThresholds(d.qualityThresholds ?? { auto_publish: 8, staging: 5 });
@@ -101,7 +100,10 @@ export default function SettingsPage() {
 
         const savedSettings: SettingsMap = d.categorySettings ?? {};
         const merged: SettingsMap = {};
-        for (const cat of cats) {
+        // 현재 nav 카테고리 + DB에 설정이 남아있는 삭제된 카테고리 모두 로드
+        // → 카테고리를 삭제해도 설정이 보존되어 재추가 시 복원 가능
+        const allSettingsCats = Array.from(new Set([...cats, ...Object.keys(savedSettings)]));
+        for (const cat of allSettingsCats) {
           const base = savedSettings[cat] ?? makeDefault(cat);
           // presets 필드가 없는 구버전 데이터 마이그레이션
           merged[cat] = {
@@ -115,7 +117,7 @@ export default function SettingsPage() {
         const rawLp = d.levelPrompts ?? {};
         if (rawLp["초급"] || rawLp["중급"] || rawLp["고급"] || rawLp["Beginner"] || rawLp["Intermediate"] || rawLp["Advanced"]) {
           const migrated: CategoryLevelPrompts = {};
-          for (const cat of cats) {
+          for (const cat of allSettingsCats) {
             migrated[cat] = {
               Beginner: rawLp["Beginner"] ?? rawLp["초급"] ?? DEFAULT_LEVEL_PROMPTS["Beginner"],
               Intermediate: rawLp["Intermediate"] ?? rawLp["중급"] ?? DEFAULT_LEVEL_PROMPTS["Intermediate"],
@@ -136,8 +138,9 @@ export default function SettingsPage() {
     const cat = newCat.trim().toUpperCase();
     if (!cat || navCategories.includes(cat)) return;
     setNavCategories((prev) => [...prev, cat]);
-    setSettings((prev) => ({ ...prev, [cat]: makeDefault(cat) }));
-    setLevelPrompts((prev) => ({ ...prev, [cat]: { ...DEFAULT_LEVEL_PROMPTS } }));
+    // 이전에 삭제된 카테고리라면 기존 설정 복원, 신규라면 기본값 생성
+    setSettings((prev) => ({ ...prev, [cat]: prev[cat] ?? makeDefault(cat) }));
+    setLevelPrompts((prev) => ({ ...prev, [cat]: prev[cat] ?? { ...DEFAULT_LEVEL_PROMPTS } }));
     setActiveTab(cat);
     setNewCat("");
   };
@@ -145,8 +148,9 @@ export default function SettingsPage() {
   /* ── 카테고리 삭제 ── */
   const removeCategory = (cat: string) => {
     if (navCategories.length <= 1) { alert("카테고리는 최소 1개 필요합니다."); return; }
-    if (!confirm(`"${cat}" 카테고리를 삭제할까요?`)) return;
+    if (!confirm(`"${cat}" 카테고리를 네비게이션에서 제거할까요?\n\n해당 카테고리의 기사는 DB에 보존되며,\n카테고리를 재추가하면 기사와 설정이 모두 복원됩니다.`)) return;
     setNavCategories((prev) => prev.filter((c) => c !== cat));
+    // settings, levelPrompts는 유지 → 재추가 시 복원 가능
     if (activeTab === cat) setActiveTab(navCategories.find((c) => c !== cat) ?? "");
   };
 
@@ -199,7 +203,7 @@ export default function SettingsPage() {
       await fetch("/api/admin/categories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ categories: navCategories, carouselSec, categorySettings: settings, levelPrompts, autoSchedule, qualityThresholds, companyContext }),
+        body: JSON.stringify({ categories: navCategories, categorySettings: settings, levelPrompts, autoSchedule, qualityThresholds, companyContext }),
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
@@ -318,18 +322,6 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        <div className="flex items-center gap-3 pt-3" style={{ borderTop: "1px solid var(--surface-container-high)" }}>
-          <label className="flex items-center gap-2 text-xs" style={{ color: "var(--on-surface-variant)" }}>
-            <span className="font-semibold">히어로 롤링 간격</span>
-            <input
-              type="number" min={2} max={60} value={carouselSec}
-              onChange={(e) => setCarouselSec(Math.max(2, Math.min(60, Number(e.target.value))))}
-              className="w-16 h-7 px-2 rounded-md text-xs text-center outline-none"
-              style={{ background: "var(--surface-container-highest)", border: "1px solid var(--surface-container-high)", color: "var(--on-surface)" }}
-            />
-            <span>초</span>
-          </label>
-        </div>
       </div>
 
       {/* ── 자동 큐레이션 스케줄 ── */}
@@ -698,23 +690,45 @@ export default function SettingsPage() {
         <p style={{ marginBottom: 12 }}>
           AI 큐레이션의 전체 동작 방식을 설정합니다. 저장 후 다음 큐레이션 실행부터 반영됩니다.
         </p>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>주요 설정 항목</p>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리 관리</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>카테고리</strong> — 추가/삭제 시 뉴스룸 전체에 즉시 반영</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>자동 큐레이션 스케줄</strong> — 실행 요일·시각 설정 (현재: 화·목 오전 9시)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>품질 임계값</strong> — 자동 발행 기준점·대기 기준점 조정</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>추가</strong> — 새 카테고리를 뉴스룸 네비게이션에 즉시 반영</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>삭제</strong> — 네비게이션에서만 숨겨지며, <strong style={{ color: "var(--on-surface)" }}>기사·설정은 DB에 그대로 보존</strong>됩니다. 같은 이름으로 재추가하면 기사와 페르소나·키워드 설정이 모두 복원됩니다.</li>
         </ul>
+
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리별 AI 설정</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>타겟 독자</strong> — 카테고리 독자층 설명 (AI 생성 방향에 반영)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>AI 페르소나</strong> — 기사 작성 스타일 프롬프트</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>강조 키워드</strong> — 분석 시 우선 언급할 키워드</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>AI 페르소나</strong> — 기사 작성 스타일 프롬프트. 프리셋 버튼으로 빠르게 전환 가능</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>강조 키워드</strong> — 분석 시 우선 언급할 키워드 (순서 조정 가능)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>레벨별 지침</strong> — Beginner / Intermediate / Advanced 별 문체·관점 지침</li>
         </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>현재 품질 기준</p>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>현재 품질 기준 (1~10점)</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 8 }}>
+          <li>
+            <strong style={{ color: "var(--on-surface)" }}>{qualityThresholds.auto_publish}점 이상 → 자동 발행</strong>
+            {" "}— 관련성·완성도가 높은 기사. 큐레이션 직후 뉴스룸에 즉시 게시됩니다.
+          </li>
+          <li>
+            <strong style={{ color: "var(--on-surface)" }}>{qualityThresholds.staging}~{qualityThresholds.auto_publish - 1}점 → 대기열 (스테이징)</strong>
+            {" "}— DB에 저장되지만 비공개 상태. 큐레이션 보드에서 관리자가 직접 발행 여부를 결정합니다.
+          </li>
+          <li>
+            <strong style={{ color: "var(--on-surface)" }}>{qualityThresholds.staging - 1}점 이하 → 자동 폐기</strong>
+            {" "}— 관련성이 낮거나 품질이 미달인 기사. <strong style={{ color: "var(--on-surface)" }}>DB에 저장되지 않고 즉시 삭제</strong>되므로 복원 불가합니다.
+          </li>
+        </ul>
+        <p style={{ fontSize: 11, color: "var(--on-surface-variant)", marginBottom: 16, paddingLeft: 2 }}>
+          ※ 점수는 AI가 수집된 원문의 주제 적합성·정보 밀도·독창성을 종합 평가합니다. 슬라이더로 기준을 조정하면 다음 큐레이션부터 적용됩니다.
+        </p>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>자동 큐레이션 스케줄</p>
         <ul style={{ paddingLeft: 16 }}>
-          <li>6점 이상 → 자동 발행</li>
-          <li>4~5점 → 대기 (수동 검토)</li>
-          <li>3점 이하 → 자동 폐기</li>
+          <li>설정한 요일에 자동으로 AI 큐레이션이 실행됩니다</li>
+          <li>Vercel Hobby 플랜 특성상 실행 시각은 최대 1시간 오차가 있을 수 있습니다</li>
+          <li>스케줄 OFF 시에도 큐레이션 보드에서 수동 실행 가능합니다</li>
         </ul>
       </HelpPanel>
     </div>
