@@ -189,7 +189,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
 
     <!-- ── HEADER IMAGE (배경) + Vol./Date 텍스트 (이미지 내부 상단에 오버레이) ── -->
     <tr>
-      <td style="background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% auto;background-repeat:no-repeat;background-color:${C.bg};height:486px;padding:60px 0 0;text-align:center;vertical-align:top;">
+      <td style="background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% auto;background-repeat:no-repeat;background-color:${C.bg};height:486px;padding:30px 0 0;text-align:center;vertical-align:top;">
         <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
           Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
         </p>
