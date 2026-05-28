@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage } from "@/lib/news-ui";
+import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage, onImgError } from "@/lib/news-ui";
 
 type Props = {
   label: string;
@@ -50,6 +50,7 @@ export default function FeedBlock({ label, items, onOpen }: Props) {
                 alt=""
                 className="w-full h-full"
                 style={{ objectFit: item.image_url ? "cover" : "contain", padding: item.image_url ? 0 : "28%" }}
+              onError={onImgError}
               />
               {item.level && (
                 <span

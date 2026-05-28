@@ -2,6 +2,7 @@
  * 뉴스 카드 UI 공통 상수 & 유틸리티
  * CategoryArchive / FeedBlock / InsightGrid / HeroCarousel 등에서 공유
  */
+import type React from "react";
 
 /** 밝은 배경(카드 썸네일 위) 레벨 뱃지 스타일 */
 export const LEVEL_STYLE_LIGHT: Record<string, { bg: string; color: string }> = {
@@ -36,4 +37,13 @@ export const FALLBACK_IMAGE = "/ez-fallback.png";
 /** image_url이 없으면 EZpmp 로고로 대체 */
 export function getArticleImage(imageUrl: string | null | undefined): string {
   return imageUrl || FALLBACK_IMAGE;
+}
+
+/** img onError 핸들러 — 로드 실패 시 EZpmp 로고로 교체 + contain 스타일 적용 */
+export function onImgError(e: React.SyntheticEvent<HTMLImageElement>) {
+  const img = e.currentTarget;
+  if (img.src.endsWith(FALLBACK_IMAGE)) return; // 무한 루프 방지
+  img.src = FALLBACK_IMAGE;
+  img.style.objectFit = "contain";
+  img.style.padding = "28%";
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { getArticleImage } from "@/lib/news-ui";
+import { getArticleImage, onImgError } from "@/lib/news-ui";
 
 type Props = {
   topNews: NewsItem;
@@ -35,6 +35,7 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
             opacity: topNews.image_url ? 0.3 : 0.15,
             padding: topNews.image_url ? 0 : "35%",
           }}
+          onError={onImgError}
         />
 
         <span

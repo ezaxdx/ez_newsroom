@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_DARK, getArticleImage } from "@/lib/news-ui";
+import { LEVEL_STYLE_DARK, getArticleImage, onImgError } from "@/lib/news-ui";
 
 type Props = {
   items: NewsItem[];
@@ -46,6 +46,7 @@ export default function InsightGrid({ items, onOpen }: Props) {
                 opacity: item.image_url ? 0.2 : 0.15,
                 padding: item.image_url ? 0 : "32%",
               }}
+              onError={onImgError}
             />
 
             {/* Level badge */}
