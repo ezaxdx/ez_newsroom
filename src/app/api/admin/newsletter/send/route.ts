@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   // ── Collect content ──
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
-  const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
+  const twoWeeksAgo = new Date(today.getTime() - 28 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
 
@@ -98,10 +98,10 @@ export async function POST(req: NextRequest) {
     .limit(2);
   const ezpmpNews: NewsCard[] = (ezpmpRaw ?? []).map(toNewsCard);
 
-  // ez letter Pick (featured 4개)
+  // ez letter Pick (featured 4개) — image_url은 없을 수 있으므로 제외
   const { data: featuredRaw } = await supabase
     .from("convention_events")
-    .select("id, event_name, start_date, end_date, venue, website, image_url")
+    .select("id, event_name, start_date, end_date, venue, website")
     .eq("is_published", true)
     .gte("start_date", todayStr)
     .order("start_date", { ascending: true })
@@ -109,14 +109,12 @@ export async function POST(req: NextRequest) {
 
   const featuredEvents: EventCard[] = (featuredRaw ?? []).map((e) => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null,
-    image_url: (e as { image_url?: string | null }).image_url ?? null,
-    website: e.website ?? null,
+    venue: e.venue ?? null, image_url: null, website: e.website ?? null,
   }));
 
-  // Weekly Event List — 이번 주에 시작하거나 진행 중인 행사 (오늘 ~ 이번 주 일요일)
+  // Weekly Event List — 이번 주 (start_date 기준, end_date 없어도 동작)
   const nowKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
-  const dayOfWeek = nowKST.getUTCDay(); // 0=Sun
+  const dayOfWeek = nowKST.getUTCDay();
   const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
   const endOfWeek = new Date(nowKST);
   endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
@@ -127,8 +125,8 @@ export async function POST(req: NextRequest) {
     .from("convention_events")
     .select("id, event_name, start_date, end_date, venue, website")
     .eq("is_published", true)
-    .lte("start_date", endOfWeekStr)   // 이번 주 일요일까지 시작
-    .gte("end_date", todayStr)          // 아직 종료 안 됨
+    .gte("start_date", todayStr)
+    .lte("start_date", endOfWeekStr)
     .not("id", "in", featuredIds.length > 0 ? `(${featuredIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
     .order("start_date", { ascending: true })
     .limit(20);

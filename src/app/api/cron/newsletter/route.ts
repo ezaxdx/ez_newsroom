@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   // 콘텐츠 수집 (send route와 동일한 로직)
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
-  const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const twoWeeksAgo = new Date(today.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const site_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
 
   const { count: issueCount } = await supabase.from("newsletter_issues").select("*", { count: "exact", head: true });
@@ -88,17 +88,15 @@ export async function GET(req: NextRequest) {
 
   // ez letter Pick (featured 4개)
   const { data: featuredRaw } = await supabase.from("convention_events")
-    .select("id, event_name, start_date, end_date, venue, website, image_url")
+    .select("id, event_name, start_date, end_date, venue, website")
     .eq("is_published", true).gte("start_date", todayStr)
     .order("start_date", { ascending: true }).limit(4);
   const featuredEvents: EventCard[] = (featuredRaw ?? []).map(e => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null,
-    image_url: (e as { image_url?: string | null }).image_url ?? null,
-    website: e.website ?? null,
+    venue: e.venue ?? null, image_url: null, website: e.website ?? null,
   }));
 
-  // Weekly Event List — 이번 주에 시작하거나 진행 중인 행사 (오늘 ~ 이번 주 일요일)
+  // Weekly Event List — 이번 주 start_date 기준
   const dayOfWeek = nowKST.getUTCDay();
   const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
   const endOfWeek = new Date(nowKST);
@@ -109,8 +107,8 @@ export async function GET(req: NextRequest) {
   const { data: upcomingRaw } = await supabase.from("convention_events")
     .select("id, event_name, start_date, end_date, venue, website")
     .eq("is_published", true)
+    .gte("start_date", todayStr)
     .lte("start_date", endOfWeekStr)
-    .gte("end_date", todayStr)
     .not("id", "in", featuredIds.length > 0 ? `(${featuredIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
     .order("start_date", { ascending: true }).limit(20);
   const upcomingEvents: EventCard[] = (upcomingRaw ?? []).map(e => ({
