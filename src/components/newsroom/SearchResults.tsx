@@ -102,7 +102,7 @@ export default function SearchResults({ items, query }: Props) {
                 className="w-full h-full"
                 style={{
                   objectFit: item.image_url ? "cover" : "contain",
-                  padding: item.image_url ? 0 : "15%",
+                  padding: item.image_url ? 0 : "22%",
                 }}
               />
             </div>

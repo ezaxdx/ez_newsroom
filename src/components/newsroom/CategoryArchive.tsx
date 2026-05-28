@@ -222,7 +222,7 @@ export default function CategoryArchive({ category, items: initialItems }: Props
                         src={getArticleImage(item.image_url)}
                         alt=""
                         className="w-full h-full"
-                        style={{ objectFit: item.image_url ? "cover" : "contain", padding: item.image_url ? 0 : "18%" }}
+                        style={{ objectFit: item.image_url ? "cover" : "contain", padding: item.image_url ? 0 : "28%" }}
                       />
                       {item.level && (
                         <span

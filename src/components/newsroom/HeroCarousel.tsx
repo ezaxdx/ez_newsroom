@@ -60,7 +60,7 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
                 width: "100%",
                 height: "100%",
                 objectFit: item.image_url ? "cover" : "contain",
-                padding: item.image_url ? 0 : "20%",
+                padding: item.image_url ? 0 : "30%",
                 background: "rgba(18,18,20,0.95)",
               }}
             />

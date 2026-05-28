@@ -33,7 +33,7 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
             objectFit: topNews.image_url ? "cover" : "contain",
             mixBlendMode: topNews.image_url ? "overlay" : "normal",
             opacity: topNews.image_url ? 0.3 : 0.15,
-            padding: topNews.image_url ? 0 : "25%",
+            padding: topNews.image_url ? 0 : "35%",
           }}
         />
 

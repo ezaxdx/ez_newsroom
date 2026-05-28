@@ -44,7 +44,7 @@ export default function InsightGrid({ items, onOpen }: Props) {
                 objectFit: item.image_url ? "cover" : "contain",
                 mixBlendMode: item.image_url ? "overlay" : "normal",
                 opacity: item.image_url ? 0.2 : 0.15,
-                padding: item.image_url ? 0 : "25%",
+                padding: item.image_url ? 0 : "32%",
               }}
             />
 
