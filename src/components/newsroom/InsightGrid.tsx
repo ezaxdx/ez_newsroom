@@ -1,7 +1,8 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_DARK, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
+import { LEVEL_STYLE_DARK } from "@/lib/news-ui";
+import ArticleImg from "./ArticleImg";
 
 type Props = {
   items: NewsItem[];
@@ -35,26 +36,11 @@ export default function InsightGrid({ items, onOpen }: Props) {
             }}
             onClick={() => onOpen(item)}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={getArticleImage(item.image_url)}
-              alt=""
-              className={hasRealImage(item.image_url) ? "absolute inset-0 w-full h-full" : ""}
-              style={hasRealImage(item.image_url) ? {
-                objectFit: "cover",
-                mixBlendMode: "overlay",
-                opacity: 0.2,
-              } : {
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "38%",
-                height: "auto",
-                objectFit: "contain",
-                opacity: 0.6,
-              }}
-              onError={onImgError}
+            <ArticleImg
+              src={item.image_url}
+              className="absolute inset-0 w-full h-full"
+              style={{ objectFit: "cover", mixBlendMode: "overlay", opacity: 0.2 }}
+              fallbackWidth="38%"
             />
 
             {/* Level badge */}

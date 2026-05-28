@@ -1,7 +1,8 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
+import { LEVEL_STYLE_LIGHT, getCategoryBg } from "@/lib/news-ui";
+import ArticleImg from "./ArticleImg";
 
 type Props = {
   news: NewsItem[];
@@ -77,19 +78,10 @@ export default function LatestNewsColumn({ news, onOpen }: Props) {
               position: "relative",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={getArticleImage(item.image_url)}
-              alt=""
-              style={hasRealImage(item.image_url) ? {
-                width: "100%", height: "100%", objectFit: "cover",
-              } : {
-                position: "absolute",
-                top: "50%", left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "40%", height: "auto", objectFit: "contain",
-              }}
-              onError={onImgError}
+            <ArticleImg
+              src={item.image_url}
+              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              fallbackWidth="40%"
             />
           </div>
 

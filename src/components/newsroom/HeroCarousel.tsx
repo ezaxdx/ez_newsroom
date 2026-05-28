@@ -1,7 +1,8 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_DARK, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
+import { LEVEL_STYLE_DARK } from "@/lib/news-ui";
+import ArticleImg from "./ArticleImg";
 
 type Slide = { category: string; item: NewsItem };
 
@@ -50,27 +51,16 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
             }}
           >
             {/* 배경 이미지 */}
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={getArticleImage(item.image_url)}
-              alt=""
-              style={hasRealImage(item.image_url) ? {
+            <ArticleImg
+              src={item.image_url}
+              style={{
                 position: "absolute",
                 inset: 0,
                 width: "100%",
                 height: "100%",
                 objectFit: "cover",
-                background: "rgba(18,18,20,0.95)",
-              } : {
-                position: "absolute",
-                top: "50%",
-                left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "38%",
-                height: "auto",
-                objectFit: "contain",
               }}
-              onError={onImgError}
+              fallbackWidth="38%"
             />
 
             {/* 그라디언트 오버레이 */}

@@ -1,7 +1,8 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
+import { LEVEL_STYLE_LIGHT, getCategoryBg } from "@/lib/news-ui";
+import ArticleImg from "./ArticleImg";
 
 type Props = {
   label: string;
@@ -44,20 +45,11 @@ export default function FeedBlock({ label, items, onOpen }: Props) {
                 background: getCategoryBg(item.category, item.image_url),
               }}
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={getArticleImage(item.image_url)}
-                alt=""
+              <ArticleImg
+                src={item.image_url}
                 className="w-full h-full"
-                style={hasRealImage(item.image_url) ? {
-                width: "100%", height: "100%", objectFit: "cover",
-              } : {
-                position: "absolute",
-                top: "50%", left: "50%",
-                transform: "translate(-50%, -50%)",
-                width: "40%", height: "auto", objectFit: "contain",
-              }}
-              onError={onImgError}
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                fallbackWidth="40%"
               />
               {item.level && (
                 <span

@@ -24,9 +24,8 @@ export const CATEGORY_GRADIENT: Record<string, string> = {
 };
 
 /** 이미지 없을 때 카테고리 그라디언트 또는 기본 surface 반환 */
-export function getCategoryBg(category: string, imageUrl: string | null): string {
-  if (hasRealImage(imageUrl)) return "var(--surface-container-highest)";
-  return CATEGORY_GRADIENT[category.toUpperCase()] ?? "var(--surface-container-highest)";
+export function getCategoryBg(_category: string, _imageUrl: string | null): string {
+  return "var(--surface-container-highest)";
 }
 
 /** 이미지 없을 때 사용할 EZpmp 로고 폴백 */
@@ -40,6 +39,15 @@ export function getArticleImage(imageUrl: string | null | undefined): string {
 /** 실제 기사 이미지가 있는지 여부 (폴백 URL 저장된 경우도 없음으로 처리) */
 export function hasRealImage(imageUrl: string | null | undefined): boolean {
   return !!imageUrl && imageUrl !== FALLBACK_IMAGE;
+}
+
+/** img onLoad 핸들러 — HTTP 200이지만 빈/손상 이미지(naturalWidth<5)도 폴백으로 교체 */
+export function onImgLoad(e: { currentTarget: HTMLImageElement }) {
+  const img = e.currentTarget;
+  if (img.src.endsWith(FALLBACK_IMAGE)) return;
+  if (img.naturalWidth < 5 || img.naturalHeight < 5) {
+    onImgError(e);
+  }
 }
 
 /** img onError 핸들러 — 로드 실패 시 EZpmp 로고로 교체 + 중앙 정렬 소형 표시 */

@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
+import ArticleImg from "./ArticleImg";
 
 type Props = {
   topNews: NewsItem;
@@ -24,26 +24,11 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
         }}
         onClick={() => onOpen(topNews)}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={getArticleImage(topNews.image_url)}
-          alt=""
-          className={hasRealImage(topNews.image_url) ? "absolute inset-0 w-full h-full" : ""}
-          style={hasRealImage(topNews.image_url) ? {
-            objectFit: "cover",
-            mixBlendMode: "overlay",
-            opacity: 0.3,
-          } : {
-            position: "absolute",
-            top: "50%",
-            left: "50%",
-            transform: "translate(-50%, -50%)",
-            width: "38%",
-            height: "auto",
-            objectFit: "contain",
-            opacity: 0.7,
-          }}
-          onError={onImgError}
+        <ArticleImg
+          src={topNews.image_url}
+          className="absolute inset-0 w-full h-full"
+          style={{ objectFit: "cover", mixBlendMode: "overlay", opacity: 0.3 }}
+          fallbackWidth="38%"
         />
 
         <span
