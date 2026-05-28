@@ -56,7 +56,7 @@ async function fetchHeroNews(categories: string[]): Promise<NewsItem[]> {
   try {
     const supabase = createAdminClient();
 
-    // 카테고리별 최신 1건
+    // 카테고리별 display_order 가장 낮은 1건 (큐레이션보드 탑뉴스 기준과 동일)
     const perCat = await Promise.all(
       categories.map(async (cat) => {
         const { data } = await supabase
@@ -64,7 +64,7 @@ async function fetchHeroNews(categories: string[]): Promise<NewsItem[]> {
           .select("*")
           .eq("is_published", true)
           .eq("category", cat)
-          .order("published_at", { ascending: false })
+          .order("display_order", { ascending: true })
           .limit(1);
         return (data?.[0] ?? null) as NewsItem | null;
       })
