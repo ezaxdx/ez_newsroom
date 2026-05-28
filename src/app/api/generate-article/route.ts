@@ -66,7 +66,42 @@ export async function POST(req: NextRequest) {
       signal: AbortSignal.timeout(8000),
       redirect: "follow",
     });
-    const html = await res.text();
+
+    // 인코딩 감지: EUC-KR 등 non-UTF-8 페이지 대응
+    const contentType = res.headers.get("content-type") ?? "";
+    const charsetMatch =
+      contentType.match(/charset=["']?([\w-]+)/i);
+    let charset = charsetMatch?.[1]?.toLowerCase() ?? "utf-8";
+    // 한국 레거시 인코딩 정규화
+    if (["euc-kr", "ks_c_5601-1987", "ks_c_5601", "cp949", "x-windows-949"].includes(charset)) {
+      charset = "euc-kr";
+    }
+
+    let html: string;
+    if (charset === "utf-8" || charset === "utf8") {
+      html = await res.text();
+    } else {
+      // UTF-8 외 인코딩은 ArrayBuffer로 받아 TextDecoder로 디코딩
+      const buffer = await res.arrayBuffer();
+      try {
+        html = new TextDecoder(charset).decode(buffer);
+      } catch {
+        // TextDecoder가 해당 charset을 모르면 UTF-8 fallback
+        html = new TextDecoder("utf-8").decode(buffer);
+      }
+    }
+
+    // meta charset 태그에서 2차 감지 (Content-Type 헤더에 없는 경우)
+    if (charset === "utf-8") {
+      const metaCharset = html.match(/<meta[^>]+charset=["']?([\w-]+)/i)?.[1]?.toLowerCase();
+      if (metaCharset && !["utf-8", "utf8"].includes(metaCharset)) {
+        const buf = Buffer.from(html, "binary");
+        try {
+          html = new TextDecoder(metaCharset).decode(buf);
+        } catch { /* fallback: 그대로 사용 */ }
+      }
+    }
+
     articleText = html
       .replace(/<script[\s\S]*?<\/script>/gi, "")
       .replace(/<style[\s\S]*?<\/style>/gi, "")
@@ -74,6 +109,14 @@ export async function POST(req: NextRequest) {
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 8000);
+
+    // 내용이 너무 짧으면 스크래핑 실패로 판단
+    if (articleText.length < 200) {
+      return NextResponse.json(
+        { error: "원문 내용을 충분히 읽을 수 없습니다. JavaScript 렌더링 페이지이거나 접근이 차단된 URL일 수 있습니다." },
+        { status: 422 }
+      );
+    }
   } catch {
     return NextResponse.json({ error: "원문 페이지를 불러올 수 없습니다." }, { status: 422 });
   }

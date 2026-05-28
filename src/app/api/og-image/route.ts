@@ -59,7 +59,22 @@ export async function GET(req: NextRequest) {
       signal: AbortSignal.timeout(8000),
       redirect: "follow",
     });
-    const html = await res.text();
+    // EUC-KR 등 non-UTF-8 인코딩 대응
+    const contentType = res.headers.get("content-type") ?? "";
+    const charsetMatch = contentType.match(/charset=["']?([\w-]+)/i);
+    let charset = charsetMatch?.[1]?.toLowerCase() ?? "utf-8";
+    if (["euc-kr", "ks_c_5601-1987", "ks_c_5601", "cp949", "x-windows-949"].includes(charset)) {
+      charset = "euc-kr";
+    }
+    let html: string;
+    if (charset === "utf-8" || charset === "utf8") {
+      html = await res.text();
+    } else {
+      const buffer = await res.arrayBuffer();
+      try { html = new TextDecoder(charset).decode(buffer); }
+      catch { html = new TextDecoder("utf-8").decode(buffer); }
+    }
+
     const image = extractImage(html, fetchUrl);
     return NextResponse.json({ image });
   } catch {
