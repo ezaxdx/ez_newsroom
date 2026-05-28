@@ -21,7 +21,16 @@ export async function POST(req: NextRequest) {
   const dry_run = body.dry_run === true;
 
   const supabase = createAdminClient();
-  const site_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+  const prod_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+  // 미리보기(dry_run)일 때는 요청 origin을 사용 → 로컬 개발 환경에서도 이미지 로드됨
+  function getPreviewBase(): string {
+    const originHeader = req.headers.get("origin");
+    if (originHeader) return originHeader; // 브라우저가 보내는 origin 헤더 (가장 정확)
+    const host = req.headers.get("host") ?? "";
+    const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+    return `${isLocal ? "http" : "https"}://${host}`;
+  }
+  const site_url = dry_run ? getPreviewBase() : prod_url;
 
   // ── Collect content ──
   const today = new Date();
@@ -40,105 +49,93 @@ export async function POST(req: NextRequest) {
   const d = String(today.getDate()).padStart(2, "0");
   const send_date = `${y}.${mo}.${d}`;
 
-  // MICE
+  // ── 뉴스 수집 헬퍼 ──
+  function toNewsCard(n: { title: string; summary_short: string; image_url: string | null; original_url: string }): NewsCard {
+    return { title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url };
+  }
+
+  // MICE (없으면 빈 배열 → 섹션 자동 제거)
   const { data: miceRaw } = await supabase
     .from("news_items")
-    .select("id, title, summary_short, image_url, original_url, category, published_at")
+    .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
     .or("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%")
     .order("published_at", { ascending: false })
     .limit(2);
-
-  let miceNews: NewsCard[] = (miceRaw ?? []).map((n) => ({
-    title: n.title,
-    summary: n.summary_short,
-    image_url: n.image_url,
-    url: n.original_url,
-  }));
-
-  if (miceNews.length < 2) {
-    const needed = 2 - miceNews.length;
-    const existingIds = (miceRaw ?? []).map((n) => n.id);
-    const { data: fallback } = await supabase
-      .from("news_items")
-      .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true)
-      .not("id", "in", existingIds.length > 0 ? `(${existingIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
-      .order("published_at", { ascending: false })
-      .limit(needed);
-    miceNews = [
-      ...miceNews,
-      ...(fallback ?? []).map((n) => ({
-        title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url,
-      })),
-    ];
-  }
+  const miceNews: NewsCard[] = (miceRaw ?? []).map(toNewsCard);
 
   // Tourism
   const { data: tourismRaw } = await supabase
     .from("news_items")
-    .select("id, title, summary_short, image_url, original_url, category, published_at")
+    .select("title, summary_short, image_url, original_url")
     .eq("is_published", true)
     .gte("published_at", twoWeeksAgo)
     .or("category.ilike.%관광%,category.ilike.%여행%")
     .order("published_at", { ascending: false })
     .limit(2);
+  const tourismNews: NewsCard[] = (tourismRaw ?? []).map(toNewsCard);
 
-  let tourismNews: NewsCard[] = (tourismRaw ?? []).map((n) => ({
-    title: n.title,
-    summary: n.summary_short,
-    image_url: n.image_url,
-    url: n.original_url,
-  }));
+  // AI
+  const { data: aiRaw } = await supabase
+    .from("news_items")
+    .select("title, summary_short, image_url, original_url")
+    .eq("is_published", true)
+    .gte("published_at", twoWeeksAgo)
+    .or("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%")
+    .order("published_at", { ascending: false })
+    .limit(2);
+  const aiNews: NewsCard[] = (aiRaw ?? []).map(toNewsCard);
 
-  if (tourismNews.length < 2) {
-    const needed = 2 - tourismNews.length;
-    const existingIds = [
-      ...(miceRaw ?? []).map((n) => n.id),
-      ...(tourismRaw ?? []).map((n) => n.id),
-    ];
-    const { data: fallback } = await supabase
-      .from("news_items")
-      .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true)
-      .not("id", "in", existingIds.length > 0 ? `(${existingIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
-      .order("published_at", { ascending: false })
-      .limit(needed);
-    tourismNews = [
-      ...tourismNews,
-      ...(fallback ?? []).map((n) => ({
-        title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url,
-      })),
-    ];
-  }
+  // EZPMP
+  const { data: ezpmpRaw } = await supabase
+    .from("news_items")
+    .select("title, summary_short, image_url, original_url")
+    .eq("is_published", true)
+    .gte("published_at", twoWeeksAgo)
+    .or("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%")
+    .order("published_at", { ascending: false })
+    .limit(2);
+  const ezpmpNews: NewsCard[] = (ezpmpRaw ?? []).map(toNewsCard);
 
-  // Featured events
+  // ez letter Pick (featured 4개)
   const { data: featuredRaw } = await supabase
     .from("convention_events")
-    .select("id, event_name, start_date, venue, website")
+    .select("id, event_name, start_date, end_date, venue, website, image_url")
     .eq("is_published", true)
     .gte("start_date", todayStr)
     .order("start_date", { ascending: true })
     .limit(4);
 
   const featuredEvents: EventCard[] = (featuredRaw ?? []).map((e) => ({
-    name: e.event_name, start_date: e.start_date, venue: e.venue ?? null, image_url: null, website: e.website ?? null,
+    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+    venue: e.venue ?? null,
+    image_url: (e as { image_url?: string | null }).image_url ?? null,
+    website: e.website ?? null,
   }));
 
-  const featuredIds = (featuredRaw ?? []).map((e) => e.id);
+  // Weekly Event List — 이번 주에 시작하거나 진행 중인 행사 (오늘 ~ 이번 주 일요일)
+  const nowKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+  const dayOfWeek = nowKST.getUTCDay(); // 0=Sun
+  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
+  const endOfWeek = new Date(nowKST);
+  endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
+  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
+  const featuredIds = (featuredRaw ?? []).map((e) => e.id);
   const { data: upcomingRaw } = await supabase
     .from("convention_events")
-    .select("id, event_name, start_date, venue, website")
+    .select("id, event_name, start_date, end_date, venue, website")
     .eq("is_published", true)
-    .gte("start_date", todayStr)
+    .lte("start_date", endOfWeekStr)   // 이번 주 일요일까지 시작
+    .gte("end_date", todayStr)          // 아직 종료 안 됨
     .not("id", "in", featuredIds.length > 0 ? `(${featuredIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
     .order("start_date", { ascending: true })
-    .limit(10);
+    .limit(20);
 
   const upcomingEvents: EventCard[] = (upcomingRaw ?? []).map((e) => ({
-    name: e.event_name, start_date: e.start_date, venue: e.venue ?? null, website: e.website ?? null,
+    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+    venue: e.venue ?? null, website: e.website ?? null,
   }));
 
   const html = generateNewsletterHTML({
@@ -147,6 +144,8 @@ export async function POST(req: NextRequest) {
     editorial_text,
     mice_news: miceNews,
     tourism_news: tourismNews,
+    ai_news: aiNews,
+    ezpmp_news: ezpmpNews,
     featured_events: featuredEvents,
     upcoming_events: upcomingEvents,
     site_url,

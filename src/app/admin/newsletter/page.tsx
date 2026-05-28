@@ -23,7 +23,7 @@ type Issue = {
 };
 
 type SendLog = { id: string; email: string; status: string; error_message: string | null; sent_at: string };
-type CronSettings = { enabled: boolean; send_day: number; default_editorial: string | null };
+type CronSettings = { enabled: boolean; send_day: number; send_hour: number; default_editorial: string | null };
 
 type Tab = "send" | "subscribers" | "history";
 
@@ -67,7 +67,7 @@ export default function NewsletterPage() {
   const [editorialError, setEditorialError] = useState<string | null>(null);
 
   // ── 자동 발송 설정 ──
-  const [cronSettings, setCronSettings] = useState<CronSettings>({ enabled: false, send_day: 1, default_editorial: "" });
+  const [cronSettings, setCronSettings] = useState<CronSettings>({ enabled: false, send_day: 1, send_hour: 9, default_editorial: "" });
   const [cronSaving, setCronSaving] = useState(false);
   const [cronSaved, setCronSaved] = useState(false);
   const [cronOpen, setCronOpen] = useState(false);
@@ -123,6 +123,7 @@ export default function NewsletterPage() {
           setCronSettings({
             enabled: json.data.enabled ?? false,
             send_day: json.data.send_day ?? 1,
+            send_hour: json.data.send_hour ?? 9,
             default_editorial: json.data.default_editorial ?? "",
           });
         }
@@ -333,6 +334,7 @@ export default function NewsletterPage() {
         body: JSON.stringify({
           enabled: cronSettings.enabled,
           send_day: cronSettings.send_day,
+          send_hour: cronSettings.send_hour,
           default_editorial: cronSettings.default_editorial || null,
         }),
       });
@@ -542,6 +544,29 @@ export default function NewsletterPage() {
                     >
                       {DAY_LABELS.map((label, idx) => (
                         <option key={idx} value={idx}>{label}요일</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* send_hour 선택 (KST) */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)", minWidth: 80 }}>발송 시간</label>
+                    <select
+                      value={cronSettings.send_hour}
+                      onChange={(e) => setCronSettings(s => ({ ...s, send_hour: Number(e.target.value) }))}
+                      style={{
+                        padding: "7px 12px", borderRadius: 6,
+                        border: "1px solid var(--surface-container-highest)",
+                        background: "var(--surface-container-low)",
+                        color: "var(--on-surface)", fontSize: 13,
+                      }}
+                    >
+                      {Array.from({ length: 24 }, (_, h) => (
+                        <option key={h} value={h}>
+                          {h < 12
+                            ? `오전 ${h === 0 ? 12 : h}시 (${String(h).padStart(2,"0")}:00 KST)`
+                            : `오후 ${h === 12 ? 12 : h - 12}시 (${String(h).padStart(2,"0")}:00 KST)`}
+                        </option>
                       ))}
                     </select>
                   </div>
