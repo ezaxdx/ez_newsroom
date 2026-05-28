@@ -165,11 +165,14 @@ export default function CategoryArchive({ category, items: initialItems }: Props
           })}
         </div>
 
-        {/* 결과 수 + 로딩 */}
-        <div className="flex items-center gap-2 ml-auto">
+        {/* 결과 수 + 로딩 + 안내 문구 */}
+        <div className="flex items-center gap-3 ml-auto">
           {loading && <Loader2 size={13} className="animate-spin" style={{ color: "var(--on-surface-variant)" }} />}
           <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>
             {filtered.length}건
+          </span>
+          <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+            * 최근 2주 내 발행된 기사가 보여집니다.
           </span>
         </div>
 
