@@ -187,20 +187,12 @@ export function generateNewsletterHTML(data: NewsletterData): string {
   <table width="600" cellpadding="0" cellspacing="0" border="0"
          style="max-width:600px;width:100%;background:${C.white};">
 
-    <!-- ── HEADER: Vol./Date 텍스트 (이미지 상단 베이지 영역과 자연스럽게 이어짐) ── -->
+    <!-- ── HEADER IMAGE (배경) + Vol./Date 텍스트 (이미지 내부 상단에 오버레이) ── -->
     <tr>
-      <td style="background:${C.bg};padding:20px 0 0;text-align:center;">
+      <td style="background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% auto;background-repeat:no-repeat;background-color:${C.bg};height:486px;padding:22px 0 0;text-align:center;vertical-align:top;">
         <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
           Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
         </p>
-      </td>
-    </tr>
-    <!-- ── HEADER IMAGE (img 태그 — 모든 클라이언트에서 안정적으로 로드) ── -->
-    <tr>
-      <td style="padding:0;font-size:0;line-height:0;">
-        <img src="${site_url}/images/ez-letter-header.png"
-             width="600" alt="EZ Letter Header"
-             style="display:block;width:600px;max-width:100%;height:auto;border:0;">
       </td>
     </tr>
 
