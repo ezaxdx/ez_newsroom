@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage, onImgError } from "@/lib/news-ui";
+import { LEVEL_STYLE_LIGHT, getCategoryBg, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
 
 type Props = {
   news: NewsItem[];
@@ -83,8 +83,8 @@ export default function LatestNewsColumn({ news, onOpen }: Props) {
               alt=""
               style={{
                 width: "100%", height: "100%",
-                objectFit: item.image_url ? "cover" : "contain",
-                padding: item.image_url ? 0 : "33%",
+                objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
+                padding: hasRealImage(item.image_url) ? 0 : "33%",
               }}
               onError={onImgError}
             />

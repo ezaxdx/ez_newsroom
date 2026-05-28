@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { NewsItem } from "@/lib/types";
 import { logEvent } from "@/lib/analytics";
-import { getArticleImage, onImgError } from "@/lib/news-ui";
+import { getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
 import InsightModal from "./InsightModal";
 
 type Props = {
@@ -101,8 +101,8 @@ export default function SearchResults({ items, query }: Props) {
                 alt=""
                 className="w-full h-full"
                 style={{
-                  objectFit: item.image_url ? "cover" : "contain",
-                  padding: item.image_url ? 0 : "30%",
+                  objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
+                  padding: hasRealImage(item.image_url) ? 0 : "30%",
                 }}
                 onError={onImgError}
               />

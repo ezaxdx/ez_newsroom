@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_DARK, getArticleImage, onImgError } from "@/lib/news-ui";
+import { LEVEL_STYLE_DARK, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
 
 type Props = {
   items: NewsItem[];
@@ -41,10 +41,10 @@ export default function InsightGrid({ items, onOpen }: Props) {
               alt=""
               className="absolute inset-0 w-full h-full"
               style={{
-                objectFit: item.image_url ? "cover" : "contain",
-                mixBlendMode: item.image_url ? "overlay" : "normal",
-                opacity: item.image_url ? 0.2 : 0.15,
-                padding: item.image_url ? 0 : "32%",
+                objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
+                mixBlendMode: hasRealImage(item.image_url) ? "overlay" : "normal",
+                opacity: hasRealImage(item.image_url) ? 0.2 : 0.15,
+                padding: hasRealImage(item.image_url) ? 0 : "32%",
               }}
               onError={onImgError}
             />

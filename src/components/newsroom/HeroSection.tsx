@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { getArticleImage, onImgError } from "@/lib/news-ui";
+import { getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
 
 type Props = {
   topNews: NewsItem;
@@ -30,10 +30,10 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
           alt=""
           className="absolute inset-0 w-full h-full"
           style={{
-            objectFit: topNews.image_url ? "cover" : "contain",
-            mixBlendMode: topNews.image_url ? "overlay" : "normal",
-            opacity: topNews.image_url ? 0.3 : 0.15,
-            padding: topNews.image_url ? 0 : "35%",
+            objectFit: hasRealImage(topNews.image_url) ? "cover" : "contain",
+            mixBlendMode: hasRealImage(topNews.image_url) ? "overlay" : "normal",
+            opacity: hasRealImage(topNews.image_url) ? 0.3 : 0.15,
+            padding: hasRealImage(topNews.image_url) ? 0 : "35%",
           }}
           onError={onImgError}
         />

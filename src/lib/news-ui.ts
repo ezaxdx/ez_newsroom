@@ -25,7 +25,7 @@ export const CATEGORY_GRADIENT: Record<string, string> = {
 
 /** 이미지 없을 때 카테고리 그라디언트 또는 기본 surface 반환 */
 export function getCategoryBg(category: string, imageUrl: string | null): string {
-  if (imageUrl) return "var(--surface-container-highest)";
+  if (hasRealImage(imageUrl)) return "var(--surface-container-highest)";
   return CATEGORY_GRADIENT[category.toUpperCase()] ?? "var(--surface-container-highest)";
 }
 
@@ -35,6 +35,11 @@ export const FALLBACK_IMAGE = "/ez-fallback.png";
 /** image_url이 없으면 EZpmp 로고로 대체 */
 export function getArticleImage(imageUrl: string | null | undefined): string {
   return imageUrl || FALLBACK_IMAGE;
+}
+
+/** 실제 기사 이미지가 있는지 여부 (폴백 URL 저장된 경우도 없음으로 처리) */
+export function hasRealImage(imageUrl: string | null | undefined): boolean {
+  return !!imageUrl && imageUrl !== FALLBACK_IMAGE;
 }
 
 /** img onError 핸들러 — 로드 실패 시 EZpmp 로고로 교체 + contain 스타일 적용 */

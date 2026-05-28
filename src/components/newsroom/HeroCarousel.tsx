@@ -1,7 +1,7 @@
 "use client";
 
 import { NewsItem } from "@/lib/types";
-import { LEVEL_STYLE_DARK, getArticleImage, onImgError } from "@/lib/news-ui";
+import { LEVEL_STYLE_DARK, getArticleImage, onImgError, hasRealImage } from "@/lib/news-ui";
 
 type Slide = { category: string; item: NewsItem };
 
@@ -59,8 +59,8 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
                 inset: 0,
                 width: "100%",
                 height: "100%",
-                objectFit: item.image_url ? "cover" : "contain",
-                padding: item.image_url ? 0 : "30%",
+                objectFit: hasRealImage(item.image_url) ? "cover" : "contain",
+                padding: hasRealImage(item.image_url) ? 0 : "30%",
                 background: "rgba(18,18,20,0.95)",
               }}
               onError={onImgError}
