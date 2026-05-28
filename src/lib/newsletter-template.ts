@@ -19,9 +19,20 @@ export type NewsletterData = {
   editorial_text: string;
   mice_news: NewsCard[];
   tourism_news: NewsCard[];
-  featured_events: EventCard[];
+  featured_events: EventCard[]; // 최대 4개
   upcoming_events: EventCard[];
   site_url: string;
+};
+
+// ── 색상 팔레트 (EZ Letter 로고 기준) ──────────────────────────
+const C = {
+  bg:       "#F5F0E8",  // 크림 베이지
+  surface:  "#FFFFFF",
+  green:    "#50723C",  // 진한 초록
+  dark:     "#423E28",  // 다크 브라운
+  muted:    "#7A6E5F",  // 중간 톤
+  border:   "#DDD5C4",  // 연한 베이지 보더
+  dashLine: "#C8BEA8",  // 대시 라인
 };
 
 function withUTM(url: string, vol: number): string {
@@ -30,238 +41,228 @@ function withUTM(url: string, vol: number): string {
   return `${url}${sep}utm_source=newsletter&utm_medium=email&utm_campaign=ez-letter-vol-${String(vol).padStart(2, "0")}`;
 }
 
-function newsCardHTML(card: NewsCard, vol_number: number): string {
-  const imgBlock = card.image_url
-    ? `<img src="${card.image_url}" alt="" width="260" height="150" style="display:block;width:100%;height:150px;object-fit:cover;border-radius:6px 6px 0 0;">`
-    : `<div style="width:100%;height:150px;background:#3D5A2E;border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#fff;font-size:24px;">📰</span>
+// ── 섹션 헤더 (대시 라인 + 레이블) ────────────────────────────
+function sectionHeader(label: string, sub: string): string {
+  return `
+<tr>
+  <td style="background:${C.bg};padding:24px 32px 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" border="0">
+      <tr>
+        <td style="border-top:2px dashed ${C.dashLine};padding-top:14px;padding-bottom:10px;">
+          <span style="font-size:15px;font-weight:900;color:${C.dark};letter-spacing:-0.02em;font-family:'Arial Black',sans-serif;">${label}</span>
+          <span style="font-size:14px;font-weight:400;color:${C.dark};margin-left:8px;">${sub}</span>
+        </td>
+      </tr>
+      <tr>
+        <td style="border-bottom:2px dashed ${C.dashLine};padding-bottom:16px;font-size:0;line-height:0;">&nbsp;</td>
+      </tr>
+    </table>
+  </td>
+</tr>`;
+}
+
+// ── 뉴스 카드 ─────────────────────────────────────────────────
+function newsCardHTML(card: NewsCard, vol: number): string {
+  const img = card.image_url
+    ? `<img src="${card.image_url}" alt="" width="255" height="145" style="display:block;width:255px;height:145px;object-fit:cover;border-radius:8px 8px 0 0;">`
+    : `<div style="width:255px;height:145px;background:${C.green};border-radius:8px 8px 0 0;text-align:center;padding-top:52px;">
+        <span style="color:#fff;font-size:28px;">📰</span>
        </div>`;
-  const shortSummary = card.summary.length > 80 ? card.summary.slice(0, 80) + "…" : card.summary;
+  const summary = card.summary.length > 75 ? card.summary.slice(0, 75) + "…" : card.summary;
   return `
-  <td width="260" valign="top" style="padding:0 6px;">
-    <a href="${withUTM(card.url, vol_number)}" style="text-decoration:none;color:inherit;">
-      <div style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E0D9CE;">
-        ${imgBlock}
-        <div style="padding:12px;">
-          <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:#2C2416;line-height:1.4;">${card.title}</p>
-          <p style="margin:0;font-size:12px;color:#6B5E4E;line-height:1.5;">${shortSummary}</p>
-        </div>
-      </div>
-    </a>
-  </td>`;
+<td width="255" valign="top">
+  <a href="${withUTM(card.url, vol)}" style="text-decoration:none;color:inherit;display:block;">
+    <table cellpadding="0" cellspacing="0" width="255" style="border-radius:8px;overflow:hidden;border:1px solid ${C.border};background:${C.surface};">
+      <tr><td style="padding:0;line-height:0;">${img}</td></tr>
+      <tr><td style="padding:12px 14px;">
+        <p style="margin:0 0 6px;font-size:13px;font-weight:700;color:${C.dark};line-height:1.45;">${card.title}</p>
+        <p style="margin:0;font-size:11.5px;color:${C.muted};line-height:1.55;">${summary}</p>
+      </td></tr>
+    </table>
+  </a>
+</td>`;
 }
 
-function featuredEventHTML(ev: EventCard, vol_number: number, site_url: string): string {
-  const imgBlock = ev.image_url
-    ? `<img src="${ev.image_url}" alt="" width="260" height="120" style="display:block;width:100%;height:120px;object-fit:cover;border-radius:6px 6px 0 0;">`
-    : `<div style="width:100%;height:120px;background:#3D5A2E;border-radius:6px 6px 0 0;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#fff;font-size:20px;font-weight:700;">📅</span>
+// ── Pick 행사 카드 (2×2) ────────────────────────────────────
+function pickEventCard(ev: EventCard, vol: number, site_url: string): string {
+  const img = ev.image_url
+    ? `<img src="${ev.image_url}" alt="" width="255" height="140" style="display:block;width:255px;height:140px;object-fit:cover;border-radius:8px 8px 0 0;">`
+    : `<div style="width:255px;height:140px;background:${C.green};border-radius:8px 8px 0 0;text-align:center;padding-top:46px;">
+        <span style="color:#F5F0E8;font-size:13px;font-weight:700;letter-spacing:0.04em;">EZ LETTER</span>
        </div>`;
-  const link = withUTM(ev.website ?? site_url, vol_number);
+  const link = withUTM(ev.website ?? site_url, vol);
   return `
-  <td width="260" valign="top" style="padding:0 6px;">
-    <a href="${link}" style="text-decoration:none;color:inherit;">
-      <div style="background:#fff;border-radius:8px;overflow:hidden;border:1px solid #E0D9CE;">
-        ${imgBlock}
-        <div style="padding:12px;">
-          <p style="margin:0 0 4px;font-size:13px;font-weight:700;color:#2C2416;line-height:1.4;">${ev.name}</p>
-          <p style="margin:0;font-size:12px;color:#3D5A2E;font-weight:600;">${ev.start_date}${ev.venue ? " · " + ev.venue : ""}</p>
-        </div>
-      </div>
-    </a>
-  </td>`;
+<td width="255" valign="top">
+  <a href="${link}" style="text-decoration:none;color:inherit;display:block;">
+    <table cellpadding="0" cellspacing="0" width="255" style="border-radius:8px;overflow:hidden;border:1px solid ${C.border};background:${C.surface};">
+      <tr><td style="padding:0;line-height:0;">${img}</td></tr>
+      <tr><td style="padding:12px 14px;">
+        <p style="margin:0 0 5px;font-size:13px;font-weight:700;color:${C.dark};line-height:1.4;">${ev.name}</p>
+        <p style="margin:0;font-size:11.5px;color:${C.green};font-weight:600;">${ev.start_date}${ev.venue ? " · " + ev.venue : ""}</p>
+      </td></tr>
+    </table>
+  </a>
+</td>`;
 }
 
-function upcomingEventRow(ev: EventCard, vol_number: number, site_url: string): string {
-  const link = withUTM(ev.website ?? site_url, vol_number);
+// ── 행사 리스트 행 ─────────────────────────────────────────
+function eventListRow(ev: EventCard, vol: number, site_url: string, isLast: boolean): string {
+  const link = withUTM(ev.website ?? site_url, vol);
+  const border = isLast ? "" : `border-bottom:1px solid ${C.border};`;
   return `
-  <tr>
-    <td style="padding:8px 12px;font-size:12px;color:#3D5A2E;font-weight:600;white-space:nowrap;border-bottom:1px solid #F0EBE0;">${ev.start_date}</td>
-    <td style="padding:8px 12px;font-size:12px;color:#2C2416;border-bottom:1px solid #F0EBE0;">
-      <a href="${link}" style="color:#2C2416;text-decoration:none;">${ev.name}</a>
-    </td>
-    <td style="padding:8px 12px;font-size:12px;color:#6B5E4E;border-bottom:1px solid #F0EBE0;">${ev.venue ?? "-"}</td>
-  </tr>`;
+<tr>
+  <td style="padding:9px 0;${border}width:95px;font-size:12px;font-weight:600;color:${C.green};white-space:nowrap;vertical-align:top;">${ev.start_date}</td>
+  <td style="padding:9px 8px;${border}font-size:12.5px;color:${C.dark};vertical-align:top;">
+    <a href="${link}" style="color:${C.dark};text-decoration:none;">${ev.name}</a>
+  </td>
+  <td style="padding:9px 0;${border}font-size:12px;color:${C.muted};white-space:nowrap;text-align:right;vertical-align:top;">${ev.venue ?? ""}</td>
+</tr>`;
 }
 
+// ── 메인 HTML 생성 ──────────────────────────────────────────
 export function generateNewsletterHTML(data: NewsletterData): string {
-  const {
-    vol_number,
-    send_date,
-    editorial_text,
-    mice_news,
-    tourism_news,
-    featured_events,
-    upcoming_events,
-    site_url,
-  } = data;
+  const { vol_number, send_date, editorial_text,
+          mice_news, tourism_news, featured_events, upcoming_events, site_url } = data;
 
-  const newsCard = (card: NewsCard) => newsCardHTML(card, vol_number);
-  const eventCard = (ev: EventCard) => featuredEventHTML(ev, vol_number, site_url);
-  const eventRow = (ev: EventCard) => upcomingEventRow(ev, vol_number, site_url);
+  const vol = vol_number;
 
-  const miceCards = mice_news
-    .slice(0, 2)
-    .map(newsCard)
-    .join("");
+  // 뉴스 카드
+  const miceCards   = mice_news.slice(0, 2).map(c => newsCardHTML(c, vol)).join(`<td width="20"></td>`);
+  const tourismCards = tourism_news.slice(0, 2).map(c => newsCardHTML(c, vol)).join(`<td width="20"></td>`);
 
-  const tourismCards = tourism_news
-    .slice(0, 2)
-    .map(newsCard)
-    .join("");
+  // Pick 행사 4개 → 2행 2열
+  const pickSlice = featured_events.slice(0, 4);
+  const pickRow1  = pickSlice.slice(0, 2).map(e => pickEventCard(e, vol, site_url)).join(`<td width="20"></td>`);
+  const pickRow2  = pickSlice.slice(2, 4).map(e => pickEventCard(e, vol, site_url)).join(`<td width="20"></td>`);
 
-  const featuredCells = featured_events
-    .slice(0, 2)
-    .map(eventCard)
-    .join("");
-
-  const upcomingRows = upcoming_events
-    .map(eventRow)
-    .join("");
+  // 행사 리스트
+  const listRows = upcoming_events.map((ev, i) =>
+    eventListRow(ev, vol, site_url, i === upcoming_events.length - 1)
+  ).join("");
 
   return `<!DOCTYPE html>
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>[EZ Letter] Vol.${vol_number} · ${send_date}</title>
+<title>[EZ Letter] Vol.${String(vol).padStart(2,"0")} · ${send_date}</title>
 </head>
-<body style="margin:0;padding:0;background:#E8E3D9;font-family:'Malgun Gothic','Apple SD Gothic Neo',sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#E8E3D9;">
-  <tr>
-    <td align="center" style="padding:24px 0;">
-      <!-- WRAPPER -->
-      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
+<body style="margin:0;padding:0;background:${C.bg};font-family:'Apple SD Gothic Neo','Malgun Gothic',Arial,sans-serif;">
+<table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.bg};">
+<tr><td align="center" style="padding:28px 0 40px;">
 
-        <!-- ── HEADER ── -->
-        <tr>
-          <td style="background:#F5F0E8;border-radius:12px 12px 0 0;padding:28px 32px 20px;text-align:center;border:1px solid #E0D9CE;border-bottom:none;">
-            <p style="margin:0 0 12px;font-size:12px;color:#6B5E4E;letter-spacing:0.05em;">Vol.${vol_number} &nbsp;·&nbsp; ${send_date}</p>
-            <img src="${site_url}/images/ez-letter-logo.png" width="280" alt="EZ Letter" style="display:inline-block;max-width:280px;height:auto;">
-            <p style="margin:14px 0 0;font-size:13px;color:#3D5A2E;font-weight:600;letter-spacing:0.02em;">업계 이야기를 쉽고 빠르게 읽는 EZ 인사이트</p>
-          </td>
-        </tr>
+  <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;">
 
-        <!-- ── TAG BAR ── -->
-        <tr>
-          <td style="background:#3D5A2E;padding:10px 32px;text-align:center;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <span style="color:#fff;font-size:12px;font-weight:600;margin:0 8px;">#MICE</span>
-            <span style="color:#fff;font-size:12px;font-weight:600;margin:0 8px;">#TOURISM</span>
-            <span style="color:#fff;font-size:12px;font-weight:600;margin:0 8px;">#AI</span>
-            <span style="color:#fff;font-size:12px;font-weight:600;margin:0 8px;">#Short Topic</span>
-          </td>
-        </tr>
+    <!-- ── HEADER ── -->
+    <tr>
+      <td style="background:${C.bg};border-radius:16px 16px 0 0;padding:28px 32px 0;text-align:center;">
+        <p style="margin:0 0 14px;font-size:11.5px;color:${C.muted};letter-spacing:0.08em;text-transform:uppercase;">
+          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
+        </p>
+        <img src="${site_url}/images/ez-letter-logo.png" width="200" alt="EZ Letter"
+             style="display:inline-block;max-width:200px;height:auto;">
+        <p style="margin:16px 0 0;font-size:13px;color:${C.dark};font-weight:600;letter-spacing:0.01em;">
+          업계 이야기를 쉽고 빠르게 읽는 EZ 인사이트
+        </p>
+      </td>
+    </tr>
 
-        <!-- ── EDITORIAL ── -->
-        <tr>
-          <td style="background:#fff;padding:24px 32px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <p style="margin:0;font-size:14px;color:#2C2416;line-height:1.8;white-space:pre-line;">${editorial_text}</p>
-          </td>
-        </tr>
+    <!-- ── TAG BAR ── -->
+    <tr>
+      <td style="background:${C.green};padding:11px 32px;text-align:center;margin-top:18px;">
+        <span style="color:#F5F0E8;font-size:12px;font-weight:700;margin:0 10px;letter-spacing:0.04em;">#MICE</span>
+        <span style="color:#F5F0E8;font-size:12px;font-weight:700;margin:0 10px;letter-spacing:0.04em;">#TOURISM</span>
+        <span style="color:#F5F0E8;font-size:12px;font-weight:700;margin:0 10px;letter-spacing:0.04em;">#AI</span>
+        <span style="color:#F5F0E8;font-size:12px;font-weight:700;margin:0 10px;letter-spacing:0.04em;">#Short Topic</span>
+      </td>
+    </tr>
 
-        <!-- DIVIDER -->
-        <tr>
-          <td style="background:#fff;padding:0 32px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <div style="height:1px;background:#E8E3D9;"></div>
-          </td>
-        </tr>
+    <!-- ── EDITORIAL ── -->
+    <tr>
+      <td style="background:${C.bg};padding:24px 32px 8px;">
+        <p style="margin:0;font-size:14px;color:${C.dark};line-height:1.85;white-space:pre-line;">${editorial_text}</p>
+      </td>
+    </tr>
 
-        <!-- ── MICE NEWS ── -->
-        <tr>
-          <td style="background:#fff;padding:24px 32px 16px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td>
-                  <span style="display:inline-block;background:#3D5A2E;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:0.06em;margin-bottom:14px;">MICE</span>
-                </td>
-              </tr>
-              <tr>
-                ${miceCards || `<td style="font-size:13px;color:#6B5E4E;padding:8px 0;">이번 주 MICE 뉴스가 없습니다.</td>`}
-              </tr>
-            </table>
-          </td>
-        </tr>
+    <!-- ── NEWS 섹션 헤더 ── -->
+    ${sectionHeader("NEWS", "지금 뜨거운 이슈")}
 
-        <!-- DIVIDER -->
-        <tr>
-          <td style="background:#fff;padding:0 32px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <div style="height:1px;background:#E8E3D9;"></div>
-          </td>
-        </tr>
+    <!-- ── MICE 뉴스 ── -->
+    <tr>
+      <td style="background:${C.bg};padding:16px 32px 8px;">
+        <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:${C.green};text-transform:uppercase;letter-spacing:0.1em;">MICE</p>
+        <table cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            ${miceCards || `<td style="font-size:13px;color:${C.muted};">이번 주 MICE 뉴스가 없습니다.</td>`}
+          </tr>
+        </table>
+      </td>
+    </tr>
 
-        <!-- ── TOURISM NEWS ── -->
-        <tr>
-          <td style="background:#fff;padding:24px 32px 16px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                <td>
-                  <span style="display:inline-block;background:#5A7A3D;color:#fff;font-size:11px;font-weight:700;padding:3px 10px;border-radius:4px;letter-spacing:0.06em;margin-bottom:14px;">TOURISM</span>
-                </td>
-              </tr>
-              <tr>
-                ${tourismCards || `<td style="font-size:13px;color:#6B5E4E;padding:8px 0;">이번 주 Tourism 뉴스가 없습니다.</td>`}
-              </tr>
-            </table>
-          </td>
-        </tr>
+    <!-- ── Tourism 뉴스 ── -->
+    <tr>
+      <td style="background:${C.bg};padding:16px 32px 8px;">
+        <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:${C.green};text-transform:uppercase;letter-spacing:0.1em;">TOURISM</p>
+        <table cellpadding="0" cellspacing="0" width="100%">
+          <tr>
+            ${tourismCards || `<td style="font-size:13px;color:${C.muted};">이번 주 Tourism 뉴스가 없습니다.</td>`}
+          </tr>
+        </table>
+      </td>
+    </tr>
 
-        <!-- DIVIDER -->
-        <tr>
-          <td style="background:#fff;padding:0 32px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <div style="height:1px;background:#E8E3D9;"></div>
-          </td>
-        </tr>
+    <!-- ── EZ LETTER PICK 섹션 헤더 ── -->
+    ${sectionHeader("EZ Letter Pick!", "이번주 행사")}
 
-        <!-- ── FEATURED EVENTS ── -->
-        <tr>
-          <td style="background:#fff;padding:24px 32px 16px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <p style="margin:0 0 14px;font-size:14px;font-weight:700;color:#2C2416;">📌 EZ Letter Pick! 이번 주 행사</p>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0">
-              <tr>
-                ${featuredCells || `<td style="font-size:13px;color:#6B5E4E;padding:8px 0;">이번 주 추천 행사가 없습니다.</td>`}
-              </tr>
-            </table>
-          </td>
-        </tr>
+    <!-- ── PICK 행사 4개 (2×2) ── -->
+    <tr>
+      <td style="background:${C.bg};padding:16px 32px 0;">
+        <table cellpadding="0" cellspacing="0" width="100%">
+          ${pickRow1 ? `<tr>${pickRow1}</tr>` : ""}
+          ${pickRow2 ? `<tr><td colspan="3" height="14" style="font-size:0;line-height:0;">&nbsp;</td></tr><tr>${pickRow2}</tr>` : ""}
+          ${!pickRow1 ? `<tr><td style="font-size:13px;color:${C.muted};padding:8px 0;">이번 주 추천 행사가 없습니다.</td></tr>` : ""}
+        </table>
+      </td>
+    </tr>
 
-        <!-- DIVIDER -->
-        <tr>
-          <td style="background:#fff;padding:0 32px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <div style="height:1px;background:#E8E3D9;"></div>
-          </td>
-        </tr>
+    <!-- ── 이번주 행사 리스트 섹션 헤더 ── -->
+    ${sectionHeader("이번주 행사", "빠르게 훑어보기")}
 
-        <!-- ── UPCOMING EVENTS ── -->
-        <tr>
-          <td style="background:#fff;padding:24px 32px;border-left:1px solid #E0D9CE;border-right:1px solid #E0D9CE;">
-            <p style="margin:0 0 14px;font-size:14px;font-weight:700;color:#2C2416;">📅 이번 주 행사 리스트</p>
-            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="border-radius:8px;overflow:hidden;border:1px solid #E0D9CE;">
-              <tr style="background:#F5F0E8;">
-                <th style="padding:8px 12px;font-size:12px;color:#6B5E4E;text-align:left;font-weight:600;border-bottom:1px solid #E0D9CE;">날짜</th>
-                <th style="padding:8px 12px;font-size:12px;color:#6B5E4E;text-align:left;font-weight:600;border-bottom:1px solid #E0D9CE;">행사명</th>
-                <th style="padding:8px 12px;font-size:12px;color:#6B5E4E;text-align:left;font-weight:600;border-bottom:1px solid #E0D9CE;">장소</th>
-              </tr>
-              ${upcomingRows || `<tr><td colspan="3" style="padding:12px;font-size:13px;color:#6B5E4E;text-align:center;">예정된 행사가 없습니다.</td></tr>`}
-            </table>
-          </td>
-        </tr>
+    <!-- ── 행사 리스트 ── -->
+    <tr>
+      <td style="background:${C.bg};padding:16px 32px 8px;">
+        <table cellpadding="0" cellspacing="0" width="100%">
+          ${listRows || `<tr><td style="font-size:13px;color:${C.muted};padding:8px 0;">예정된 행사가 없습니다.</td></tr>`}
+        </table>
+      </td>
+    </tr>
 
-        <!-- ── FOOTER ── -->
-        <tr>
-          <td style="background:#3D5A2E;border-radius:0 0 12px 12px;padding:24px 32px;text-align:center;border:1px solid #2E4422;border-top:none;">
-            <p style="margin:0 0 8px;">
-              <a href="${withUTM(site_url, vol_number)}" style="color:#A8C490;font-size:13px;font-weight:600;text-decoration:none;">EZ 뉴스룸 바로가기 →</a>
-            </p>
-            <p style="margin:0 0 6px;font-size:11px;color:#7A9E62;">Copyright © 2026 AXDX All rights reserved.</p>
-            <p style="margin:0;font-size:11px;color:#7A9E62;">수신 거부 문의: <a href="mailto:ez.micedx1@gmail.com" style="color:#7A9E62;">ez.micedx1@gmail.com</a></p>
-          </td>
-        </tr>
+    <!-- 하단 여백 -->
+    <tr><td style="background:${C.bg};height:20px;font-size:0;line-height:0;">&nbsp;</td></tr>
 
-      </table>
-      <!-- /WRAPPER -->
-    </td>
-  </tr>
+    <!-- ── FOOTER ── -->
+    <tr>
+      <td style="background:${C.green};border-radius:0 0 16px 16px;padding:22px 32px;text-align:center;">
+        <p style="margin:0 0 10px;">
+          <a href="${withUTM(site_url, vol)}"
+             style="color:#F5F0E8;font-size:13px;font-weight:700;text-decoration:none;letter-spacing:0.02em;">
+            EZ 뉴스룸 바로가기 →
+          </a>
+        </p>
+        <p style="margin:0 0 5px;font-size:11px;color:rgba(245,240,232,0.6);">
+          Copyright © 2026 AXDX All rights reserved.
+        </p>
+        <p style="margin:0;font-size:11px;color:rgba(245,240,232,0.5);">
+          수신 거부 문의:
+          <a href="mailto:ez.micedx1@gmail.com" style="color:rgba(245,240,232,0.5);">ez.micedx1@gmail.com</a>
+        </p>
+      </td>
+    </tr>
+
+  </table>
+
+</td></tr>
 </table>
 </body>
 </html>`;

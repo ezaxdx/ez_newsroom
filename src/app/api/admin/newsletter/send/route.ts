@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
     .eq("is_published", true)
     .gte("start_date", todayStr)
     .order("start_date", { ascending: true })
-    .limit(2);
+    .limit(4);
 
   const featuredEvents: EventCard[] = (featuredRaw ?? []).map((e) => ({
     name: e.event_name, start_date: e.start_date, venue: e.venue ?? null, image_url: null, website: e.website ?? null,
@@ -135,7 +135,7 @@ export async function POST(req: NextRequest) {
     .gte("start_date", todayStr)
     .not("id", "in", featuredIds.length > 0 ? `(${featuredIds.join(",")})` : "(00000000-0000-0000-0000-000000000000)")
     .order("start_date", { ascending: true })
-    .limit(7);
+    .limit(10);
 
   const upcomingEvents: EventCard[] = (upcomingRaw ?? []).map((e) => ({
     name: e.event_name, start_date: e.start_date, venue: e.venue ?? null, website: e.website ?? null,
