@@ -26,7 +26,7 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
         gridTemplateRows: `repeat(${rows}, 1fr)`,
         height: "100%",
-        minHeight: 520,
+        minHeight: rows === 1 ? 480 : 520,
       }}
     >
       {items.map((slide, i) => {
@@ -46,7 +46,7 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
               cursor: "pointer",
               borderRight:  !isLastCol  ? "1px solid var(--surface-container-high)" : "none",
               borderBottom: !isLastRow  ? "1px solid var(--surface-container-high)" : "none",
-              minHeight: rows === 1 ? 520 : 260,
+              minHeight: rows === 1 ? 480 : 240,
             }}
           >
             {/* 배경 이미지 */}

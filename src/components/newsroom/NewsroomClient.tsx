@@ -67,7 +67,7 @@ export default function NewsroomClient({
             gridTemplateColumns: "1fr 260px",
             borderTop: "1px solid var(--surface-container-high)",
             borderBottom: "1px solid var(--surface-container-high)",
-            height: "calc(100vh - 52px)",
+            height: "calc(100vh - 96px)",
           }}
         >
           {/* Col 1: 히어로 2×2 고정 그리드 */}
