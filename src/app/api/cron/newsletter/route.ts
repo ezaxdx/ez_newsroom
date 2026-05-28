@@ -40,7 +40,7 @@ export async function GET(req: NextRequest) {
   // 콘텐츠 수집 (send route와 동일한 로직)
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
-  const twoWeeksAgo = new Date(today.getTime() - 28 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const site_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
 
   const { count: issueCount } = await supabase.from("newsletter_issues").select("*", { count: "exact", head: true });

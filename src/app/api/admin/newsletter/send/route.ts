@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   // ── Collect content ──
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
-  const twoWeeksAgo = new Date(today.getTime() - 28 * 24 * 60 * 60 * 1000)
+  const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
     .toISOString()
     .split("T")[0];
 
