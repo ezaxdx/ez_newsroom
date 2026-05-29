@@ -59,7 +59,7 @@ const TYPE_META = {
     bg: "#ea4335",
     color: "#fff",
     placeholder: "gmail://yozm-it",
-    hint: "Gmail로 수신한 뉴스레터에서 기사를 자동 수집합니다. 먼저 /admin/gmail 에서 Gmail 인증을 완료하세요.",
+    hint: "Gmail로 수신한 뉴스레터에서 기사를 자동 수집합니다. 먼저 관리자 > 뉴스레터 > Gmail 연동에서 인증을 완료하세요.",
   },
 };
 

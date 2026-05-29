@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { LayoutDashboard, Rss, Settings, BarChart2, ArrowLeft, PenLine, LogOut, ShieldCheck, Mail, AtSign } from "lucide-react";
+import { LayoutDashboard, Rss, Settings, BarChart2, ArrowLeft, PenLine, LogOut, ShieldCheck, Mail } from "lucide-react";
 
 const NAV = [
   { href: "/admin", label: "큐레이션 보드", icon: LayoutDashboard },
@@ -12,7 +12,6 @@ const NAV = [
   { href: "/admin/settings", label: "큐레이션 설정", icon: Settings },
   { href: "/admin/quality", label: "정합성 관리", icon: ShieldCheck },
   { href: "/admin/newsletter", label: "뉴스레터", icon: Mail },
-  { href: "/admin/gmail", label: "Gmail 연결", icon: AtSign },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

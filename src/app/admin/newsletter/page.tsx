@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles } from "lucide-react";
+import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink } from "lucide-react";
 
 type Subscriber = {
   id: string;
@@ -74,12 +74,18 @@ export default function NewsletterPage() {
   const [cronSaved, setCronSaved] = useState(false);
   const [cronOpen, setCronOpen] = useState(false);
 
+  // ── Gmail 연동 상태 ──
+  const [gmailStatus, setGmailStatus] = useState<"loading" | "connected" | "disconnected">("loading");
+  const [gmailUpdatedAt, setGmailUpdatedAt] = useState<string | null>(null);
+  const [gmailOpen, setGmailOpen] = useState(false);
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   // Load active count and subscribers on mount
   useEffect(() => {
     fetchSubscribers();
     fetchCronSettings();
+    fetchGmailStatus();
     prefetchEditorialContext();
   }, []);
 
@@ -114,6 +120,17 @@ export default function NewsletterPage() {
       // ignore
     } finally {
       setHistoryLoading(false);
+    }
+  }
+
+  async function fetchGmailStatus() {
+    try {
+      const res = await fetch("/api/gmail/status");
+      const data = await res.json();
+      setGmailStatus(data.connected ? "connected" : "disconnected");
+      setGmailUpdatedAt(data.updated_at ?? null);
+    } catch {
+      setGmailStatus("disconnected");
     }
   }
 
@@ -530,6 +547,58 @@ export default function NewsletterPage() {
               </div>
             )}
 
+            {/* ── Gmail 연동 ── */}
+            <div style={{ ...cardStyle, marginTop: 8 }}>
+              <button
+                onClick={() => setGmailOpen(o => !o)}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", background: "none", border: "none", cursor: "pointer",
+                  fontSize: 14, fontWeight: 600, color: "var(--on-surface)", padding: 0,
+                }}
+              >
+                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  📧 Gmail 연동
+                  {gmailStatus === "connected" && (
+                    <CheckCircle size={14} color="#2e7d32" />
+                  )}
+                  {gmailStatus === "disconnected" && (
+                    <XCircle size={14} color="#c62828" />
+                  )}
+                  <span style={{ fontSize: 12, fontWeight: 400, color: gmailStatus === "connected" ? "#2e7d32" : "#c62828" }}>
+                    {gmailStatus === "loading" ? "" : gmailStatus === "connected" ? "연동됨" : "연동 안 됨"}
+                  </span>
+                </span>
+                <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{gmailOpen ? "▲" : "▼"}</span>
+              </button>
+
+              {gmailOpen && (
+                <div style={{ marginTop: 16 }}>
+                  {gmailUpdatedAt && (
+                    <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--on-surface-variant)" }}>
+                      마지막 인증: {new Date(gmailUpdatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+                    </p>
+                  )}
+                  <a
+                    href="/api/gmail/auth"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 6,
+                      padding: "9px 18px", borderRadius: 6, fontSize: 13, fontWeight: 600,
+                      background: gmailStatus === "connected" ? "var(--surface-container-high)" : "var(--on-surface)",
+                      color: gmailStatus === "connected" ? "var(--on-surface)" : "var(--surface)",
+                      textDecoration: "none",
+                    }}
+                  >
+                    <ExternalLink size={13} />
+                    {gmailStatus === "connected" ? "다시 인증 (재연동)" : "Google 계정으로 인증"}
+                  </a>
+                  <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+                    뉴스레터 자동 발송에 사용할 Gmail 계정을 인증합니다. RSS 소스에서 Gmail 뉴스레터 수집 시에도 동일하게 사용됩니다.
+                  </p>
+                </div>
+              )}
+            </div>
+
             {/* ── 자동 발송 설정 아코디언 ── */}
             <div style={{ ...cardStyle, marginTop: 8 }}>
               <button
@@ -938,75 +1007,75 @@ export default function NewsletterPage() {
         {tab === "manual" && (
           <div style={{ fontSize: 14, lineHeight: 1.75, color: "var(--on-surface)" }}>
 
-            <Section title="📬 뉴스레터 발송 프로세스">
-              <Step n={1} text="AI로 작성 클릭 → 이번 호 뉴스·행사 기반으로 인사말 자동 생성" />
-              <Step n={2} text="인사말 직접 수정 (선택)" />
-              <Step n={3} text="미리보기 클릭 → 실제 이메일 레이아웃 확인" />
-              <Step n={4} text="발송 버튼 → 활성 수신자 전체 발송" />
-              <Note>미리보기는 몇 번을 눌러도 Vol 번호가 올라가지 않습니다. 실제 발송 시에만 Vol이 증가합니다.</Note>
+            <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
+              뉴스레터 발간 순서에 따라 정리한 운영 가이드입니다.
+            </p>
+
+            <Section title="STEP 1 · 뉴스 콘텐츠 준비">
+              <Item text="뉴스룸 관리자에서 이번 호에 넣을 기사를 발행 상태로 확인" />
+              <Item text="카테고리별 대표 기사는 순서를 맨 위로 올려 TOP 지정" />
+              <Indent><b>카드 선정 로직 (카테고리별 2개):</b></Indent>
+              <Indent>① 1번 카드: 뉴스룸에서 순서를 맨 위로 올린 기사 (순서 변경 시 즉시 반영)</Indent>
+              <Indent>② 2번 카드: 최근 2주 내 가장 최근 발행 기사 (1번과 중복 제외)</Indent>
+              <Indent><b>카테고리:</b> MICE / Tourism / EZPMP / AI — 각각 독립 선정</Indent>
+              <Note>모든 뉴스 카드 클릭 시 EZ데이터허브(micedx.ezpmp.co.kr)로 연결됩니다.</Note>
             </Section>
 
-            <Section title="🔢 Vol 번호 관리">
-              <Item text="status = 'sent' 인 발송 건수 + 1 로 자동 계산" />
-              <Item text="테스트·미리보기는 DB에 기록되지 않으므로 Vol 영향 없음" />
-              <Item text="진짜 발송 전까지 Vol.01 유지됨" />
-              <Note>이전 테스트 발송이 sent로 기록된 경우 Supabase에서 status를 'draft'로 변경하면 리셋됩니다.</Note>
+            <Section title="STEP 2 · 행사 데이터 확인">
+              <Item text="EZ Letter Pick: 오늘~90일 이내 행사 중 EZPMP 관련도 스코어 상위 4개 자동 선정 → 시작일 빠른 순 정렬" />
+              <Indent><b>이미지 우선순위:</b> DB image_url → 웹사이트 og:image → EZ 로고 플레이스홀더</Indent>
+              <Indent><b>설명 문구 우선순위:</b> DB description → 웹사이트 og:description → Gemini AI 자동 생성 후 DB 저장</Indent>
+              <Item text="Weekly Event List: 이번 주 시작 행사 중 스코어 13점 이상만 표시 (최대 7개, Pick 제외)" />
+              <Indent><b>자동 제외 키워드:</b> 정기총회, 임시총회, 이사회, 간담회, 위원회, 강의, 교육, 워크숍, 세미나</Indent>
+              <Note>산하 행사가 중복 노출되거나 관련 없는 행사가 뜨면 행사 관리에서 해당 행사를 비공개로 변경하세요.</Note>
             </Section>
 
-            <Section title="🌟 EZ Letter Pick (행사 카드 4개)">
-              <Item text="DB의 convention_events 중 is_published=true + 오늘~90일 이내 행사 대상" />
-              <Item text="EZPMP 관련 키워드·파트너 기관·선호 장소 기준으로 자동 스코어링 → 상위 4개 선정" />
-              <Item text="선정 후 시작일 빠른 순 정렬" />
-              <Indent>
-                <b>이미지 우선순위:</b> DB image_url → 웹사이트 og:image → EZ 로고 플레이스홀더
-              </Indent>
-              <Indent>
-                <b>설명 문구 우선순위:</b> DB description → 웹사이트 og:description → Gemini AI 생성 → DB 자동 저장
-              </Indent>
-              <Note>스마트테크 코리아처럼 산하 행사가 중복 노출될 경우, Supabase에서 해당 행사의 is_published를 false로 변경하세요.</Note>
+            <Section title="STEP 3 · 인사말 작성">
+              <Item text="'AI로 작성' 클릭 → 이번 호 뉴스 제목 + Pick 행사명 기반으로 Gemini가 자동 생성" />
+              <Item text="현재 월·계절·업계 분위기 반영, 마지막은 'EZ하게 시작해볼까요?' 뉘앙스로 마무리" />
+              <Item text="생성 후 직접 수정 가능" />
+              <Note>페이지를 열면 콘텐츠를 백그라운드에서 미리 로드하므로 버튼 클릭 즉시 생성됩니다.</Note>
             </Section>
 
-            <Section title="📅 Weekly Event List">
-              <Item text="이번 주 내 시작하는 행사 중 스코어 13점 이상만 표시 (최대 7개)" />
-              <Item text="Pick 4개에 이미 포함된 행사는 자동 제외" />
-              <Indent>
-                <b>자동 제외 키워드:</b> 정기총회, 임시총회, 이사회, 간담회, 위원회, 강의, 교육, 워크숍, 세미나
-              </Indent>
-              <Note>관련 없는 행사가 뜰 경우 event-score.ts의 WEEKLY_EXCLUDE_KEYWORDS에 키워드를 추가하거나 해당 행사를 비공개 처리하세요.</Note>
+            <Section title="STEP 4 · 미리보기 확인">
+              <Item text="'미리보기' 클릭 → 실제 이메일 레이아웃으로 확인" />
+              <Item text="뉴스 카드·Pick 행사·Weekly List·인사말 전체 검토" />
+              <Note>미리보기는 몇 번을 눌러도 Vol 번호가 올라가지 않습니다. DB에 기록되지 않습니다.</Note>
             </Section>
 
-            <Section title="🖼️ 행사 이미지 등록">
-              <Item text="Supabase convention_events 테이블의 image_url 컬럼에 직접 URL 입력" />
-              <Item text="비워두면 웹사이트에서 og:image 자동 수집 시도" />
-              <Item text="og:image도 없으면 EZ 로고 플레이스홀더 표시" />
-              <Note>흰색(투명) 로고 이미지는 흰 배경에서 안 보일 수 있으니 컬러 이미지 URL을 직접 등록하는 걸 권장합니다.</Note>
+            <Section title="STEP 5 · 발송">
+              <Item text="'발송' 버튼 클릭 → 활성 수신자 전체에게 발송" />
+              <Item text="발송 완료 시 자동으로 기록되며 다음 호 Vol 번호가 자동 증가합니다." />
+              <Note>Vol 번호는 실제 발송 완료 건수 + 1로 계산됩니다. 진짜 발송 전까지 Vol.01이 유지됩니다.</Note>
+            </Section>
+
+            <Section title="STEP 6 · 발송 후 확인">
+              <Item text="'이력' 탭에서 발송 건수·실패 건수 확인" />
+              <Item text="실패 건수 클릭 시 실패한 이메일 주소와 오류 메시지 확인 가능" />
+            </Section>
+
+            <div style={{ borderTop: "1px solid var(--surface-container-highest)", margin: "20px 0 14px", paddingTop: 4 }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "var(--on-surface-variant)", margin: "0 0 10px", letterSpacing: "0.05em" }}>
+                ─ 사전 설정 & 관리
+              </p>
+            </div>
+
+            <Section title="📋 수신자 관리">
+              <Item text="개별 추가: 이메일 + 이름(선택) 입력 후 추가 / 엑셀 일괄 업로드(email·이름 컬럼)" />
+              <Item text="토글로 개별 활성/비활성 전환 — 비활성 수신자에게는 발송되지 않음" />
+              <Note>중복 이메일은 자동 스킵됩니다.</Note>
             </Section>
 
             <Section title="⚙️ 자동 발송 (Cron) 설정">
-              <Item text="Vercel Hobby 플랜 제한: 하루 1회만 실행 가능 (매일 KST 10:00 = UTC 01:00)" />
-              <Item text="발송 요일은 DB send_days 배열로 관리 — 해당 요일이 아닌 날은 자동 스킵" />
-              <Item text="자동 발송 설정 패널에서 활성화·요일·기본 인사말 저장 가능" />
-              <Note>자동 발송 시 인사말은 DB의 default_editorial 값을 사용합니다. 비워두면 빈 인사말로 발송됩니다.</Note>
+              <Item text="Vercel Hobby 플랜 제한: 하루 1회만 실행 (매일 KST 10:00 = UTC 01:00)" />
+              <Item text="발송 요일을 체크박스로 다중 선택 — 해당 요일이 아닌 날은 자동 스킵" />
+              <Item text="기본 인사말 설정 가능 (자동 발송 시 사용, 비워두면 빈 인사말)" />
             </Section>
 
-            <Section title="👥 수신자 관리">
-              <Item text="개별 추가: 이메일 + 이름(선택) 입력 후 추가" />
-              <Item text="엑셀 일괄 업로드: email·이름 컬럼이 있는 xlsx 파일 업로드" />
-              <Item text="토글로 개별 활성/비활성 전환 가능 — 비활성 수신자에게는 발송되지 않음" />
-              <Note>중복 이메일은 자동으로 스킵됩니다.</Note>
-            </Section>
-
-            <Section title="✍️ AI 인사말 생성">
-              <Item text="페이지 열릴 때 이번 호 뉴스 제목 + Pick 행사명을 백그라운드로 미리 로드" />
-              <Item text="'AI로 작성' 클릭 시 실제 이번 호 콘텐츠를 컨텍스트로 넘겨 Gemini가 생성" />
-              <Item text="6월·날씨·업계 분위기 등 현재 시점 반영, AI·기술 관점 제외" />
-              <Item text="마지막 문장은 항상 'EZ하게 시작해볼까요?' 뉘앙스로 마무리" />
-            </Section>
-
-            <Section title="📰 뉴스 기사 말투">
-              <Item text="모든 summary_short·content_long·implications 는 합쇼체(~했습니다, ~입니다)로 작성" />
-              <Item text="기존 기사 말투 변환: rewrite_summaries_formal.mjs 스크립트 실행" />
-              <Item text="새 기사는 generate-article API 프롬프트에서 자동으로 합쇼체 적용" />
+            <Section title="🖼️ 행사 이미지 직접 등록">
+              <Item text="행사 관리에서 해당 행사의 이미지 URL에 직접 입력" />
+              <Item text="흰색·투명 로고는 흰 배경에서 안 보이므로 컬러 이미지 URL 권장" />
+              <Note>이미지 URL이 없으면 웹사이트 대표 이미지 자동 수집 → 없으면 EZ 로고 플레이스홀더 표시</Note>
             </Section>
 
           </div>
