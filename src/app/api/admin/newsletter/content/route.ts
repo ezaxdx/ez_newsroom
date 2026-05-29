@@ -3,6 +3,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent } from "@/lib/event-score";
+import { fetchOgImage } from "@/lib/fetch-og-image";
 
 export const dynamic = "force-dynamic";
 
@@ -76,10 +77,15 @@ export async function GET() {
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
   const featuredRaw = scored.slice(0, 4);
-  const featuredEvents: EventCard[] = featuredRaw.map((e) => ({
-    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null, image_url: e.image_url ?? null, website: e.website ?? null,
-  }));
+  const featuredEvents: EventCard[] = await Promise.all(
+    featuredRaw.map(async (e) => {
+      const imageUrl = e.image_url ?? await fetchOgImage(e.website ?? null);
+      return {
+        name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+        venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,
+      };
+    })
+  );
 
   const featuredIds = new Set(featuredRaw.map((e) => e.id));
   const upcomingEvents: EventCard[] = scored

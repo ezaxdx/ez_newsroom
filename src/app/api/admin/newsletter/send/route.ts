@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
+import { fetchOgImage } from "@/lib/fetch-og-image";
 
 export const maxDuration = 60;
 
@@ -127,10 +128,16 @@ export async function POST(req: NextRequest) {
 
   // ez letter Pick: 스코어 top 4
   const featuredRaw = scored.slice(0, 4);
-  const featuredEvents: EventCard[] = featuredRaw.map((e) => ({
-    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null, image_url: e.image_url ?? null, website: e.website ?? null,
-  }));
+  // image_url 없으면 og:image 폴백 (병렬 요청)
+  const featuredEvents: EventCard[] = await Promise.all(
+    featuredRaw.map(async (e) => {
+      const imageUrl = e.image_url ?? await fetchOgImage(e.website ?? null);
+      return {
+        name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+        venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,
+      };
+    })
+  );
 
   // Weekly Event List: 이번 주 행사 중 스코어 순 (Pick 제외)
   const featuredIds = new Set(featuredRaw.map((e) => e.id));

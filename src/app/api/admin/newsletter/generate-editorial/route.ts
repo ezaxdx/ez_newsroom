@@ -34,23 +34,22 @@ export async function POST() {
   const month = nowKST.getUTCMonth() + 1;
   const day = nowKST.getUTCDate();
 
-  const prompt = `당신은 MICE·관광 업계 뉴스레터 'EZ Letter'의 에디터입니다.
+  const prompt = `MICE·관광 업계에서 일하는 실무자가 동료들에게 보내는 뉴스레터 인사말을 써줘.
 
-오늘은 ${month}월 ${day}일입니다.
+오늘은 ${month}월 ${day}일이야.
 
-이번 주 주요 뉴스 목록:
+이번 주 주요 뉴스:
 ${newsTitles || "뉴스 정보 없음"}
 
-위 뉴스들을 참고해 이번 주 뉴스레터 에디터 인사말을 작성해주세요.
-
 조건:
-- 3~4문장, 총 60~100자 내외
-- 계절감·업계 분위기·이번 주 트렌드를 자연스럽게 담을 것
-- 특정 카테고리(AI 등)에 치우치지 않고 업계 전반의 이야기로
-- 딱딱하지 않고 따뜻하고 친근한 말투
-- "안녕하세요" 같은 형식적 인사 없이 바로 내용으로 시작
-- 마지막 문장은 "오늘도 EZ하게 시작해볼까요?" 또는 비슷한 뉘앙스로 마무리
-- 서명이나 이름 없이 본문만 출력`;
+- 3~4문장, 60~100자 내외
+- 실무자가 직접 쓴 것처럼 자연스럽고 편안한 말투
+- 계절·날씨·업계 분위기 중 하나를 가볍게 언급해도 좋음
+- 뉴스 내용을 직접 요약하지 말고, 이번 주 업계 흐름을 느낌으로만 담을 것
+- AI·데이터·기술 관점 언급 금지
+- "안녕하세요" 없이 바로 시작
+- 마지막은 "오늘도 EZ하게 시작해볼까요?" 또는 같은 뉘앙스로 마무리
+- 본문만 출력, 서명 없음`;
 
   const geminiRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
