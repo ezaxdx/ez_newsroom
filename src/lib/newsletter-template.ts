@@ -91,9 +91,11 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
   const img = proxied
     ? `<img src="${proxied}" alt="" width="255" height="129"
            style="display:block;width:255px;height:129px;object-fit:cover;">`
-    : `<div style="width:255px;height:129px;background:${C.gray};display:table-cell;vertical-align:middle;text-align:center;">
-         <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
-       </div>`;
+    : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
+         <tr><td height="129" style="height:129px;background:${C.gray};text-align:center;vertical-align:middle;">
+           <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
+         </td></tr>
+       </table>`;
   const summary = item.summary;
   return `
 <td width="255" valign="top">
@@ -115,9 +117,11 @@ function pickCard(ev: EventCard, vol: number, site_url: string): string {
   const img = proxied
     ? `<img src="${proxied}" alt="" width="255" height="129"
            style="display:block;width:255px;height:129px;object-fit:cover;">`
-    : `<div style="width:255px;height:129px;background:${C.gray};display:table-cell;vertical-align:middle;text-align:center;">
-         <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
-       </div>`;
+    : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
+         <tr><td height="129" style="height:129px;background:${C.gray};text-align:center;vertical-align:middle;">
+           <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
+         </td></tr>
+       </table>`;
   const link = withUTM(ev.website ?? site_url, vol);
   const dateVenue = ev.venue ? `${ev.start_date} · ${ev.venue}` : ev.start_date;
   return `

@@ -64,7 +64,15 @@ export async function GET() {
     .limit(200);
 
   const scored = (eventsPool ?? [])
-    .map((e) => ({ ...e, _score: scoreEvent(e, today) }))
+    .map((e) => ({ ...e, _score: scoreEvent({
+      event_name: e.event_name ?? "",
+      event_name_en: e.event_name_en ?? null,
+      category: e.category ?? null,
+      industry: e.industry ?? null,
+      organizer: e.organizer ?? null,
+      venue: e.venue ?? "",
+      start_date: e.start_date ?? todayStr,
+    }, today) }))
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
   const featuredRaw = scored.slice(0, 4);

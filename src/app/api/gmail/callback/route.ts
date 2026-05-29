@@ -30,13 +30,15 @@ export async function GET(req: NextRequest) {
     ]);
 
     const supabase = createAdminClient();
-    const { error: dbError } = await supabase.from("gmail_tokens").upsert({
-      id: "singleton", // 단일 레코드 유지
+    // refresh_token은 최초 인증 시에만 발급됨. null이면 기존 DB 값 유지 (덮어쓰지 않음)
+    const upsertData: Record<string, unknown> = {
+      id: "singleton",
       access_token: encAccessToken,
-      refresh_token: encRefreshToken,
       expiry_date: tokens.expiry_date,
       updated_at: new Date().toISOString(),
-    });
+    };
+    if (encRefreshToken) upsertData.refresh_token = encRefreshToken;
+    const { error: dbError } = await supabase.from("gmail_tokens").upsert(upsertData);
 
     if (dbError) throw new Error(dbError.message);
 

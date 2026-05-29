@@ -80,7 +80,7 @@ export function isEzpmpPartner(organizer: string | null | undefined): boolean {
     .trim()
     .toLowerCase();
   return EZPMP_PARTNERS.some((p) => {
-    if (p.length < 4) return false;
+    if (p.length < 2) return false;
     const pl = p.toLowerCase();
     return (
       orgBase === pl ||

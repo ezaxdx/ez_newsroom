@@ -158,9 +158,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 
-  const { data: issue } = await supabase.from("newsletter_issues")
+  const { data: issue, error: issueErr } = await supabase.from("newsletter_issues")
     .insert({ vol_number, editorial_text: settings.default_editorial ?? "", status: "sent", total_sent, total_failed, sent_at: new Date().toISOString() })
     .select().single();
+
+  if (issueErr) console.error("[cron] newsletter_issues insert 실패:", issueErr.message);
 
   if (issue && logEntries.length > 0) {
     await supabase.from("newsletter_send_logs").insert(logEntries.map(l => ({ ...l, issue_id: issue.id })));

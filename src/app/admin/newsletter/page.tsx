@@ -175,8 +175,8 @@ export default function NewsletterPage() {
   }
 
   async function handleSend() {
-    if (activeCount === 0) {
-      setSendResult({ ok: false, message: "활성 수신자가 없습니다." });
+    if (!activeCount) {
+      setSendResult({ ok: false, message: activeCount === null ? "수신자 수를 불러오는 중입니다. 잠시 후 다시 시도하세요." : "활성 수신자가 없습니다." });
       return;
     }
     const confirmed = window.confirm(
@@ -341,9 +341,12 @@ export default function NewsletterPage() {
       if (res.ok) {
         setCronSaved(true);
         setTimeout(() => setCronSaved(false), 2000);
+      } else {
+        const json = await res.json().catch(() => ({}));
+        alert(`설정 저장 실패: ${json.error ?? res.status}`);
       }
     } catch {
-      // ignore
+      alert("설정 저장 중 네트워크 오류가 발생했습니다.");
     } finally {
       setCronSaving(false);
     }
