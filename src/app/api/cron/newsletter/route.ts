@@ -27,12 +27,17 @@ export async function GET(req: NextRequest) {
 
   // KST 기준 요일 · 시간 확인 (UTC+9)
   const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
-  const todayDay  = nowKST.getUTCDay();    // 0=일, 1=월 ... 6=토
+  const todayDay   = nowKST.getUTCDay();    // 0=일, 1=월 ... 6=토
   const nowHourKST = nowKST.getUTCHours(); // KST 시(0-23)
-  const sendHour  = settings.send_hour ?? 9; // 기본값 오전 9시
+  const sendHour   = settings.send_hour ?? 10; // 기본값 오전 10시
 
-  if (todayDay !== settings.send_day) {
-    return NextResponse.json({ skipped: true, reason: `오늘 요일 ${todayDay}, 설정 요일 ${settings.send_day}` });
+  // send_days 배열 우선, 없으면 send_day 단일값 fallback
+  const sendDays: number[] = Array.isArray(settings.send_days) && settings.send_days.length > 0
+    ? settings.send_days
+    : [settings.send_day ?? 2]; // 기본값 화요일
+
+  if (!sendDays.includes(todayDay)) {
+    return NextResponse.json({ skipped: true, reason: `오늘 요일 ${todayDay}, 설정 요일 [${sendDays.join(",")}]` });
   }
   if (nowHourKST !== sendHour) {
     return NextResponse.json({ skipped: true, reason: `현재 KST ${nowHourKST}시, 설정 시간 ${sendHour}시` });

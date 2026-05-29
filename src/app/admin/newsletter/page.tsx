@@ -23,7 +23,7 @@ type Issue = {
 };
 
 type SendLog = { id: string; email: string; status: string; error_message: string | null; sent_at: string };
-type CronSettings = { enabled: boolean; send_day: number; send_hour: number; default_editorial: string | null };
+type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
 type Tab = "send" | "subscribers" | "history";
 
@@ -67,7 +67,7 @@ export default function NewsletterPage() {
   const [editorialError, setEditorialError] = useState<string | null>(null);
 
   // ── 자동 발송 설정 ──
-  const [cronSettings, setCronSettings] = useState<CronSettings>({ enabled: false, send_day: 1, send_hour: 9, default_editorial: "" });
+  const [cronSettings, setCronSettings] = useState<CronSettings>({ enabled: false, send_days: [2, 4], send_hour: 10, default_editorial: "" });
   const [cronSaving, setCronSaving] = useState(false);
   const [cronSaved, setCronSaved] = useState(false);
   const [cronOpen, setCronOpen] = useState(false);
@@ -120,10 +120,15 @@ export default function NewsletterPage() {
       if (res.ok) {
         const json = await res.json();
         if (json.data) {
+          // send_days 배열 우선, 없으면 send_day 단일값 fallback
+          const rawDays = json.data.send_days;
+          const send_days: number[] = Array.isArray(rawDays) && rawDays.length > 0
+            ? rawDays
+            : [json.data.send_day ?? 2];
           setCronSettings({
             enabled: json.data.enabled ?? false,
-            send_day: json.data.send_day ?? 1,
-            send_hour: json.data.send_hour ?? 9,
+            send_days,
+            send_hour: json.data.send_hour ?? 10,
             default_editorial: json.data.default_editorial ?? "",
           });
         }
@@ -333,7 +338,7 @@ export default function NewsletterPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           enabled: cronSettings.enabled,
-          send_day: cronSettings.send_day,
+          send_days: cronSettings.send_days,
           send_hour: cronSettings.send_hour,
           default_editorial: cronSettings.default_editorial || null,
         }),
@@ -532,23 +537,40 @@ export default function NewsletterPage() {
                     </span>
                   </div>
 
-                  {/* send_day 선택 */}
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
-                    <label style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)", minWidth: 80 }}>발송 요일</label>
-                    <select
-                      value={cronSettings.send_day}
-                      onChange={(e) => setCronSettings(s => ({ ...s, send_day: Number(e.target.value) }))}
-                      style={{
-                        padding: "7px 12px", borderRadius: 6,
-                        border: "1px solid var(--surface-container-highest)",
-                        background: "var(--surface-container-low)",
-                        color: "var(--on-surface)", fontSize: 13,
-                      }}
-                    >
-                      {DAY_LABELS.map((label, idx) => (
-                        <option key={idx} value={idx}>{label}요일</option>
-                      ))}
-                    </select>
+                  {/* send_days 다중 선택 */}
+                  <div style={{ display: "flex", alignItems: "flex-start", gap: 10, marginBottom: 14 }}>
+                    <label style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)", minWidth: 80, paddingTop: 4 }}>발송 요일</label>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {DAY_LABELS.map((label, idx) => {
+                        const checked = cronSettings.send_days.includes(idx);
+                        return (
+                          <label key={idx} style={{
+                            display: "flex", alignItems: "center", gap: 4,
+                            padding: "5px 10px", borderRadius: 6, cursor: "pointer",
+                            border: `1px solid ${checked ? "var(--primary)" : "var(--surface-container-highest)"}`,
+                            background: checked ? "color-mix(in srgb, var(--primary) 12%, transparent)" : "var(--surface-container-low)",
+                            fontSize: 13, fontWeight: checked ? 600 : 400,
+                            color: checked ? "var(--primary)" : "var(--on-surface)",
+                            userSelect: "none",
+                          }}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => {
+                                setCronSettings(s => ({
+                                  ...s,
+                                  send_days: checked
+                                    ? s.send_days.filter(d => d !== idx)
+                                    : [...s.send_days, idx].sort(),
+                                }));
+                              }}
+                              style={{ display: "none" }}
+                            />
+                            {label}
+                          </label>
+                        );
+                      })}
+                    </div>
                   </div>
 
                   {/* send_hour 선택 (KST) */}
