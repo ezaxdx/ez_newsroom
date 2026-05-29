@@ -12,6 +12,7 @@ export type EventCard = {
   venue: string | null;
   image_url?: string | null;
   website: string | null;
+  description?: string | null;
 };
 
 export type NewsletterData = {
@@ -45,7 +46,7 @@ const C = {
 // Noto Sans SC: wght 300(Light) / 500(Medium) / 700(Bold)
 // Playfair Display: 섹션 타이틀 (Google Fonts, editorial 세리프)
 // Pretendard: 푸터 저작권 (Thin)
-const FONT_NOTO   = "'Noto Sans SC', 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif";
+const FONT_NOTO   = "'Pretendard', 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif";
 const FONT_TOKKI  = "'Playfair Display', Georgia, serif";
 const FONT_PRET   = "'Pretendard', 'Apple SD Gothic Neo', Arial, sans-serif";
 
@@ -66,7 +67,7 @@ function sectionDivider(title: string): string {
           <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
         </td>
         <td style="text-align:center;white-space:nowrap;padding:0 20px;width:1%;">
-          <span style="font-size:48px;font-weight:400;color:${C.dark};font-family:${FONT_TOKKI};letter-spacing:0;">${title}</span>
+          <span style="font-size:36px;font-weight:700;color:${C.dark};font-family:${FONT_NOTO};letter-spacing:0.02em;">${title}</span>
         </td>
         <td style="vertical-align:middle;padding:0;">
           <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
@@ -92,8 +93,9 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
     ? `<img src="${proxied}" alt="" width="255" height="129"
            style="display:block;width:255px;height:129px;object-fit:cover;">`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
-         <tr><td height="129" style="height:129px;background:${C.gray};text-align:center;vertical-align:middle;">
-           <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
+         <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
+           <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
+                style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
          </td></tr>
        </table>`;
   const summary = item.summary;
@@ -114,16 +116,28 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
 // ── Pick 행사 카드 ────────────────────────────────────────
 function pickCard(ev: EventCard, vol: number, site_url: string): string {
   const proxied = proxyImg(ev.image_url ?? null, site_url);
+  // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
-    ? `<img src="${proxied}" alt="" width="255" height="129"
-           style="display:block;width:255px;height:129px;object-fit:cover;">`
+    ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
+         <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;line-height:0;font-size:0;overflow:hidden;">
+           <img src="${proxied}" alt="" style="display:block;max-width:255px;max-height:129px;width:auto;height:auto;margin:0 auto;">
+         </td></tr>
+       </table>`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
-         <tr><td height="129" style="height:129px;background:${C.gray};text-align:center;vertical-align:middle;">
-           <span style="font-size:24px;font-family:${FONT_NOTO};">사진</span>
+         <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
+           <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
+                style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
          </td></tr>
        </table>`;
   const link = withUTM(ev.website ?? site_url, vol);
-  const dateVenue = ev.venue ? `${ev.start_date} · ${ev.venue}` : ev.start_date;
+  const dateRange = ev.end_date && ev.end_date !== ev.start_date
+    ? `${ev.start_date} ~ ${ev.end_date}`
+    : ev.start_date;
+  const dateVenue = ev.venue ? `${dateRange} · ${ev.venue}` : dateRange;
+  // industry를 최대 40자로 잘라서 소개 문구로 사용
+  const desc = ev.description
+    ? (ev.description.length > 40 ? ev.description.slice(0, 40) + "…" : ev.description)
+    : null;
   return `
 <td width="255" valign="top">
   <a href="${link}" style="text-decoration:none;color:inherit;display:block;">
@@ -131,7 +145,8 @@ function pickCard(ev: EventCard, vol: number, site_url: string): string {
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
       <tr><td style="padding:8px 4px 0;">
         <p style="margin:0 0 6px;font-size:16px;font-weight:500;color:#000000;line-height:1.3;text-align:center;font-family:${FONT_NOTO};">${ev.name}</p>
-        <p style="margin:0;font-size:13px;font-weight:300;color:#000000;line-height:1.5;text-align:center;font-family:${FONT_NOTO};">${dateVenue}</p>
+        <p style="margin:0 0 4px;font-size:13px;font-weight:300;color:#000000;line-height:1.5;text-align:center;font-family:${FONT_NOTO};">${dateVenue}</p>
+        ${desc ? `<p style="margin:0;font-size:11px;font-weight:300;color:#7A6E5F;line-height:1.5;text-align:center;font-family:${FONT_NOTO};">${desc}</p>` : ""}
       </td></tr>
     </table>
   </a>
@@ -193,7 +208,6 @@ export function generateNewsletterHTML(data: NewsletterData): string {
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <title>[EZ Letter] Vol.${String(vol).padStart(2,"0")} · ${send_date}</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 </style>
@@ -207,7 +221,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
 
     <!-- ── HEADER IMAGE (배경) + Vol./Date 텍스트 (이미지 내부 상단에 오버레이) ── -->
     <tr>
-      <td style="background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% auto;background-repeat:no-repeat;background-color:${C.bg};height:486px;padding:35px 0 0;text-align:center;vertical-align:top;">
+      <td style="background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% auto;background-repeat:no-repeat;background-color:${C.white};height:440px;padding:35px 0 0;text-align:center;vertical-align:top;">
         <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
           Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
         </p>
@@ -273,7 +287,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
         <p style="margin:0 0 8px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
           <a href="${withUTM(site_url, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">EZ 뉴스룸 바로가기</a>
         </p>
-        <p style="margin:0;font-size:15px;font-weight:100;color:#000000;font-family:${FONT_PRET};">© AXDX All Rights Reserved.</p>
+        <p style="margin:0;font-size:14px;font-weight:300;color:#000000;font-family:${FONT_PRET};">Copyright © AXDX All Rights Reserved.</p>
         <p style="margin:6px 0 0;font-size:11px;color:#BBBBBB;font-family:${FONT_NOTO};">
           수신 거부: <a href="mailto:ez.micedx1@gmail.com" style="color:#BBBBBB;font-family:${FONT_NOTO};">ez.micedx1@gmail.com</a>
         </p>

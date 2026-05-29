@@ -65,6 +65,8 @@ export default function NewsletterPage() {
   // ── AI 인사말 생성 ──
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
   const [editorialError, setEditorialError] = useState<string | null>(null);
+  // 이번 호 콘텐츠 context (뉴스 제목 + 행사명) - 마운트 시 백그라운드 프리페치
+  const [editorialCtx, setEditorialCtx] = useState<{ news_titles: string[]; event_names: string[] } | null>(null);
 
   // ── 자동 발송 설정 ──
   const [cronSettings, setCronSettings] = useState<CronSettings>({ enabled: false, send_days: [2, 4], send_hour: 10, default_editorial: "" });
@@ -78,6 +80,7 @@ export default function NewsletterPage() {
   useEffect(() => {
     fetchSubscribers();
     fetchCronSettings();
+    prefetchEditorialContext();
   }, []);
 
   useEffect(() => {
@@ -138,11 +141,35 @@ export default function NewsletterPage() {
     }
   }
 
+  // 이번 호 콘텐츠(뉴스 제목 + 행사명)를 미리 가져와 state에 저장
+  async function prefetchEditorialContext() {
+    try {
+      const res = await fetch("/api/admin/newsletter/content");
+      if (!res.ok) return;
+      const json = await res.json();
+      const allNews = [
+        ...(json.mice_news ?? []),
+        ...(json.tourism_news ?? []),
+        ...(json.ezpmp_news ?? []),
+        ...(json.ai_news ?? []),
+      ] as Array<{ title: string }>;
+      const newsTitles = allNews.map((n) => n.title).filter(Boolean);
+      const eventNames = (json.featured_events ?? []).map((e: { name: string }) => e.name).filter(Boolean);
+      setEditorialCtx({ news_titles: newsTitles, event_names: eventNames });
+    } catch {
+      // 실패해도 fallback(DB 직접 조회)으로 진행됨
+    }
+  }
+
   async function handleGenerateEditorial() {
     setGeneratingEditorial(true);
     setEditorialError(null);
     try {
-      const res = await fetch("/api/admin/newsletter/generate-editorial", { method: "POST" });
+      const res = await fetch("/api/admin/newsletter/generate-editorial", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ context: editorialCtx ?? undefined }),
+      });
       const json = await res.json();
       if (res.ok && json.editorial) {
         setEditorialText(json.editorial);

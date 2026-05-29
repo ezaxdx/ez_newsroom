@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsCard, EventCard } from "@/lib/newsletter-template";
-import { scoreEvent } from "@/lib/event-score";
+import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { fetchOgImage } from "@/lib/fetch-og-image";
+import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
 
 export const dynamic = "force-dynamic";
 
@@ -18,10 +19,11 @@ export async function GET() {
     .toISOString()
     .split("T")[0];
 
-  // Vol number = existing issues count + 1
+  // Vol number = 실제 발송 완료(status=sent)된 건수 + 1 (테스트/드래프트는 미포함)
   const { count: issueCount } = await supabase
     .from("newsletter_issues")
-    .select("*", { count: "exact", head: true });
+    .select("*", { count: "exact", head: true })
+    .eq("status", "sent");
   const vol_number = (issueCount ?? 0) + 1;
 
   type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
@@ -57,7 +59,7 @@ export async function GET() {
 
   const { data: eventsPool } = await supabase
     .from("convention_events")
-    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url")
+    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description")
     .eq("is_published", true)
     .gte("start_date", todayStr)
     .lte("start_date", new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
@@ -76,20 +78,45 @@ export async function GET() {
     }, today) }))
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
-  const featuredRaw = scored.slice(0, 4);
+  // 스코어 상위 4개 선정 후 시작일 빠른 순 정렬
+  const featuredRaw = scored.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+  // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시
+  const descMap = await fillEventDescriptions(
+    featuredRaw.map((e) => ({
+      id: e.id,
+      event_name: e.event_name,
+      description: (e as { description?: string | null }).description ?? null,
+      website: e.website ?? null,
+      industry: e.industry ?? null,
+      category: e.category ?? null,
+      organizer: e.organizer ?? null,
+    })),
+    supabase,
+    process.env.GOOGLE_AI_API_KEY
+  );
+
   const featuredEvents: EventCard[] = await Promise.all(
     featuredRaw.map(async (e) => {
       const imageUrl = e.image_url ?? await fetchOgImage(e.website ?? null);
       return {
         name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
         venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,
+        description: descMap[e.id] ?? null,
       };
     })
   );
 
   const featuredIds = new Set(featuredRaw.map((e) => e.id));
   const upcomingEvents: EventCard[] = scored
-    .filter((e) => !featuredIds.has(e.id) && e.start_date <= endOfWeekStr)
+    .filter((e) => {
+      if (featuredIds.has(e.id)) return false;
+      if (e.start_date > endOfWeekStr) return false;
+      if (e._score < WEEKLY_LIST_MIN_SCORE) return false;
+      const nameLower = (e.event_name ?? "").toLowerCase();
+      if (WEEKLY_EXCLUDE_KEYWORDS.some((kw) => nameLower.includes(kw.toLowerCase()))) return false;
+      return true;
+    })
     .slice(0, 7)
     .map((e) => ({
       name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,

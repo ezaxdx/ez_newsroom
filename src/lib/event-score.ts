@@ -138,3 +138,12 @@ export function scoreEvent(event: EventForScore, today: Date): number {
 
 /** EZPMP 픽 기준: 최소 스코어 이상 + 스코어 내림차순 top N */
 export const EZPMP_PICK_MIN_SCORE = 15;
+
+/** Weekly Event List 최소 스코어 - 총회·이사회 등 무관 행사 제거 */
+export const WEEKLY_LIST_MIN_SCORE = 13;
+
+/** Weekly Event List 제외 키워드 (행사명에 포함되면 제외) */
+export const WEEKLY_EXCLUDE_KEYWORDS = [
+  "정기총회", "임시총회", "이사회", "간담회", "위원회",
+  "강의", "교육", "워크숍", "workshop", "세미나", "seminar",
+];
