@@ -23,6 +23,7 @@ type Issue = {
 };
 
 type SendLog = { id: string; email: string; status: string; error_message: string | null; sent_at: string };
+type EventForImage = { id: string; event_name: string; start_date: string; end_date: string | null; venue: string | null; image_url: string | null; website: string | null; is_published: boolean };
 type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
 type Tab = "send" | "subscribers" | "history" | "manual";
@@ -78,6 +79,17 @@ export default function NewsletterPage() {
   const [gmailStatus, setGmailStatus] = useState<"loading" | "connected" | "disconnected">("loading");
   const [gmailUpdatedAt, setGmailUpdatedAt] = useState<string | null>(null);
   const [gmailOpen, setGmailOpen] = useState(false);
+
+  // ── 행사 이미지 관리 ──
+  const [imageEditorOpen, setImageEditorOpen] = useState(false);
+  const [imageEvents, setImageEvents] = useState<EventForImage[]>([]);
+  const [imageEventsLoading, setImageEventsLoading] = useState(false);
+  const [imageEdits, setImageEdits] = useState<Record<string, string>>({}); // id → url 편집값
+  const [imageSaving, setImageSaving] = useState<Set<string>>(new Set());
+  const [imageSaved, setImageSaved] = useState<Set<string>>(new Set());
+
+  // ── 이력 로그 모드 ──
+  const [logMode, setLogMode] = useState<"all" | "failed">("all");
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -354,22 +366,64 @@ export default function NewsletterPage() {
     }
   }
 
-  async function fetchFailureLogs(issue: Issue) {
-    if (selectedIssue?.id === issue.id) {
+  async function fetchIssueLogs(issue: Issue, mode: "all" | "failed") {
+    // 이미 같은 이슈 + 같은 모드면 닫기
+    if (selectedIssue?.id === issue.id && logMode === mode) {
       setSelectedIssue(null);
       setIssueLogs([]);
       return;
     }
     setSelectedIssue(issue);
+    setLogMode(mode);
     setLogsLoading(true);
     try {
-      const res = await fetch(`/api/admin/newsletter/logs?issue_id=${issue.id}&status=failed`);
+      const url = mode === "failed"
+        ? `/api/admin/newsletter/logs?issue_id=${issue.id}&status=failed`
+        : `/api/admin/newsletter/logs?issue_id=${issue.id}`;
+      const res = await fetch(url);
       const json = await res.json();
       setIssueLogs(json.data ?? []);
     } catch {
       setIssueLogs([]);
     } finally {
       setLogsLoading(false);
+    }
+  }
+
+  async function fetchImageEvents() {
+    setImageEventsLoading(true);
+    try {
+      const today = new Date().toISOString().split("T")[0];
+      const ninetyDays = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+      const res = await fetch(`/api/admin/events?from=${today}&to=${ninetyDays}`);
+      const json = await res.json();
+      const events: EventForImage[] = (json.data ?? []).filter((e: EventForImage) => e.is_published);
+      setImageEvents(events);
+      // 편집값 초기화 (image_url 현재값으로)
+      const edits: Record<string, string> = {};
+      for (const e of events) edits[e.id] = e.image_url ?? "";
+      setImageEdits(edits);
+    } catch {
+      // ignore
+    } finally {
+      setImageEventsLoading(false);
+    }
+  }
+
+  async function saveImageUrl(id: string) {
+    setImageSaving((prev) => new Set(prev).add(id));
+    setImageSaved((prev) => { const s = new Set(prev); s.delete(id); return s; });
+    try {
+      await fetch("/api/admin/events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, image_url: imageEdits[id] || null }),
+      });
+      setImageEvents((prev) => prev.map((e) => e.id === id ? { ...e, image_url: imageEdits[id] || null } : e));
+      setImageSaved((prev) => new Set(prev).add(id));
+      setTimeout(() => setImageSaved((prev) => { const s = new Set(prev); s.delete(id); return s; }), 2000);
+    } finally {
+      setImageSaving((prev) => { const s = new Set(prev); s.delete(id); return s; });
     }
   }
 
@@ -595,6 +649,109 @@ export default function NewsletterPage() {
                   <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
                     뉴스레터 자동 발송에 사용할 Gmail 계정을 인증합니다. RSS 소스에서 Gmail 뉴스레터 수집 시에도 동일하게 사용됩니다.
                   </p>
+                </div>
+              )}
+            </div>
+
+            {/* ── 행사 이미지 관리 ── */}
+            <div style={{ ...cardStyle, marginTop: 8 }}>
+              <button
+                onClick={() => {
+                  const next = !imageEditorOpen;
+                  setImageEditorOpen(next);
+                  if (next && imageEvents.length === 0) fetchImageEvents();
+                }}
+                style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  width: "100%", background: "none", border: "none", cursor: "pointer",
+                  fontSize: 14, fontWeight: 600, color: "var(--on-surface)", padding: 0,
+                }}
+              >
+                <span>🖼️ EZ Letter Pick 이미지 관리</span>
+                <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{imageEditorOpen ? "▲" : "▼"}</span>
+              </button>
+
+              {imageEditorOpen && (
+                <div style={{ marginTop: 16 }}>
+                  {imageEventsLoading ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--on-surface-variant)", fontSize: 13 }}>
+                      <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />불러오는 중...
+                    </div>
+                  ) : imageEvents.length === 0 ? (
+                    <p style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>90일 이내 발행된 행사가 없습니다.</p>
+                  ) : (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--on-surface-variant)" }}>
+                        오늘부터 90일 이내 행사 {imageEvents.length}개 · 이미지 URL을 직접 입력하거나 비워두면 웹사이트 대표 이미지를 자동 사용합니다.
+                      </p>
+                      {imageEvents.map((ev) => (
+                        <div key={ev.id} style={{
+                          display: "grid", gridTemplateColumns: "auto 1fr auto auto", gap: 10, alignItems: "center",
+                          padding: "10px 12px", borderRadius: 8,
+                          background: "var(--surface-container-low)",
+                        }}>
+                          {/* 썸네일 */}
+                          <div style={{ width: 48, height: 32, borderRadius: 4, overflow: "hidden", background: "var(--surface-container-highest)", flexShrink: 0 }}>
+                            {(imageEdits[ev.id] || ev.image_url) ? (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={imageEdits[ev.id] || ev.image_url || ""}
+                                alt=""
+                                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }}
+                              />
+                            ) : (
+                              <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🖼</div>
+                            )}
+                          </div>
+                          {/* 행사 정보 + URL 입력 */}
+                          <div style={{ minWidth: 0 }}>
+                            <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                              {ev.event_name}
+                              <span style={{ marginLeft: 6, fontSize: 11, fontWeight: 400, color: "var(--on-surface-variant)" }}>
+                                {ev.start_date}{ev.end_date && ev.end_date !== ev.start_date ? ` ~ ${ev.end_date}` : ""}
+                              </span>
+                            </p>
+                            <input
+                              type="text"
+                              value={imageEdits[ev.id] ?? ""}
+                              onChange={(e) => setImageEdits((prev) => ({ ...prev, [ev.id]: e.target.value }))}
+                              placeholder="이미지 URL (비워두면 자동)"
+                              style={{
+                                width: "100%", height: 28, padding: "0 8px", borderRadius: 4, fontSize: 11,
+                                border: "1px solid var(--surface-container-highest)",
+                                background: "var(--surface-container-lowest)",
+                                color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
+                              }}
+                              onKeyDown={(e) => e.key === "Enter" && saveImageUrl(ev.id)}
+                            />
+                          </div>
+                          {/* 저장 버튼 */}
+                          <button
+                            onClick={() => saveImageUrl(ev.id)}
+                            disabled={imageSaving.has(ev.id)}
+                            style={{
+                              height: 28, padding: "0 10px", borderRadius: 4, border: "none",
+                              background: imageSaved.has(ev.id) ? "#D4EDDA" : "var(--primary)",
+                              color: imageSaved.has(ev.id) ? "#155724" : "#fff",
+                              fontSize: 12, fontWeight: 600, cursor: imageSaving.has(ev.id) ? "not-allowed" : "pointer",
+                              whiteSpace: "nowrap",
+                            }}
+                          >
+                            {imageSaving.has(ev.id) ? "..." : imageSaved.has(ev.id) ? "저장됨 ✓" : "저장"}
+                          </button>
+                          {/* 삭제(비우기) 버튼 */}
+                          {(imageEdits[ev.id] || ev.image_url) && (
+                            <button
+                              onClick={() => setImageEdits((prev) => ({ ...prev, [ev.id]: "" }))}
+                              style={{ height: 28, padding: "0 8px", borderRadius: 4, border: "none", background: "transparent", color: "var(--on-surface-variant)", fontSize: 13, cursor: "pointer" }}
+                              title="URL 지우기"
+                            >×</button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -910,6 +1067,7 @@ export default function NewsletterPage() {
                         <th style={thStyle}>Vol</th>
                         <th style={thStyle}>날짜</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>발송</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>성공</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>실패</th>
                         <th style={thStyle}>상태</th>
                       </tr>
@@ -930,16 +1088,30 @@ export default function NewsletterPage() {
                                 ? new Date(issue.sent_at).toLocaleDateString("ko-KR")
                                 : new Date(issue.created_at).toLocaleDateString("ko-KR")}
                             </td>
-                            <td style={{ ...tdStyle, textAlign: "center" }}>{issue.total_sent}</td>
+                            <td style={{ ...tdStyle, textAlign: "center" }}>
+                              <button
+                                onClick={() => fetchIssueLogs(issue, "all")}
+                                style={{
+                                  background: "none", border: "none", cursor: "pointer",
+                                  color: "var(--primary)", fontWeight: 700, fontSize: 13, textDecoration: "underline",
+                                }}
+                                title="전체 발송 내역 보기"
+                              >
+                                {issue.total_sent + issue.total_failed}
+                              </button>
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: "center", color: "#155724", fontWeight: 600 }}>
+                              {issue.total_sent}
+                            </td>
                             <td style={{ ...tdStyle, textAlign: "center" }}>
                               {issue.total_failed > 0 ? (
                                 <button
-                                  onClick={() => fetchFailureLogs(issue)}
+                                  onClick={() => fetchIssueLogs(issue, "failed")}
                                   style={{
                                     background: "none", border: "none", cursor: "pointer",
                                     color: "#c0392b", fontWeight: 700, fontSize: 13, textDecoration: "underline",
                                   }}
-                                  title="실패 로그 보기"
+                                  title="실패 로그만 보기"
                                 >
                                   {issue.total_failed}
                                 </button>
@@ -966,9 +1138,15 @@ export default function NewsletterPage() {
 
                 {selectedIssue && (
                   <div style={{ marginTop: 12, background: "var(--surface-container)", borderRadius: 8, padding: 16 }}>
-                    <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 700, color: "#c0392b" }}>
-                      Vol.{selectedIssue.vol_number} 실패 로그
-                    </p>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: logMode === "failed" ? "#c0392b" : "var(--on-surface)" }}>
+                        Vol.{selectedIssue.vol_number} {logMode === "failed" ? "실패 내역" : "전체 발송 내역"}
+                      </p>
+                      <button
+                        onClick={() => { setSelectedIssue(null); setIssueLogs([]); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--on-surface-variant)", lineHeight: 1 }}
+                      >×</button>
+                    </div>
                     {logsLoading ? (
                       <p style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>불러오는 중...</p>
                     ) : issueLogs.length === 0 ? (
@@ -978,7 +1156,8 @@ export default function NewsletterPage() {
                         <thead>
                           <tr style={{ background: "var(--surface-container-high)" }}>
                             <th style={{ ...thStyle, fontSize: 12 }}>이메일</th>
-                            <th style={{ ...thStyle, fontSize: 12 }}>에러 메시지</th>
+                            <th style={{ ...thStyle, fontSize: 12, textAlign: "center" }}>상태</th>
+                            {logMode === "all" && <th style={{ ...thStyle, fontSize: 12 }}>오류</th>}
                             <th style={{ ...thStyle, fontSize: 12 }}>시간</th>
                           </tr>
                         </thead>
@@ -986,7 +1165,18 @@ export default function NewsletterPage() {
                           {issueLogs.map(log => (
                             <tr key={log.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
                               <td style={{ ...tdStyle, fontSize: 12 }}>{log.email}</td>
-                              <td style={{ ...tdStyle, fontSize: 12, color: "#c0392b" }}>{log.error_message ?? "-"}</td>
+                              <td style={{ ...tdStyle, fontSize: 12, textAlign: "center" }}>
+                                <span style={{
+                                  display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                                  background: log.status === "success" ? "#D4EDDA" : "#F8D7DA",
+                                  color: log.status === "success" ? "#155724" : "#721C24",
+                                }}>
+                                  {log.status === "success" ? "성공" : "실패"}
+                                </span>
+                              </td>
+                              {logMode === "all" && (
+                                <td style={{ ...tdStyle, fontSize: 12, color: "#c0392b" }}>{log.error_message ?? "-"}</td>
+                              )}
                               <td style={{ ...tdStyle, fontSize: 12, whiteSpace: "nowrap" }}>
                                 {log.sent_at ? new Date(log.sent_at).toLocaleString("ko-KR") : "-"}
                               </td>
