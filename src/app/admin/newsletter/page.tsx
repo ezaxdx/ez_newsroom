@@ -26,7 +26,7 @@ type SendLog = { id: string; email: string; status: string; error_message: strin
 type EventForImage = { id: string; event_name: string; start_date: string; end_date: string | null; venue: string | null; image_url: string | null; website: string | null; is_published: boolean };
 type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
-type Tab = "send" | "subscribers" | "history" | "manual";
+type Tab = "send" | "subscribers" | "history" | "manual" | "gmail";
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -78,7 +78,6 @@ export default function NewsletterPage() {
   // ── Gmail 연동 상태 ──
   const [gmailStatus, setGmailStatus] = useState<"loading" | "connected" | "disconnected">("loading");
   const [gmailUpdatedAt, setGmailUpdatedAt] = useState<string | null>(null);
-  const [gmailOpen, setGmailOpen] = useState(false);
 
   // ── 행사 이미지 관리 ──
   const [imageEditorOpen, setImageEditorOpen] = useState(false);
@@ -487,6 +486,15 @@ export default function NewsletterPage() {
         <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>
         <button style={tabStyle("manual")} onClick={() => setTab("manual")}>📋 매뉴얼</button>
+        <button
+          style={tabStyle("gmail")}
+          onClick={() => { setTab("gmail"); if (gmailStatus === "loading") fetchGmailStatus(); }}
+        >
+          📧 Gmail 연동
+          {gmailStatus === "disconnected" && (
+            <span style={{ marginLeft: 5, display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#c62828", verticalAlign: "middle" }} />
+          )}
+        </button>
       </div>
 
       <div style={{ paddingTop: 20 }}>
@@ -600,58 +608,6 @@ export default function NewsletterPage() {
                 />
               </div>
             )}
-
-            {/* ── Gmail 연동 ── */}
-            <div style={{ ...cardStyle, marginTop: 8 }}>
-              <button
-                onClick={() => setGmailOpen(o => !o)}
-                style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  width: "100%", background: "none", border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 600, color: "var(--on-surface)", padding: 0,
-                }}
-              >
-                <span style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  📧 Gmail 연동
-                  {gmailStatus === "connected" && (
-                    <CheckCircle size={14} color="#2e7d32" />
-                  )}
-                  {gmailStatus === "disconnected" && (
-                    <XCircle size={14} color="#c62828" />
-                  )}
-                  <span style={{ fontSize: 12, fontWeight: 400, color: gmailStatus === "connected" ? "#2e7d32" : "#c62828" }}>
-                    {gmailStatus === "loading" ? "" : gmailStatus === "connected" ? "연동됨" : "연동 안 됨"}
-                  </span>
-                </span>
-                <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{gmailOpen ? "▲" : "▼"}</span>
-              </button>
-
-              {gmailOpen && (
-                <div style={{ marginTop: 16 }}>
-                  {gmailUpdatedAt && (
-                    <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                      마지막 인증: {new Date(gmailUpdatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
-                    </p>
-                  )}
-                  <a
-                    href="/api/gmail/auth"
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 6,
-                      padding: "9px 18px", borderRadius: 6, fontSize: 13, fontWeight: 600,
-                      background: gmailStatus === "connected" ? "var(--surface-container-high)" : "var(--on-surface)",
-                      color: gmailStatus === "connected" ? "var(--on-surface)" : "var(--surface)",
-                      textDecoration: "none",
-                    }}
-                  >
-                    <ExternalLink size={13} />
-                    {gmailStatus === "connected" ? "다시 인증 (재연동)" : "Google 계정으로 인증"}
-                  </a>
-                  <p style={{ margin: "12px 0 0", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-                    뉴스레터 자동 발송에 사용할 Gmail 계정을 인증합니다. RSS 소스에서 Gmail 뉴스레터 수집 시에도 동일하게 사용됩니다.
-                  </p>
-                </div>
-              )}
-            </div>
 
             {/* ── 행사 이미지 관리 ── */}
             <div style={{ ...cardStyle, marginTop: 8 }}>
@@ -1268,6 +1224,59 @@ export default function NewsletterPage() {
               <Note>이미지 URL이 없으면 웹사이트 대표 이미지 자동 수집 → 없으면 EZ 로고 플레이스홀더 표시</Note>
             </Section>
 
+          </div>
+        )}
+
+        {/* ── GMAIL TAB ── */}
+        {tab === "gmail" && (
+          <div style={{ maxWidth: 520 }}>
+            {/* 상태 카드 */}
+            <div style={{ ...cardStyle, display: "flex", alignItems: "center", gap: 16 }}>
+              {gmailStatus === "loading" && <Loader2 size={20} style={{ animation: "spin 1s linear infinite", color: "var(--on-surface-variant)" }} />}
+              {gmailStatus === "connected" && <CheckCircle size={20} color="#2e7d32" />}
+              {gmailStatus === "disconnected" && <XCircle size={20} color="#c62828" />}
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
+                  {gmailStatus === "loading" && "확인 중..."}
+                  {gmailStatus === "connected" && "Gmail 연동됨"}
+                  {gmailStatus === "disconnected" && "연동 안 됨"}
+                </div>
+                {gmailUpdatedAt && (
+                  <div style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
+                    마지막 인증: {new Date(gmailUpdatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 인증 버튼 */}
+            <a
+              href="/api/gmail/auth"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 8,
+                padding: "11px 22px", borderRadius: 8, fontSize: 14, fontWeight: 600,
+                background: gmailStatus === "connected" ? "var(--surface-container-high)" : "var(--on-surface)",
+                color: gmailStatus === "connected" ? "var(--on-surface)" : "var(--surface)",
+                textDecoration: "none", marginBottom: 24,
+              }}
+            >
+              <ExternalLink size={15} />
+              {gmailStatus === "connected" ? "다시 인증 (재연동)" : "Google 계정으로 인증"}
+            </a>
+
+            {/* 안내 */}
+            <div style={{ ...cardStyle, fontSize: 13, lineHeight: 1.75, color: "var(--on-surface-variant)" }}>
+              <p style={{ margin: "0 0 8px", fontWeight: 600, color: "var(--on-surface)", fontSize: 14 }}>연동 용도</p>
+              <ul style={{ margin: "0 0 16px", paddingLeft: 18 }}>
+                <li>뉴스레터 <strong>자동 발송</strong>에 사용 (ez.micedx1@gmail.com)</li>
+                <li>RSS 소스에서 <strong>Gmail 뉴스레터 수집</strong> 시에도 동일하게 사용</li>
+              </ul>
+              <p style={{ margin: "0 0 8px", fontWeight: 600, color: "var(--on-surface)", fontSize: 14 }}>토큰 만료 시</p>
+              <ul style={{ margin: 0, paddingLeft: 18 }}>
+                <li>발송 또는 수집 실패 → 이 화면에서 [다시 인증] 클릭</li>
+                <li>인증은 1회로 지속 유지됩니다.</li>
+              </ul>
+            </div>
           </div>
         )}
 
