@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
-import { scoreEvent } from "@/lib/event-score";
+import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 
 export const maxDuration = 60;
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
   const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const site_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
 
-  const { count: issueCount } = await supabase.from("newsletter_issues").select("*", { count: "exact", head: true });
+  const { count: issueCount } = await supabase.from("newsletter_issues").select("*", { count: "exact", head: true }).eq("status", "sent");
   const vol_number = (issueCount ?? 0) + 1;
 
   const y = nowKST.getUTCFullYear();
@@ -111,15 +111,24 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
-  const featuredRaw = scored.slice(0, 4);
+  // Pick: 스코어 상위 4개 → 시작일 빠른 순 정렬
+  const featuredRaw = scored.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const featuredEvents: EventCard[] = featuredRaw.map(e => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
     venue: e.venue ?? null, image_url: e.image_url ?? null, website: e.website ?? null,
   }));
 
+  // Weekly List: 이번 주 행사 중 min score + 제외 키워드 필터
   const featuredIds = new Set(featuredRaw.map(e => e.id));
   const upcomingEvents: EventCard[] = scored
-    .filter(e => !featuredIds.has(e.id) && e.start_date <= endOfWeekStr)
+    .filter(e => {
+      if (featuredIds.has(e.id)) return false;
+      if (e.start_date > endOfWeekStr) return false;
+      if (e._score < WEEKLY_LIST_MIN_SCORE) return false;
+      const nameLower = (e.event_name ?? "").toLowerCase();
+      if (WEEKLY_EXCLUDE_KEYWORDS.some(kw => nameLower.includes(kw.toLowerCase()))) return false;
+      return true;
+    })
     .slice(0, 7)
     .map(e => ({
       name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,

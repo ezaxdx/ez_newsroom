@@ -5,10 +5,6 @@
       "schedule": "0 0 * * 2,4"
     },
     {
-      "path": "/api/cron/scrape-events",
-      "schedule": "0 0 1 1,7 *"
-    },
-    {
       "path": "/api/cron/newsletter",
       "schedule": "0 1 * * *"
     }
