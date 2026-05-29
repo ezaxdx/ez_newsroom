@@ -43,10 +43,10 @@ const C = {
 
 // ── 폰트 ───────────────────────────────────────────────────
 // Noto Sans SC: wght 300(Light) / 500(Medium) / 700(Bold)
-// HSSanTokki: 섹션 타이틀
+// Playfair Display: 섹션 타이틀 (Google Fonts, editorial 세리프)
 // Pretendard: 푸터 저작권 (Thin)
 const FONT_NOTO   = "'Noto Sans SC', 'Apple SD Gothic Neo', 'Malgun Gothic', Arial, sans-serif";
-const FONT_TOKKI  = "'HSSanTokki', 'HS산토끼체', Georgia, serif";
+const FONT_TOKKI  = "'Playfair Display', Georgia, serif";
 const FONT_PRET   = "'Pretendard', 'Apple SD Gothic Neo', Arial, sans-serif";
 
 function withUTM(url: string, vol: number): string {
@@ -194,7 +194,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
 <title>[EZ Letter] Vol.${String(vol).padStart(2,"0")} · ${send_date}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&display=swap');
-@import url('https://cdn.jsdelivr.net/gh/fonts-archive/HSSanTokki/HSSanTokki.css');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
 </style>
 </head>

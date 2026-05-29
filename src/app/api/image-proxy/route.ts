@@ -2,23 +2,39 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const runtime = "edge";
 
-export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get("url");
-  if (!url) {
-    return new NextResponse("missing url", { status: 400 });
-  }
+// 실패 시 반환할 EZ 로고 플레이스홀더 SVG
+function makePlaceholderSVG(origin: string): string {
+  const logoUrl = `${origin}/images/ez-letter-logo.png`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="255" height="129" viewBox="0 0 255 129">
+  <rect width="255" height="129" fill="#EEEBE5"/>
+  <image href="${logoUrl}" x="87" y="39" width="80" height="50" preserveAspectRatio="xMidYMid meet"/>
+</svg>`;
+}
 
-  // 기본적인 URL 유효성 검사
+function placeholderResponse(origin: string) {
+  return new NextResponse(makePlaceholderSVG(origin), {
+    headers: {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "public, max-age=3600",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
+export async function GET(req: NextRequest) {
+  const origin = new URL(req.url).origin;
+  const url = req.nextUrl.searchParams.get("url");
+  if (!url) return placeholderResponse(origin);
+
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return new NextResponse("invalid url", { status: 400 });
+    return placeholderResponse(origin);
   }
 
-  // http/https만 허용
   if (!["http:", "https:"].includes(parsed.protocol)) {
-    return new NextResponse("protocol not allowed", { status: 400 });
+    return placeholderResponse(origin);
   }
 
   try {
@@ -30,14 +46,10 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    if (!res.ok) {
-      return new NextResponse("fetch failed", { status: 502 });
-    }
+    if (!res.ok) return placeholderResponse(origin);
 
-    const contentType = res.headers.get("content-type") ?? "image/jpeg";
-    if (!contentType.startsWith("image/")) {
-      return new NextResponse("not an image", { status: 400 });
-    }
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return placeholderResponse(origin);
 
     const buffer = await res.arrayBuffer();
     return new NextResponse(buffer, {
@@ -48,6 +60,6 @@ export async function GET(req: NextRequest) {
       },
     });
   } catch {
-    return new NextResponse("proxy error", { status: 502 });
+    return placeholderResponse(origin);
   }
 }
