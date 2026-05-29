@@ -25,7 +25,7 @@ type Issue = {
 type SendLog = { id: string; email: string; status: string; error_message: string | null; sent_at: string };
 type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
-type Tab = "send" | "subscribers" | "history";
+type Tab = "send" | "subscribers" | "history" | "manual";
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -415,6 +415,7 @@ export default function NewsletterPage() {
         <button style={tabStyle("send")} onClick={() => setTab("send")}>발송</button>
         <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>
+        <button style={tabStyle("manual")} onClick={() => setTab("manual")}>📋 매뉴얼</button>
       </div>
 
       <div style={{ paddingTop: 20 }}>
@@ -933,9 +934,130 @@ export default function NewsletterPage() {
         )}
       </div>
 
+        {/* ── MANUAL TAB ── */}
+        {tab === "manual" && (
+          <div style={{ fontSize: 14, lineHeight: 1.75, color: "var(--on-surface)" }}>
+
+            <Section title="📬 뉴스레터 발송 프로세스">
+              <Step n={1} text="AI로 작성 클릭 → 이번 호 뉴스·행사 기반으로 인사말 자동 생성" />
+              <Step n={2} text="인사말 직접 수정 (선택)" />
+              <Step n={3} text="미리보기 클릭 → 실제 이메일 레이아웃 확인" />
+              <Step n={4} text="발송 버튼 → 활성 수신자 전체 발송" />
+              <Note>미리보기는 몇 번을 눌러도 Vol 번호가 올라가지 않습니다. 실제 발송 시에만 Vol이 증가합니다.</Note>
+            </Section>
+
+            <Section title="🔢 Vol 번호 관리">
+              <Item text="status = 'sent' 인 발송 건수 + 1 로 자동 계산" />
+              <Item text="테스트·미리보기는 DB에 기록되지 않으므로 Vol 영향 없음" />
+              <Item text="진짜 발송 전까지 Vol.01 유지됨" />
+              <Note>이전 테스트 발송이 sent로 기록된 경우 Supabase에서 status를 'draft'로 변경하면 리셋됩니다.</Note>
+            </Section>
+
+            <Section title="🌟 EZ Letter Pick (행사 카드 4개)">
+              <Item text="DB의 convention_events 중 is_published=true + 오늘~90일 이내 행사 대상" />
+              <Item text="EZPMP 관련 키워드·파트너 기관·선호 장소 기준으로 자동 스코어링 → 상위 4개 선정" />
+              <Item text="선정 후 시작일 빠른 순 정렬" />
+              <Indent>
+                <b>이미지 우선순위:</b> DB image_url → 웹사이트 og:image → EZ 로고 플레이스홀더
+              </Indent>
+              <Indent>
+                <b>설명 문구 우선순위:</b> DB description → 웹사이트 og:description → Gemini AI 생성 → DB 자동 저장
+              </Indent>
+              <Note>스마트테크 코리아처럼 산하 행사가 중복 노출될 경우, Supabase에서 해당 행사의 is_published를 false로 변경하세요.</Note>
+            </Section>
+
+            <Section title="📅 Weekly Event List">
+              <Item text="이번 주 내 시작하는 행사 중 스코어 13점 이상만 표시 (최대 7개)" />
+              <Item text="Pick 4개에 이미 포함된 행사는 자동 제외" />
+              <Indent>
+                <b>자동 제외 키워드:</b> 정기총회, 임시총회, 이사회, 간담회, 위원회, 강의, 교육, 워크숍, 세미나
+              </Indent>
+              <Note>관련 없는 행사가 뜰 경우 event-score.ts의 WEEKLY_EXCLUDE_KEYWORDS에 키워드를 추가하거나 해당 행사를 비공개 처리하세요.</Note>
+            </Section>
+
+            <Section title="🖼️ 행사 이미지 등록">
+              <Item text="Supabase convention_events 테이블의 image_url 컬럼에 직접 URL 입력" />
+              <Item text="비워두면 웹사이트에서 og:image 자동 수집 시도" />
+              <Item text="og:image도 없으면 EZ 로고 플레이스홀더 표시" />
+              <Note>흰색(투명) 로고 이미지는 흰 배경에서 안 보일 수 있으니 컬러 이미지 URL을 직접 등록하는 걸 권장합니다.</Note>
+            </Section>
+
+            <Section title="⚙️ 자동 발송 (Cron) 설정">
+              <Item text="Vercel Hobby 플랜 제한: 하루 1회만 실행 가능 (매일 KST 10:00 = UTC 01:00)" />
+              <Item text="발송 요일은 DB send_days 배열로 관리 — 해당 요일이 아닌 날은 자동 스킵" />
+              <Item text="자동 발송 설정 패널에서 활성화·요일·기본 인사말 저장 가능" />
+              <Note>자동 발송 시 인사말은 DB의 default_editorial 값을 사용합니다. 비워두면 빈 인사말로 발송됩니다.</Note>
+            </Section>
+
+            <Section title="👥 수신자 관리">
+              <Item text="개별 추가: 이메일 + 이름(선택) 입력 후 추가" />
+              <Item text="엑셀 일괄 업로드: email·이름 컬럼이 있는 xlsx 파일 업로드" />
+              <Item text="토글로 개별 활성/비활성 전환 가능 — 비활성 수신자에게는 발송되지 않음" />
+              <Note>중복 이메일은 자동으로 스킵됩니다.</Note>
+            </Section>
+
+            <Section title="✍️ AI 인사말 생성">
+              <Item text="페이지 열릴 때 이번 호 뉴스 제목 + Pick 행사명을 백그라운드로 미리 로드" />
+              <Item text="'AI로 작성' 클릭 시 실제 이번 호 콘텐츠를 컨텍스트로 넘겨 Gemini가 생성" />
+              <Item text="6월·날씨·업계 분위기 등 현재 시점 반영, AI·기술 관점 제외" />
+              <Item text="마지막 문장은 항상 'EZ하게 시작해볼까요?' 뉘앙스로 마무리" />
+            </Section>
+
+            <Section title="📰 뉴스 기사 말투">
+              <Item text="모든 summary_short·content_long·implications 는 합쇼체(~했습니다, ~입니다)로 작성" />
+              <Item text="기존 기사 말투 변환: rewrite_summaries_formal.mjs 스크립트 실행" />
+              <Item text="새 기사는 generate-article API 프롬프트에서 자동으로 합쇼체 적용" />
+            </Section>
+
+          </div>
+        )}
+
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
+    </div>
+  );
+}
+
+// ── 매뉴얼 UI 컴포넌트 ──────────────────────────────────
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div style={{ background: "var(--surface-container)", borderRadius: 10, padding: "18px 20px", marginBottom: 14 }}>
+      <p style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "var(--on-surface)" }}>{title}</p>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{children}</div>
+    </div>
+  );
+}
+function Step({ n, text }: { n: number; text: string }) {
+  return (
+    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <span style={{ minWidth: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff",
+        fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+        {n}
+      </span>
+      <span style={{ fontSize: 13, color: "var(--on-surface)", paddingTop: 2 }}>{text}</span>
+    </div>
+  );
+}
+function Item({ text }: { text: string }) {
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+      <span style={{ color: "var(--primary)", fontWeight: 700, flexShrink: 0, fontSize: 13 }}>·</span>
+      <span style={{ fontSize: 13, color: "var(--on-surface)" }}>{text}</span>
+    </div>
+  );
+}
+function Indent({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ marginLeft: 16, fontSize: 13, color: "var(--on-surface-variant)" }}>{children}</div>
+  );
+}
+function Note({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ marginTop: 4, padding: "8px 12px", borderRadius: 6,
+      background: "color-mix(in srgb, var(--primary) 8%, transparent)",
+      fontSize: 12, color: "var(--on-surface-variant)", borderLeft: "3px solid var(--primary)" }}>
+      💡 {children}
     </div>
   );
 }
