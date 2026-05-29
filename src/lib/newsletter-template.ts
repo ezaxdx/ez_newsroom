@@ -86,6 +86,9 @@ function proxyImg(image_url: string | null, site_url: string): string | null {
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
 
+// 모든 뉴스는 EZ 뉴스룸으로 연결
+const NEWS_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
+
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 function newsCard(item: NewsCard, vol: number, site_url: string): string {
   const proxied = proxyImg(item.image_url, site_url);
@@ -101,7 +104,7 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
   const summary = item.summary;
   return `
 <td width="255" valign="top">
-  <a href="${withUTM(item.url, vol)}" style="text-decoration:none;color:inherit;display:block;">
+  <a href="${withUTM(NEWS_LINK, vol)}" style="text-decoration:none;color:inherit;display:block;">
     <table cellpadding="0" cellspacing="0" width="255">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
       <tr><td style="padding:3px 4px 0;">
