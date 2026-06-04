@@ -158,7 +158,9 @@ function pickCard(ev: EventCard, vol: number, site_url: string): string {
 
 // ── 행사 리스트 행 (시작일~종료일 + 행사명 링크) ──────
 function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean): string {
-  const link = withUTM(ev.website ?? site_url, vol);
+  const link = ev.website
+    ? withUTM(ev.website, vol)
+    : `https://search.naver.com/search.naver?query=${encodeURIComponent(ev.name)}`;
   const border = isLast ? "" : `border-bottom:1px solid #E8E0D0;`;
   const dateRange = ev.end_date && ev.end_date !== ev.start_date
     ? `${ev.start_date}&nbsp;~&nbsp;${ev.end_date}`
