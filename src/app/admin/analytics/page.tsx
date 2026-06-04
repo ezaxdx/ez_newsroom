@@ -27,9 +27,32 @@ const SOURCE_LABEL: Record<string, string> = {
   facebook:    "Facebook",
 };
 
-async function fetchAnalytics() {
+function getDateRange(period: string | null): { from: string | null } {
+  const now = new Date();
+  if (period === "week") {
+    const day = now.getDay(); // 0=일
+    const diff = day === 0 ? 6 : day - 1; // 월요일 기준
+    const monday = new Date(now);
+    monday.setDate(now.getDate() - diff);
+    monday.setHours(0, 0, 0, 0);
+    return { from: monday.toISOString() };
+  }
+  if (period === "month") {
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: firstDay.toISOString() };
+  }
+  return { from: null };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function applyDate(query: any, from: string | null) {
+  return from ? query.gte("created_at", from) : query;
+}
+
+async function fetchAnalytics(period: string | null = null) {
   try {
     const db = createAdminClient();
+    const { from } = getDateRange(period);
 
     // ── 이벤트 타입별 카운트 (HEAD 요청 = 데이터 전송 없음) ──
     const [
@@ -44,16 +67,16 @@ async function fetchAnalytics() {
       { data: utmLogs },      // utm 유입 경로
       { data: searchLogs },   // 검색어
     ] = await Promise.all([
-      db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "view"),
-      db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "detail_view"),
-      db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "outbound_click"),
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "view"), from),
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "detail_view"), from),
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "outbound_click"), from),
       db.from("news").select("id, title, category"),
-      db.from("user_logs").select("news_id").eq("event_type", "detail_view").not("news_id", "is", null).limit(5000),
-      db.from("user_logs").select("news_id").eq("event_type", "outbound_click").not("news_id", "is", null).limit(5000),
-      db.from("user_logs").select("news_id, read_sec").eq("event_type", "read_time").not("news_id", "is", null).limit(5000),
-      db.from("user_logs").select("category").eq("event_type", "view").not("category", "is", null).limit(5000),
-      db.from("user_logs").select("utm_source, utm_campaign").not("utm_source", "is", null).limit(5000),
-      db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000),
+      applyDate(db.from("user_logs").select("news_id").eq("event_type", "detail_view").not("news_id", "is", null).limit(5000), from),
+      applyDate(db.from("user_logs").select("news_id").eq("event_type", "outbound_click").not("news_id", "is", null).limit(5000), from),
+      applyDate(db.from("user_logs").select("news_id, read_sec").eq("event_type", "read_time").not("news_id", "is", null).limit(5000), from),
+      applyDate(db.from("user_logs").select("category").eq("event_type", "view").not("category", "is", null).limit(5000), from),
+      applyDate(db.from("user_logs").select("utm_source, utm_campaign").not("utm_source", "is", null).limit(5000), from),
+      applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from),
     ]);
 
     const viewCount    = view    ?? 0;
@@ -185,8 +208,9 @@ async function fetchNavCategories(): Promise<string[]> {
   }
 }
 
-export default async function AnalyticsPage() {
-  const [data, navCategories] = await Promise.all([fetchAnalytics(), fetchNavCategories()]);
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ period?: string }> }) {
+  const { period } = await searchParams;
+  const [data, navCategories] = await Promise.all([fetchAnalytics(period ?? null), fetchNavCategories()]);
   const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
@@ -204,11 +228,37 @@ export default async function AnalyticsPage() {
   return (
     <div className="p-8 max-w-5xl flex flex-col gap-8">
       {/* Header */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight m-0">애널리틱스</h2>
-        <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
-          사용자 여정 · 유입 경로 · 카테고리 성과
-        </p>
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight m-0">애널리틱스</h2>
+          <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
+            사용자 여정 · 유입 경로 · 카테고리 성과
+          </p>
+        </div>
+        {/* 기간 필터 */}
+        <div className="flex gap-2 flex-shrink-0">
+          {[
+            { label: "전체", value: "" },
+            { label: "이번 달", value: "month" },
+            { label: "이번 주", value: "week" },
+          ].map(({ label, value }) => {
+            const active = (period ?? "") === value;
+            return (
+              <a
+                key={value}
+                href={value ? `/admin/analytics?period=${value}` : "/admin/analytics"}
+                className="px-4 py-1.5 rounded-full text-sm font-semibold transition-colors"
+                style={{
+                  background: active ? "var(--primary)" : "var(--surface-container-highest)",
+                  color: active ? "#fff" : "var(--on-surface-variant)",
+                  textDecoration: "none",
+                }}
+              >
+                {label}
+              </a>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── KPI 카드 ── */}
