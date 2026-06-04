@@ -11,7 +11,7 @@ const EMPTY = {
   ],
   referrers:    [] as { source: string; count: number }[],
   utmCampaigns: [] as { campaign: string; count: number }[],
-  categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
+  categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number }[],
   topArticles:  [] as { title: string; category: string; detail_views: number; outbound: number }[],
   topSearches:  [] as { query: string; count: number }[],
 };
@@ -116,9 +116,6 @@ async function fetchAnalytics() {
       page_views:   catPageViews[cat] ?? 0,
       detail_views: catDetails[cat]   ?? 0,
       outbound:     catOut[cat]       ?? 0,
-      avg_read_sec: catReadSecs[cat]?.length
-        ? Math.round(catReadSecs[cat].reduce((a, b) => a + b, 0) / catReadSecs[cat].length)
-        : 0,
     })).sort((a, b) => b.detail_views - a.detail_views);
 
     // ── 인기 기사 TOP 5 ──
@@ -195,7 +192,7 @@ export default async function AnalyticsPage() {
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
     const found = data.categories.find((c) => c.category === cat);
-    return found ?? { category: cat, page_views: 0, detail_views: 0, outbound: 0, avg_read_sec: 0 };
+    return found ?? { category: cat, page_views: 0, detail_views: 0, outbound: 0 };
   });
 
   const detailRate   = totals.view ? ((totals.detail_view    / totals.view) * 100).toFixed(1) : "0";
@@ -320,7 +317,7 @@ export default async function AnalyticsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "접속 수", "기사 클릭", "전환율", "원문 클릭", "평균 체류", "관심도"].map((h) => (
+                {["카테고리", "접속 수", "기사 클릭", "전환율", "원문 클릭", "관심도"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -343,9 +340,6 @@ export default async function AnalyticsPage() {
                     <td className="py-3 pr-4">{cat.detail_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{convRate === "-" ? "-" : `${convRate}%`}</td>
                     <td className="py-3 pr-4">{cat.outbound.toLocaleString()}</td>
-                    <td className="py-3 pr-4">
-                      {cat.avg_read_sec > 0 ? `${cat.avg_read_sec}s` : "-"}
-                    </td>
                     <td className="py-3 pr-4 w-28">
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
                         <div className="h-full rounded-full"
@@ -458,8 +452,7 @@ export default async function AnalyticsPage() {
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>전환율</strong> — 카테고리 접속 대비 기사 클릭 비율. 접속 데이터가 없으면 "-"</li>
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류</strong> — 기사 모달을 열고 닫기까지의 평균 시간(초). 1초 미만은 집계 제외</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>관심도</strong> — 기사 클릭 수 기준 카테고리 간 상대 비율. 가장 높은 카테고리가 100%</li>
+<li><strong style={{ color: "var(--on-surface)" }}>관심도</strong> — 기사 클릭 수 기준 카테고리 간 상대 비율. 가장 높은 카테고리가 100%</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>인기 검색어</p>
