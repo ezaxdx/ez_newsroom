@@ -81,7 +81,7 @@ async function fetchAnalytics() {
     const utmCampaigns = Object.entries(campMap)
       .map(([campaign, count]) => ({ campaign, count }))
       .sort((a, b) => b.count - a.count)
-      .filter(([c]) => c !== "(없음)")
+      .filter(({ campaign }) => campaign !== "(없음)")
       .slice(0, 10);
 
     // ── 카테고리별 성과 ──
