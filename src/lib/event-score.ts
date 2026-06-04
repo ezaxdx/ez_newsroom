@@ -22,7 +22,7 @@ export const EZPMP_MEDIUM_MATCH: string[] = [
   "금융", "핀테크", "경제",
 ];
 
-export const PREFERRED_VENUES = ["코엑스", "킨텍스"];
+export const PREFERRED_VENUES = ["코엑스", "킨텍스", "벡스코", "BEXCO"];
 
 export const EZPMP_PARTNERS: string[] = [
   "행정안전부", "환경부", "문화체육관광부", "산업통상자원부", "과학기술정보통신부",
@@ -147,4 +147,6 @@ export const WEEKLY_LIST_MIN_SCORE = 13;
 export const WEEKLY_EXCLUDE_KEYWORDS = [
   "정기총회", "임시총회", "이사회", "간담회", "위원회",
   "강의", "교육", "워크숍", "workshop", "세미나", "seminar",
+  "식품", "음식", "요리", "푸드", "food", "베이커리", "쿠킹",
+  "출산", "육아", "임신", "영유아", "맘", "베이비", "baby", "키즈", "kids",
 ];
