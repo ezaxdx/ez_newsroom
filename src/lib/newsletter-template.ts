@@ -290,10 +290,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
         <p style="margin:0 0 8px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
           <a href="${withUTM(site_url, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">EZ 뉴스룸 바로가기</a>
         </p>
-        <p style="margin:0;font-size:14px;font-weight:300;color:#000000;font-family:${FONT_PRET};">Copyright © AXDX All Rights Reserved.</p>
-        <p style="margin:6px 0 0;font-size:11px;color:#BBBBBB;font-family:${FONT_NOTO};">
-          수신 거부: <a href="mailto:ez.micedx1@gmail.com" style="color:#BBBBBB;font-family:${FONT_NOTO};">ez.micedx1@gmail.com</a>
-        </p>
+        <p style="margin:0;font-size:11px;font-weight:300;color:#000000;font-family:${FONT_PRET};">Copyright © AXDX All Rights Reserved.</p>
       </td>
     </tr>
 
