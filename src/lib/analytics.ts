@@ -23,6 +23,8 @@ function getUtmParams() {
 
 export async function logEvent(payload: LogPayload) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
+  // 로컬 개발 환경에서는 로그 기록 안 함
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") return;
   try {
     const supabase = createClient();
     await supabase.from("user_logs").insert({
