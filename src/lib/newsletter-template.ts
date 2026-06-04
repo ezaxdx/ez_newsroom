@@ -87,7 +87,7 @@ function proxyImg(image_url: string | null, site_url: string): string | null {
 }
 
 // 모든 뉴스는 EZ 뉴스룸으로 연결
-const NEWS_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/mice-dx/member/login.do";
+const NEWS_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
 
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 function newsCard(item: NewsCard, vol: number, site_url: string): string {
