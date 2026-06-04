@@ -278,9 +278,14 @@ Deno.serve(async (req: Request) => {
     return new Response("Method Not Allowed", { status: 405 });
   }
 
-  // 인증
+  // 인증: Authorization Bearer CRON_SECRET 또는 X-Cron-Secret 헤더 허용
   const auth = req.headers.get("authorization") ?? "";
-  if (CRON_SECRET && auth !== `Bearer ${CRON_SECRET}`) {
+  const cronHeader = req.headers.get("x-cron-secret") ?? "";
+  const validAuth = !CRON_SECRET
+    || auth === `Bearer ${CRON_SECRET}`
+    || cronHeader === CRON_SECRET
+    || auth === `Bearer ${SERVICE_ROLE_KEY}`;
+  if (!validAuth) {
     return new Response("Unauthorized", { status: 401 });
   }
 

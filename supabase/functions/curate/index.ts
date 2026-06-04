@@ -493,9 +493,15 @@ Deno.serve(async (req) => {
       headers: { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, content-type" },
     });
 
-  const authHeader = req.headers.get("Authorization");
-  const cronSecret = Deno.env.get("CRON_SECRET");
-  if (cronSecret && authHeader !== `Bearer ${cronSecret}`)
+  const authHeader = req.headers.get("Authorization") ?? "";
+  const cronHeader = req.headers.get("x-cron-secret") ?? "";
+  const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+  const validAuth = !cronSecret
+    || authHeader === `Bearer ${cronSecret}`
+    || cronHeader === cronSecret
+    || authHeader === `Bearer ${serviceRoleKey}`;
+  if (!validAuth)
     return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401 });
 
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
