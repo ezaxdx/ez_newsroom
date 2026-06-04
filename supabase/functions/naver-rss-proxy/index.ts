@@ -24,10 +24,14 @@ const BROWSER_HEADERS = {
 Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const blogId = url.searchParams.get("blogId");
-  const secret = url.searchParams.get("secret");
 
-  // 인증 확인
-  if (CRON_SECRET && secret !== CRON_SECRET) {
+  // 인증: Authorization 헤더 또는 쿼리 파라미터(레거시) 모두 허용
+  const authHeader = req.headers.get("authorization") ?? "";
+  const secretParam = url.searchParams.get("secret") ?? "";
+  const validAuth = !CRON_SECRET
+    || authHeader === `Bearer ${CRON_SECRET}`
+    || secretParam === CRON_SECRET;
+  if (!validAuth) {
     return new Response("Unauthorized", { status: 401 });
   }
 

@@ -26,8 +26,20 @@ interface GmailConfig {
 
 /* ── RSS XML 인코딩 감지 후 텍스트 변환 ── */
 async function fetchRssText(url: string): Promise<string> {
+  const headers: Record<string, string> = {
+    "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)",
+  };
+  // naver-rss-proxy 호출 시 Authorization 헤더 추가 (URL에 secret 노출 방지)
+  if (url.includes("naver-rss-proxy")) {
+    const cronSecret = Deno.env.get("CRON_SECRET") ?? "";
+    if (cronSecret) headers["Authorization"] = `Bearer ${cronSecret}`;
+    // 레거시 ?secret= 파라미터 제거
+    const parsed = new URL(url);
+    parsed.searchParams.delete("secret");
+    url = parsed.toString();
+  }
   const res = await fetch(url, {
-    headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
+    headers,
     signal: AbortSignal.timeout(8000),
   });
   const buffer = await res.arrayBuffer();
