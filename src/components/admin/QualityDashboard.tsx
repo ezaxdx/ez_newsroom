@@ -1182,13 +1182,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "1fr 100px 140px 100px 80px 70px",
+          gridTemplateColumns: "40px 1fr 100px 140px 100px 80px 70px",
           padding: "8px 14px", gap: 8,
           background: "var(--surface-container)",
           fontSize: "0.68rem", fontWeight: 700,
           letterSpacing: "0.04em", textTransform: "uppercase",
           color: "var(--on-surface-variant)",
         }}>
+          <span>No.</span>
           <span>행사명</span>
           <span>센터</span>
           <span>주최기관</span>
@@ -1202,11 +1203,16 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
           {filtered.map((e, idx) => (
             <div key={e.id} style={{
               display: "grid",
-              gridTemplateColumns: "1fr 100px 140px 100px 80px 70px",
+              gridTemplateColumns: "40px 1fr 100px 140px 100px 80px 70px",
               padding: "9px 14px", gap: 8, alignItems: "center",
               borderTop: idx > 0 ? "1px solid var(--surface-container-high)" : "none",
               background: hasIssue(e) ? "#ef444406" : "var(--surface-container-lowest)",
             }}>
+              {/* No. */}
+              <span style={{ fontSize: "0.68rem", color: "var(--on-surface-variant)", textAlign: "right" }}>
+                {idx + 1}
+              </span>
+
               {/* 행사명 */}
               <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0 }}>
                 {hasIssue(e) && (
