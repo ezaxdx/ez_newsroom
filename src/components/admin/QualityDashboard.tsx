@@ -871,7 +871,7 @@ function ManualOpsPanel() {
               🧹 중복 / 불량 데이터 정리
             </p>
             <p style={{ margin: "0 0 12px", fontSize: "0.73rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
-              노이즈 행사명 삭제, 중복 제거(정보량 낮은 쪽), 해외 venue 비공개 처리를 수행합니다.
+              노이즈 행사명 삭제(총회·웨딩·설명회 등 포함), 완전 중복 제거(정보량 낮은 쪽)를 수행합니다.
             </p>
 
             {/* 미리보기 */}
@@ -1357,7 +1357,7 @@ export default function QualityDashboard({ news, events, sources }: Props) {
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>
         <ul style={{ paddingLeft: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>행사 데이터 수집</strong> — 쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤 새로고침하면 결과를 확인할 수 있습니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>중복/불량 정리</strong> — 미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명 삭제, 중복 그룹에서 정보량이 낮은 행 삭제, 해외 venue 비공개 처리를 한번에 수행합니다. <strong style={{ color: "#ef4444" }}>실행 후 복원 불가.</strong></li>
+          <li><strong style={{ color: "var(--on-surface)" }}>중복/불량 정리</strong> — 미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명(총회·웨딩·설명회 등) 삭제, 완전 중복 그룹에서 정보량이 낮은 행 삭제를 한번에 수행합니다. <strong style={{ color: "#ef4444" }}>실행 후 복원 불가.</strong></li>
           <li style={{ marginTop: 8 }}><strong style={{ color: "var(--on-surface)" }}>AKEI 엑셀 가져오기 (UI)</strong> — 한국전시산업진흥회(AKEI) 엑셀 파일을 업로드해 행사를 추가합니다.
             <ol style={{ paddingLeft: 16, marginTop: 4, lineHeight: 1.8 }}>
               <li>AKEI 사이트에서 전시행사 일정 엑셀을 다운로드합니다.</li>
