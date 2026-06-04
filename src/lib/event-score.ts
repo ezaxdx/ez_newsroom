@@ -147,6 +147,5 @@ export const WEEKLY_LIST_MIN_SCORE = 13;
 export const WEEKLY_EXCLUDE_KEYWORDS = [
   "정기총회", "임시총회", "이사회", "간담회", "위원회",
   "강의", "교육", "워크숍", "workshop", "세미나", "seminar",
-  "식품", "음식", "요리", "푸드", "food", "베이커리", "쿠킹",
   "출산", "육아", "임신", "영유아", "맘", "베이비", "baby", "키즈", "kids",
 ];
