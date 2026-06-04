@@ -1268,7 +1268,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
           letterSpacing: "0.04em", textTransform: "uppercase",
           color: "var(--on-surface-variant)",
         }}>
-          <span>No.</span>
+          <span style={{ textAlign: "center" }}>No.</span>
           <span>행사명</span>
           <span>센터</span>
           <span>주최기관</span>
@@ -1288,7 +1288,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               background: hasIssue(e) ? "#ef444406" : "var(--surface-container-lowest)",
             }}>
               {/* No. */}
-              <span style={{ fontSize: "0.68rem", color: "var(--on-surface-variant)", textAlign: "right" }}>
+              <span style={{ fontSize: "0.68rem", color: "var(--on-surface-variant)", textAlign: "center", display: "block" }}>
                 {idx + 1}
               </span>
 
@@ -1431,6 +1431,7 @@ export default function QualityDashboard({ news, events, sources }: Props) {
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li>⚠️ 아이콘이 있는 행은 주최기관 없음·이름 짧음(데이터 짤림 의심)·카테고리 없음 중 하나 이상의 이슈가 있습니다.</li>
           <li>공개/비공개 버튼으로 뉴스룸 행사 섹션 노출 여부를 즉시 전환합니다.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>인라인 편집</strong> — 행사명·주최기관·시작일·종료일 셀을 클릭하면 바로 수정할 수 있습니다. Enter 또는 클릭 아웃 시 저장, ESC로 취소. 변경 즉시 DB에 반영됩니다.</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>
