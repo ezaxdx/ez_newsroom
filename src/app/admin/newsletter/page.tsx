@@ -86,6 +86,7 @@ export default function NewsletterPage() {
   const [imageEdits, setImageEdits] = useState<Record<string, string>>({}); // id → url 편집값
   const [imageSaving, setImageSaving] = useState<Set<string>>(new Set());
   const [imageSaved, setImageSaved] = useState<Set<string>>(new Set());
+  const [imageAutoFetching, setImageAutoFetching] = useState<Set<string>>(new Set());
 
   // ── 이력 로그 모드 ──
   const [logMode, setLogMode] = useState<"all" | "failed">("all");
@@ -362,6 +363,24 @@ export default function NewsletterPage() {
     } finally {
       setExcelUploading(false);
       e.target.value = "";
+    }
+  }
+
+  async function autoFetchOgImage(ev: EventForImage) {
+    if (!ev.website) return;
+    setImageAutoFetching((prev) => new Set(prev).add(ev.id));
+    try {
+      const res = await fetch(`/api/og-image?url=${encodeURIComponent(ev.website)}`);
+      const data = await res.json();
+      if (data.image) {
+        setImageEdits((prev) => ({ ...prev, [ev.id]: data.image }));
+      } else {
+        alert("홈페이지에서 이미지를 찾지 못했어요.");
+      }
+    } catch {
+      alert("이미지 자동 수집 실패");
+    } finally {
+      setImageAutoFetching((prev) => { const s = new Set(prev); s.delete(ev.id); return s; });
     }
   }
 
@@ -668,19 +687,35 @@ export default function NewsletterPage() {
                                 {ev.start_date}{ev.end_date && ev.end_date !== ev.start_date ? ` ~ ${ev.end_date}` : ""}
                               </span>
                             </p>
-                            <input
-                              type="text"
-                              value={imageEdits[ev.id] ?? ""}
-                              onChange={(e) => setImageEdits((prev) => ({ ...prev, [ev.id]: e.target.value }))}
-                              placeholder="이미지 URL (비워두면 자동)"
-                              style={{
-                                width: "100%", height: 28, padding: "0 8px", borderRadius: 4, fontSize: 11,
-                                border: "1px solid var(--surface-container-highest)",
-                                background: "var(--surface-container-lowest)",
-                                color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
-                              }}
-                              onKeyDown={(e) => e.key === "Enter" && saveImageUrl(ev.id)}
-                            />
+                            <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                              <input
+                                type="text"
+                                value={imageEdits[ev.id] ?? ""}
+                                onChange={(e) => setImageEdits((prev) => ({ ...prev, [ev.id]: e.target.value }))}
+                                placeholder="이미지 직접 URL (.jpg/.png)"
+                                style={{
+                                  flex: 1, height: 28, padding: "0 8px", borderRadius: 4, fontSize: 11,
+                                  border: "1px solid var(--surface-container-highest)",
+                                  background: "var(--surface-container-lowest)",
+                                  color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
+                                }}
+                                onKeyDown={(e) => e.key === "Enter" && saveImageUrl(ev.id)}
+                              />
+                              {ev.website && (
+                                <button
+                                  onClick={() => autoFetchOgImage(ev)}
+                                  disabled={imageAutoFetching.has(ev.id)}
+                                  style={{
+                                    height: 28, padding: "0 8px", borderRadius: 4, border: "1px solid var(--surface-container-highest)",
+                                    background: "var(--surface-container-low)", fontSize: 11, cursor: imageAutoFetching.has(ev.id) ? "not-allowed" : "pointer",
+                                    whiteSpace: "nowrap", color: "var(--on-surface-variant)",
+                                  }}
+                                  title="홈페이지에서 대표 이미지 자동 수집"
+                                >
+                                  {imageAutoFetching.has(ev.id) ? "..." : "🔄 자동"}
+                                </button>
+                              )}
+                            </div>
                           </div>
                           {/* 저장 버튼 */}
                           <button
