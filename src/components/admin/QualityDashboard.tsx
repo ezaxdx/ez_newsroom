@@ -1058,6 +1058,11 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "hidden">("all");
   const [venueFilter, setVenueFilter] = useState("전체");
   const [toggling, setToggling] = useState<string | null>(null);
+  // 인라인 편집
+  type EditField = "event_name" | "organizer" | "start_date" | "end_date";
+  const [editingCell, setEditingCell] = useState<{ id: string; field: EditField } | null>(null);
+  const [editValue, setEditValue] = useState("");
+  const [savingCell, setSavingCell] = useState<string | null>(null); // "id-field"
 
   const venues = useMemo(() => {
     const set = new Set(events.map((e) => e.venue));
@@ -1098,6 +1103,80 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     } finally {
       setToggling(null);
     }
+  }
+
+  function startEdit(id: string, field: EditField, currentValue: string) {
+    setEditingCell({ id, field });
+    setEditValue(currentValue ?? "");
+  }
+
+  async function saveEdit() {
+    if (!editingCell) return;
+    const { id, field } = editingCell;
+    const cellKey = `${id}-${field}`;
+    setSavingCell(cellKey);
+    try {
+      const res = await fetch("/api/admin/events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, [field]: editValue || null }),
+      });
+      if (res.ok) {
+        setEvents((prev) =>
+          prev.map((e) => e.id === id ? { ...e, [field]: editValue || null } : e)
+        );
+      }
+    } finally {
+      setSavingCell(null);
+      setEditingCell(null);
+    }
+  }
+
+  function cancelEdit() {
+    setEditingCell(null);
+    setEditValue("");
+  }
+
+  function EditableCell({ id, field, value, type = "text" }: {
+    id: string; field: EditField; value: string | null; type?: "text" | "date";
+  }) {
+    const isEditing = editingCell?.id === id && editingCell?.field === field;
+    const isSaving = savingCell === `${id}-${field}`;
+    if (isEditing) {
+      return (
+        <input
+          autoFocus
+          type={type}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
+          onBlur={saveEdit}
+          style={{
+            width: "100%", fontSize: "0.78rem", padding: "2px 6px", borderRadius: 4,
+            border: "1.5px solid var(--primary)", background: "var(--surface-container-lowest)",
+            color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
+            opacity: isSaving ? 0.5 : 1,
+          }}
+        />
+      );
+    }
+    return (
+      <span
+        onClick={() => startEdit(id, field, value ?? "")}
+        title="클릭해서 편집"
+        style={{
+          display: "block", fontSize: "0.78rem", cursor: "text",
+          color: value ? "var(--on-surface)" : "#ef4444",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          padding: "2px 4px", borderRadius: 4,
+          border: "1px dashed transparent",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--surface-container-high)")}
+        onMouseLeave={(e) => (e.currentTarget.style.borderColor = "transparent")}
+      >
+        {value || "—"}
+      </span>
+    );
   }
 
   function hasIssue(e: EventRow) {
@@ -1223,12 +1302,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                   ].filter(Boolean).join(", ")}
                     style={{ cursor: "help", flexShrink: 0 }}>⚠️</span>
                 )}
-                <span style={{
-                  fontSize: "0.8rem", color: "var(--on-surface)",
-                  overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                }} title={e.event_name}>
-                  {e.event_name}
-                </span>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <EditableCell id={e.id} field="event_name" value={e.event_name} />
+                </div>
               </div>
 
               {/* 센터 */}
@@ -1238,18 +1314,15 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               </span>
 
               {/* 주최기관 */}
-              <span style={{
-                fontSize: "0.72rem",
-                color: e.organizer ? "var(--on-surface-variant)" : "#ef4444",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-              }} title={e.organizer ?? undefined}>
-                {e.organizer ?? "없음"}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <EditableCell id={e.id} field="organizer" value={e.organizer} />
+              </div>
 
               {/* 기간 */}
-              <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
-                {fmtDate(e.start_date)}{e.end_date && e.end_date !== e.start_date ? ` ~ ${fmtDate(e.end_date)}` : ""}
-              </span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <EditableCell id={e.id} field="start_date" value={e.start_date} type="date" />
+                <EditableCell id={e.id} field="end_date" value={e.end_date} type="date" />
+              </div>
 
               {/* 카테고리 */}
               <span style={{
