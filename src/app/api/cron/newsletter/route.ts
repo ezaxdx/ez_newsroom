@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
+import { fetchOgImage } from "@/lib/fetch-og-image";
 
 export const maxDuration = 60;
 
@@ -113,10 +114,15 @@ export async function GET(req: NextRequest) {
 
   // Pick: 스코어 상위 4개 → 시작일 빠른 순 정렬
   const featuredRaw = scored.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const featuredEvents: EventCard[] = featuredRaw.map(e => ({
-    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null, image_url: e.image_url ?? null, website: e.website ?? null,
-  }));
+  const featuredEvents: EventCard[] = await Promise.all(
+    featuredRaw.map(async (e) => {
+      const imageUrl = e.image_url ?? await fetchOgImage(e.website ?? null);
+      return {
+        name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+        venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,
+      };
+    })
+  );
 
   // Weekly List: 이번 주 행사 중 min score + 제외 키워드 필터
   const featuredIds = new Set(featuredRaw.map(e => e.id));
