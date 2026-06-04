@@ -2,8 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin-auth";
 
-// 의미 없는 행사명
+// 행사명 완전 일치 삭제
 const NOISE_NAMES = ["대관 행사", "대관행사", "대관", "행사 대관"];
+
+// 행사명에 포함되면 삭제 (키워드 포함 방식)
+const NOISE_KEYWORDS = [
+  "정기총회", "임시총회", "이사회", "간담회",
+  "육아", "웨딩", "wedding",
+  "설명회", "공청회", "청문회",
+  "임용", "채용", "졸업식", "입학식",
+];
 
 // 해외 venue는 그대로 오픈 유지 — 비공개 처리 안 함
 
@@ -37,8 +45,13 @@ async function runDedup(dryRun: boolean) {
 
   const toDelete = new Set<string>();
 
-  // 1. 노이즈 행사명 삭제
-  const noiseRows = rows.filter((e) => NOISE_NAMES.some((n) => e.event_name?.trim() === n));
+  // 1. 노이즈 행사명 삭제 (완전 일치 + 키워드 포함)
+  const noiseRows = rows.filter((e) => {
+    const name = e.event_name?.trim() ?? "";
+    const nameLower = name.toLowerCase();
+    return NOISE_NAMES.some((n) => name === n)
+      || NOISE_KEYWORDS.some((kw) => nameLower.includes(kw.toLowerCase()));
+  });
   noiseRows.forEach((e) => toDelete.add(e.id));
 
   // 2. 중복 제거 (event_name + start_date 기준)
