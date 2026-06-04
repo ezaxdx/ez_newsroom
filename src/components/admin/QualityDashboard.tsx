@@ -1058,6 +1058,16 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "hidden">("all");
   const [venueFilter, setVenueFilter] = useState("전체");
   const [toggling, setToggling] = useState<string | null>(null);
+  // 키워드 필터 관리
+  type KeywordFilter = { id: string; keyword: string; memo: string | null };
+  const [filters, setFilters] = useState<KeywordFilter[]>([]);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [newMemo, setNewMemo] = useState("");
+  const [addingKeyword, setAddingKeyword] = useState(false);
+  // 비공개 시 키워드 추가 팝업
+  const [keywordPrompt, setKeywordPrompt] = useState<{ id: string; eventName: string } | null>(null);
+  const [promptKeyword, setPromptKeyword] = useState("");
   // 인라인 편집
   type EditField = "event_name" | "organizer" | "start_date" | "end_date";
   const [editingCell, setEditingCell] = useState<{ id: string; field: EditField } | null>(null);
@@ -1087,7 +1097,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     shortName: events.filter((e) => e.event_name.length <= 4).length,
   }), [events]);
 
-  async function togglePublish(id: string, current: boolean) {
+  async function togglePublish(id: string, current: boolean, eventName?: string) {
     setToggling(id);
     try {
       const res = await fetch("/api/admin/events", {
@@ -1099,10 +1109,58 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         setEvents((prev) =>
           prev.map((e) => e.id === id ? { ...e, is_published: !current } : e)
         );
+        // 공개→비공개 전환 시 키워드 추가 팝업
+        if (current && eventName) {
+          setKeywordPrompt({ id, eventName });
+          setPromptKeyword("");
+        }
       }
     } finally {
       setToggling(null);
     }
+  }
+
+  async function loadFilters() {
+    const res = await fetch("/api/admin/event-filters");
+    const json = await res.json();
+    setFilters(json.data ?? []);
+  }
+
+  async function addKeyword() {
+    if (!newKeyword.trim()) return;
+    setAddingKeyword(true);
+    try {
+      const res = await fetch("/api/admin/event-filters", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keyword: newKeyword.trim(), memo: newMemo.trim() || undefined }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setFilters((prev) => [json.data, ...prev]);
+        setNewKeyword(""); setNewMemo("");
+      }
+    } finally { setAddingKeyword(false); }
+  }
+
+  async function deleteKeyword(id: string) {
+    await fetch("/api/admin/event-filters", {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id }),
+    });
+    setFilters((prev) => prev.filter((f) => f.id !== id));
+  }
+
+  async function addKeywordFromPrompt() {
+    if (!promptKeyword.trim()) { setKeywordPrompt(null); return; }
+    await fetch("/api/admin/event-filters", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword: promptKeyword.trim(), memo: "비공개 처리 시 추가" }),
+    });
+    setKeywordPrompt(null);
+    setPromptKeyword("");
   }
 
   function startEdit(id: string, field: EditField, currentValue: string) {
@@ -1193,6 +1251,80 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     <div>
       {/* 수동 관리 패널 */}
       <ManualOpsPanel />
+
+      {/* 비공개 시 키워드 추가 팝업 */}
+      {keywordPrompt && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ background: "var(--surface-container-lowest)", borderRadius: 12, padding: 24, width: 400, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 15 }}>차단 키워드 추가</p>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: "var(--on-surface-variant)" }}>
+              <b>{keywordPrompt.eventName}</b>을 비공개 처리했어요.<br/>
+              앞으로 비슷한 행사도 자동 비공개하려면 키워드를 입력하세요.
+            </p>
+            <input
+              autoFocus
+              value={promptKeyword}
+              onChange={(e) => setPromptKeyword(e.target.value)}
+              placeholder="예: 총회, 웨딩, 설명회..."
+              onKeyDown={(e) => e.key === "Enter" && addKeywordFromPrompt()}
+              style={{
+                width: "100%", height: 34, padding: "0 10px", borderRadius: 6, fontSize: 13,
+                border: "1px solid var(--surface-container-highest)",
+                background: "var(--surface-container-low)",
+                color: "var(--on-surface)", outline: "none", boxSizing: "border-box", marginBottom: 14,
+              }}
+            />
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setKeywordPrompt(null)} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}>
+                그냥 비공개만
+              </button>
+              <button onClick={addKeywordFromPrompt} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                키워드 추가
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 키워드 필터 관리 */}
+      <div style={{ marginBottom: 16, border: "1px solid var(--surface-container-high)", borderRadius: 10, overflow: "hidden" }}>
+        <button
+          onClick={() => { setFiltersOpen(o => !o); if (!filtersOpen && filters.length === 0) loadFilters(); }}
+          style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--surface-container)", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--on-surface)" }}
+        >
+          <span>🚫 자동 비공개 키워드 관리</span>
+          <span style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>{filtersOpen ? "▲" : "▼"}</span>
+        </button>
+        {filtersOpen && (
+          <div style={{ padding: "12px 16px" }}>
+            <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--on-surface-variant)" }}>
+              행사명에 아래 키워드가 포함되면 수집 시 자동으로 비공개 처리됩니다.
+            </p>
+            {/* 키워드 추가 */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+              <input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} placeholder="키워드" onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+                style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
+              <input value={newMemo} onChange={(e) => setNewMemo(e.target.value)} placeholder="메모(선택)"
+                style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
+              <button onClick={addKeyword} disabled={addingKeyword || !newKeyword.trim()} style={{ height: 30, padding: "0 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>추가</button>
+            </div>
+            {/* 키워드 목록 */}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+              {filters.length === 0 && <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>키워드 없음</span>}
+              {filters.map((f) => (
+                <span key={f.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, background: "var(--surface-container-high)", fontSize: 12, color: "var(--on-surface)" }}>
+                  {f.keyword}
+                  {f.memo && <span style={{ fontSize: 10, color: "var(--on-surface-variant)" }}>({f.memo})</span>}
+                  <button onClick={() => deleteKeyword(f.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* 통계 */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 20 }}>
@@ -1333,7 +1465,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
               {/* 공개 여부 토글 */}
               <button
-                onClick={() => togglePublish(e.id, e.is_published)}
+                onClick={() => togglePublish(e.id, e.is_published, e.event_name)}
                 disabled={toggling === e.id}
                 style={{
                   padding: "3px 10px", borderRadius: 20, fontSize: "0.68rem",

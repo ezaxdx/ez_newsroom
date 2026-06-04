@@ -306,8 +306,26 @@ Deno.serve(async (req: Request) => {
       upsertEvents(keoaEvents, "KEOA"),
     ]);
 
+    // ── 키워드 필터 자동 비공개 처리 ──
+    const { data: filters } = await supabase
+      .from("event_keyword_filters")
+      .select("keyword");
+    let autoHidden = 0;
+    if (filters && filters.length > 0) {
+      for (const { keyword } of filters) {
+        const { count } = await supabase
+          .from("convention_events")
+          .update({ is_published: false })
+          .ilike("event_name", `%${keyword}%`)
+          .eq("is_published", true)
+          .select("*", { count: "exact", head: true });
+        autoHidden += count ?? 0;
+      }
+      console.log(`키워드 필터: ${autoHidden}건 자동 비공개`);
+    }
+
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(`완료: 쇼알라 ${showalaNew}건, KEOA ${keoaNew}건 신규, 기존 ${fixed}건 URL 수정 (${elapsed}s)`);
+    console.log(`완료: 쇼알라 ${showalaNew}건, KEOA ${keoaNew}건 신규, 자동비공개 ${autoHidden}건, 기존 ${fixed}건 URL 수정 (${elapsed}s)`);
 
     return new Response(
       JSON.stringify({ ok: true, showala: showalaNew, keoa: keoaNew, fixed, elapsed }),
