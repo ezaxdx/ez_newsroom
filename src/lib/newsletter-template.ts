@@ -132,7 +132,9 @@ function pickCard(ev: EventCard, vol: number, site_url: string): string {
                 style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
          </td></tr>
        </table>`;
-  const link = withUTM(ev.website ?? site_url, vol);
+  const link = ev.website
+    ? withUTM(ev.website, vol)
+    : `https://search.naver.com/search.naver?query=${encodeURIComponent(ev.name)}`;
   const dateRange = ev.end_date && ev.end_date !== ev.start_date
     ? `${ev.start_date} ~ ${ev.end_date}`
     : ev.start_date;
