@@ -9,8 +9,9 @@ export const EZPMP_HIGH_MATCH: string[] = [
   "관광", "MICE", "마이스", "여행", "travel", "tourism", "컨벤션",
   "콘텐츠", "content", "방송", "미디어", "K-콘텐츠", "웹툰", "영상",
   "의료", "헬스케어", "healthcare", "medical", "바이오", "제약", "헬스",
-  "국제", "summit", "forum", "포럼", "컨퍼런스", "conference",
+  "국제", "국제회의", "summit", "forum", "포럼", "컨퍼런스", "conference",
   "정부", "공공", "행정", "혁신",
+  "전시홍보관", "홍보관", "기업회의",
 ];
 
 export const EZPMP_MEDIUM_MATCH: string[] = [
@@ -60,6 +61,11 @@ export const EZPMP_PARTNERS: string[] = [
   "국가과학기술연구회", "NST",
   "광주비엔날레",
   "서울경제진흥원", "인천관광공사",
+  "한국수산회",
+  "한국산업은행", "KDB",
+  "2018평창기념재단", "평창기념재단",
+  "경상북도경제진흥원",
+  "킨텍스", "KINTEX",
   "디지털플랫폼정부위원회",
   "탄소중립녹색성장위원회",
   "한국자동차모빌리티산업협회", "KAMA",
@@ -148,4 +154,5 @@ export const WEEKLY_EXCLUDE_KEYWORDS = [
   "정기총회", "임시총회", "이사회", "간담회", "위원회",
   "강의", "교육", "워크숍", "workshop", "세미나", "seminar",
   "출산", "육아", "임신", "영유아", "맘", "베이비", "baby", "키즈", "kids",
+  "키즈카페", "놀이터", "놀이공간", "놀이시설", "놀이구조물", "실내놀이",
 ];
