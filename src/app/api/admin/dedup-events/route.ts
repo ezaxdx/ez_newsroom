@@ -5,11 +5,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 // 의미 없는 행사명
 const NOISE_NAMES = ["대관 행사", "대관행사", "대관", "행사 대관"];
 
-// 해외/불명확 venue 키워드
-const FOREIGN_VENUE_KEYWORDS = [
-  "Centre", "Center", "Kemayoran", "Singapore", "Bogotá", "Norte",
-  "Versailles", "SECC", "V.E.C", "Online", "쾰른", "베트남",
-];
+// 해외 venue는 그대로 오픈 유지 — 비공개 처리 안 함
 
 type EventRow = {
   id: string;
@@ -70,14 +66,6 @@ async function runDedup(dryRun: boolean) {
     dupDetails.push({ keep: keep.event_name, discard: discard.map((r) => r.id) });
   }
 
-  // 3. 해외/불명확 venue → is_published = false
-  const foreignRows = rows.filter(
-    (e) =>
-      !toDelete.has(e.id) &&
-      e.is_published &&
-      FOREIGN_VENUE_KEYWORDS.some((kw) => e.venue?.includes(kw))
-  );
-
   if (!dryRun) {
     const ids = [...toDelete];
     const BATCH = 100;
@@ -88,19 +76,12 @@ async function runDedup(dryRun: boolean) {
         .in("id", ids.slice(i, i + BATCH));
       if (delErr) throw new Error(delErr.message);
     }
-    if (foreignRows.length) {
-      const { error: updErr } = await supabase
-        .from("convention_events")
-        .update({ is_published: false })
-        .in("id", foreignRows.map((e) => e.id));
-      if (updErr) throw new Error(updErr.message);
-    }
   }
 
   return {
     noise:   noiseRows.length,
     dup:     toDelete.size - noiseRows.length,
-    foreign: foreignRows.length,
+    foreign: 0,
     total_delete: toDelete.size,
     dry_run: dryRun,
     dup_groups: dupDetails.length,
