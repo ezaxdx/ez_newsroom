@@ -129,9 +129,10 @@ export function scoreEvent(event: EventForScore, today: Date): number {
 
   const startMs  = new Date(event.start_date).getTime();
   const daysUntil = (startMs - today.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysUntil >= 7 && daysUntil <= 30)       score += 20;
-  else if (daysUntil > 30 && daysUntil <= 90)  score += 10;
-  else if (daysUntil > 0  && daysUntil < 7)    score += 5;
+  if (daysUntil >= 0  && daysUntil < 7)        score += 50; // 이번 주
+  else if (daysUntil >= 7 && daysUntil <= 30)  score += 40; // 이번 달
+  else if (daysUntil > 30 && daysUntil <= 60)  score += 10; // 다음 달
+  else if (daysUntil > 60 && daysUntil <= 90)  score += 5;  // 2달 후
 
   return score;
 }
