@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
-import { fetchOgImage } from "@/lib/fetch-og-image";
+import { fetchEventImage } from "@/lib/fetch-event-image";
 
 export const maxDuration = 60;
 
@@ -134,7 +134,7 @@ export async function GET(req: NextRequest) {
   const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const featuredEvents: EventCard[] = await Promise.all(
     featuredRaw.map(async (e) => {
-      const imageUrl = e.image_url ?? await fetchOgImage(e.website ?? null);
+      const imageUrl = await fetchEventImage(e.event_name, e.website ?? null, e.image_url ?? null);
       return {
         name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
         venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,

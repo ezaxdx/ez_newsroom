@@ -367,15 +367,17 @@ export default function NewsletterPage() {
   }
 
   async function autoFetchOgImage(ev: EventForImage) {
-    if (!ev.website) return;
     setImageAutoFetching((prev) => new Set(prev).add(ev.id));
     try {
-      const res = await fetch(`/api/og-image?url=${encodeURIComponent(ev.website)}`);
+      // 네이버 이미지 검색 우선 + og:image fallback
+      const params = new URLSearchParams({ query: ev.event_name });
+      if (ev.website) params.set("url", ev.website);
+      const res = await fetch(`/api/og-image?${params.toString()}`);
       const data = await res.json();
-      if (data.image) {
+      if (data.image && !data.image.includes("ez-fallback")) {
         setImageEdits((prev) => ({ ...prev, [ev.id]: data.image }));
       } else {
-        alert("홈페이지에서 이미지를 찾지 못했어요.");
+        alert("이미지를 찾지 못했어요. 직접 URL을 입력해주세요.");
       }
     } catch {
       alert("이미지 자동 수집 실패");

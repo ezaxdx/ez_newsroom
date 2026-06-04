@@ -86,7 +86,36 @@ async function fetchImage(fetchUrl: string, isNaver: boolean): Promise<string | 
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
-  if (!url) return NextResponse.json({ image: FALLBACK_IMAGE }, { status: 400 });
+  const query = req.nextUrl.searchParams.get("query"); // 행사명 (네이버 검색용)
+  if (!url && !query) return NextResponse.json({ image: FALLBACK_IMAGE }, { status: 400 });
+
+  // 네이버 이미지 검색 우선 시도 (query 파라미터 있을 때)
+  if (query) {
+    const clientId = process.env.NAVER_CLIENT_ID;
+    const clientSecret = process.env.NAVER_CLIENT_SECRET;
+    if (clientId && clientSecret) {
+      try {
+        const naverRes = await fetch(
+          `https://openapi.naver.com/v1/search/image.json?query=${encodeURIComponent(query)}&display=1&sort=sim`,
+          {
+            headers: {
+              "X-Naver-Client-Id": clientId,
+              "X-Naver-Client-Secret": clientSecret,
+            },
+            signal: AbortSignal.timeout(4000),
+          }
+        );
+        if (naverRes.ok) {
+          const data = await naverRes.json();
+          const item = data?.items?.[0];
+          const image = item?.thumbnail ?? item?.link ?? null;
+          if (image) return NextResponse.json({ image });
+        }
+      } catch { /* fallthrough */ }
+    }
+  }
+
+  if (!url) return NextResponse.json({ image: FALLBACK_IMAGE });
 
   // 네이버 블로그는 PostView.naver로 변환해서 fetch
   const fetchUrl = resolveNaverBlogUrl(url);
