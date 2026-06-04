@@ -1069,7 +1069,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [keywordPrompt, setKeywordPrompt] = useState<{ id: string; eventName: string } | null>(null);
   const [promptKeyword, setPromptKeyword] = useState("");
   // 인라인 편집
-  type EditField = "event_name" | "organizer" | "start_date" | "end_date";
+  type EditField = "event_name" | "organizer" | "start_date" | "end_date" | "venue";
   const [editingCell, setEditingCell] = useState<{ id: string; field: EditField } | null>(null);
   const [editValue, setEditValue] = useState("");
   const [savingCell, setSavingCell] = useState<string | null>(null); // "id-field"
@@ -1440,10 +1440,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               </div>
 
               {/* 센터 */}
-              <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)",
-                overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {e.venue}
-              </span>
+              <div style={{ minWidth: 0 }}>
+                <EditableCell id={e.id} field="venue" value={e.venue} />
+              </div>
 
               {/* 주최기관 */}
               <div style={{ minWidth: 0 }}>
