@@ -1163,6 +1163,18 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     setPromptKeyword("");
   }
 
+  async function deleteAsDuplicate() {
+    if (!keywordPrompt) return;
+    await fetch("/api/admin/dedup-events", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: [keywordPrompt.id] }),
+    });
+    // 로컬 상태에서 제거
+    setEvents((prev) => prev.filter((e) => e.id !== keywordPrompt.id));
+    setKeywordPrompt(null);
+  }
+
   function startEdit(id: string, field: EditField, currentValue: string) {
     setEditingCell({ id, field });
     setEditValue(currentValue ?? "");
@@ -1277,9 +1289,12 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 color: "var(--on-surface)", outline: "none", boxSizing: "border-box", marginBottom: 14,
               }}
             />
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
               <button onClick={() => setKeywordPrompt(null)} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}>
                 그냥 비공개만
+              </button>
+              <button onClick={deleteAsDuplicate} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "#fee2e2", color: "#dc2626", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                🗑 중복 삭제
               </button>
               <button onClick={addKeywordFromPrompt} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
                 키워드 추가

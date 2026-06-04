@@ -118,6 +118,18 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   const body = await req.json().catch(() => ({}));
+
+  // 단건 삭제 (중복 처리용)
+  if (Array.isArray(body.ids)) {
+    const supabase = createAdminClient();
+    const { error } = await supabase
+      .from("convention_events")
+      .delete()
+      .in("id", body.ids);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, deleted: body.ids.length });
+  }
+
   const dryRun = body.dry_run === true;
 
   try {
