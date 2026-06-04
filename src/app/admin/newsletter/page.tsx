@@ -1205,11 +1205,12 @@ export default function NewsletterPage() {
             </Section>
 
             <Section title="STEP 2 · 행사 데이터 확인">
-              <Item text="EZ Letter Pick: 오늘~90일 이내 행사 중 EZPMP 관련도 스코어 상위 4개 자동 선정 → 시작일 빠른 순 정렬" />
-              <Indent><b>이미지 우선순위:</b> DB image_url → 웹사이트 og:image → EZ 로고 플레이스홀더</Indent>
+              <Item text="EZ Letter Pick: 30일 이내 행사 우선 선정 (부족하면 60일→90일 확장), 최근 2개 호 중복 제외" />
+              <Indent><b>이미지 우선순위:</b> 네이버 이미지 자동 검색 → 웹사이트 og:image → 직접 등록 이미지 → EZ 로고</Indent>
               <Indent><b>설명 문구 우선순위:</b> DB description → 웹사이트 og:description → Gemini AI 자동 생성 후 DB 저장</Indent>
+              <Indent><b>Pick 선정 기준:</b> MICE·전시·박람회·국제회의 + 관광·환경·콘텐츠·AI 분야 + 주요 컨벤션센터 보정</Indent>
               <Item text="Weekly Event List: 이번 주 시작 행사 중 스코어 13점 이상만 표시 (최대 7개, Pick 제외)" />
-              <Indent><b>자동 제외 키워드:</b> 정기총회, 임시총회, 이사회, 간담회, 위원회, 강의, 교육, 워크숍, 세미나</Indent>
+              <Indent><b>자동 제외 키워드:</b> 정기총회, 임시총회, 이사회, 간담회, 위원회, 강의, 교육, 워크숍, 세미나, 육아, 웨딩 등</Indent>
               <Note>산하 행사가 중복 노출되거나 관련 없는 행사가 뜨면 행사 관리에서 해당 행사를 비공개로 변경하세요.</Note>
             </Section>
 
@@ -1250,15 +1251,29 @@ export default function NewsletterPage() {
             </Section>
 
             <Section title="⚙️ 자동 발송 (Cron) 설정">
-              <Item text="Vercel Hobby 플랜 제한: 하루 1회만 실행 (매일 KST 10:00 = UTC 01:00)" />
               <Item text="발송 요일을 체크박스로 다중 선택 — 해당 요일이 아닌 날은 자동 스킵" />
               <Item text="기본 인사말 설정 가능 (자동 발송 시 사용, 비워두면 빈 인사말)" />
             </Section>
 
+            <Section title="🤖 자동 큐레이션 (뉴스 수집)">
+              <Item text="cron-job.org에서 매주 화·목 09:00 KST에 자동 실행" />
+              <Item text="RSS 소스 관리(/admin/rss)에 등록된 활성 소스에서 기사를 자동 수집·발행" />
+              <Item text="실패 알림: k2cow0610@ezpmp.co.kr 로 이메일 발송" />
+              <Note>수동 실행: 정합성 관리 → 큐레이션 보드 → 수동 실행 버튼</Note>
+            </Section>
+
+            <Section title="🗂️ 행사 데이터 관리">
+              <Item text="정합성 관리 → 행사 탭에서 행사명·센터·주최기관·기간 직접 편집 (셀 클릭)" />
+              <Item text="비공개 처리 시 팝업 → 키워드 추가하면 다음 수집 때 동일 유형 자동 비공개" />
+              <Item text="🚫 자동 비공개 키워드 관리: 행사 탭 상단에서 키워드 추가/삭제" />
+              <Item text="중복/불량 정리: 행사 탭 하단 → 미리보기 확인 후 실행 (복원 불가)" />
+              <Note>행사 데이터 수집: 정합성 관리 → 행사 탭 → 📡 행사 데이터 수집 버튼 (쇼알라 + KEOA)</Note>
+            </Section>
+
             <Section title="🖼️ 행사 이미지 직접 등록">
-              <Item text="행사 관리에서 해당 행사의 이미지 URL에 직접 입력" />
-              <Item text="흰색·투명 로고는 흰 배경에서 안 보이므로 컬러 이미지 URL 권장" />
-              <Note>이미지 URL이 없으면 웹사이트 대표 이미지 자동 수집 → 없으면 EZ 로고 플레이스홀더 표시</Note>
+              <Item text="발송 탭 → 🖼️ Pick 이미지 관리에서 🔄 자동 버튼 클릭 (네이버 이미지 자동 검색)" />
+              <Item text="자동 수집 결과가 마음에 안 들면 직접 이미지 URL 입력 후 저장" />
+              <Note>이미지 우선순위: 네이버 검색 → 홈페이지 og:image → 직접 등록 URL → EZ 로고</Note>
             </Section>
 
           </div>
