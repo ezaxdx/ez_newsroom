@@ -33,14 +33,15 @@ export async function GET(req: Request) {
   // Edge Function 호출 — await으로 요청 전송을 보장하되 8초 내 응답 없으면 포기
   // (Supabase Edge Function은 클라이언트 연결 끊겨도 계속 실행됨)
   const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate`;
-  const cronSecret = process.env.CRON_SECRET ?? "";
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
   try {
     await fetch(edgeFnUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${cronSecret}`,
+        "Authorization": `Bearer ${serviceRoleKey}`,
+        "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       },
       signal: AbortSignal.timeout(8000),
     });

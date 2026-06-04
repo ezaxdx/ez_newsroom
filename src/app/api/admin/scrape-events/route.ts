@@ -12,14 +12,16 @@ export async function POST() {
   if (unauth) return unauth;
 
   const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/scrape-events`;
-  const cronSecret = process.env.CRON_SECRET ?? "";
+  // Supabase Edge Function은 유효한 JWT(service role key)로 인증해야 게이트웨이 통과
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
   try {
     await fetch(edgeFnUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${cronSecret}`,
+        "Authorization": `Bearer ${serviceRoleKey}`,
+        "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       },
       signal: AbortSignal.timeout(8000),
     });
