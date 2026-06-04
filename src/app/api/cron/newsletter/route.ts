@@ -112,8 +112,26 @@ export async function GET(req: NextRequest) {
     }))
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
-  // Pick: 스코어 상위 4개 → 시작일 빠른 순 정렬
-  const featuredRaw = scored.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  // 최근 2개 발송 호에 나온 Pick 행사 제외 (중복 방지)
+  const { data: recentIssues } = await supabase
+    .from("newsletter_issues")
+    .select("featured_event_ids")
+    .eq("status", "sent")
+    .order("sent_at", { ascending: false })
+    .limit(2);
+  const recentlyFeatured = new Set<string>(
+    (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
+  );
+
+  // Pick 선정: 30일 이내 우선 → 부족하면 60일 → 부족하면 90일 전체
+  const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const d60 = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
+  let pickPool = fresh.filter(e => e.start_date <= d30);
+  if (pickPool.length < 4) pickPool = fresh.filter(e => e.start_date <= d60);
+  if (pickPool.length < 4) pickPool = fresh;
+  if (pickPool.length < 4) pickPool = scored;
+  const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
   const featuredEvents: EventCard[] = await Promise.all(
     featuredRaw.map(async (e) => {
       const imageUrl = e.image_url ?? await fetchOgImage(e.website ?? null);
@@ -179,7 +197,7 @@ export async function GET(req: NextRequest) {
   }
 
   const { data: issue, error: issueErr } = await supabase.from("newsletter_issues")
-    .insert({ vol_number, editorial_text: settings.default_editorial ?? "", status: "sent", total_sent, total_failed, sent_at: new Date().toISOString() })
+    .insert({ vol_number, editorial_text: settings.default_editorial ?? "", status: "sent", total_sent, total_failed, sent_at: new Date().toISOString(), featured_event_ids: featuredRaw.map(e => e.id) })
     .select().single();
 
   if (issueErr) console.error("[cron] newsletter_issues insert 실패:", issueErr.message);
