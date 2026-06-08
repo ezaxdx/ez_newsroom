@@ -935,11 +935,28 @@ export default function NewsletterPage() {
 
               {/* 엑셀 업로드 */}
               <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--surface-container-highest)" }}>
-                <p style={{ margin: "0 0 8px", fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>
-                  엑셀 일괄 업로드
-                </p>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                    엑셀 일괄 업로드
+                  </p>
+                  <a
+                    href="/api/admin/newsletter/subscribers/template"
+                    download="subscribers_template.xlsx"
+                    style={{
+                      display: "inline-flex", alignItems: "center", gap: 4,
+                      padding: "4px 10px", borderRadius: 6,
+                      border: "1px solid var(--primary)",
+                      background: "transparent", color: "var(--primary)",
+                      fontSize: 12, fontWeight: 500, textDecoration: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    ⬇ 템플릿 다운로드
+                  </a>
+                </div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                  이메일(email) · 이름(name) 컬럼이 있는 xlsx 파일을 업로드하세요.
+                  <strong>email</strong> (필수) · <strong>name</strong> (선택) 컬럼이 있는 xlsx 파일을 업로드하세요.
+                  템플릿을 먼저 받아서 작성하면 편해요.
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
@@ -957,7 +974,7 @@ export default function NewsletterPage() {
                   </button>
                   {excelResult && (
                     <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-                      추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명
+                      ✅ 추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명
                     </span>
                   )}
                 </div>
@@ -1245,7 +1262,8 @@ export default function NewsletterPage() {
             </div>
 
             <Section title="📋 수신자 관리">
-              <Item text="개별 추가: 이메일 + 이름(선택) 입력 후 추가 / 엑셀 일괄 업로드(email·이름 컬럼)" />
+              <Item text="개별 추가: 이메일 + 이름(선택) 입력 후 추가" />
+              <Item text="엑셀 일괄 업로드: '템플릿 다운로드' 버튼으로 양식 받아 email(필수)·name(선택) 채운 뒤 업로드" />
               <Item text="토글로 개별 활성/비활성 전환 — 비활성 수신자에게는 발송되지 않음" />
               <Note>중복 이메일은 자동 스킵됩니다.</Note>
             </Section>
