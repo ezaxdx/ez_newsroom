@@ -423,7 +423,7 @@ async function fetchGmailNewsletters(
   return results;
 }
 
-/* ── Gemini 기사 생성 ── */
+/* ── Claude 기사 생성 ── */
 async function generateArticle(
   apiKey: string, articleText: string, url: string,
   persona: string, audience: string, keywords: string[],
@@ -431,7 +431,7 @@ async function generateArticle(
   companyContext?: string
 ): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
-  const prompt = `${persona}
+  const userPrompt = `${persona}
 타겟 독자: ${audience}${keywordHint}
 
 퀄리티 점수 기준 (1~10):
@@ -463,7 +463,7 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 [Intermediate] ${levelPrompts["Intermediate"] ?? "실무 담당자 관점에서 작성하세요."}
 [Advanced] ${levelPrompts["Advanced"] ?? "전략적 심층 분석으로 작성하세요."}
 
-문체 규칙: 모든 문장은 반드시 '~다' 체(예: ~했다, ~이다, ~한다)로 통일하세요. '~습니다', '~입니다', '~합니다' 등 경어체 사용 금지.
+문체 규칙: '~습니다/~입니다' 경어체로 작성하되, 딱딱하지 않고 읽기 편한 뉴스레터 톤으로 작성하세요. 신문체('~다', '~한다') 사용 금지.
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
 {"quality_score":점수,"level":"레벨","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
@@ -472,28 +472,25 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 ${articleText.length > 50 ? `원문:\n${articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
 
   try {
-    const body: Record<string, unknown> = {
-      contents: [{ parts: [{ text: prompt }] }],
-    };
-    if (companyContext?.trim()) {
-      body.system_instruction = { parts: [{ text: companyContext.trim() }] };
-    }
     const res = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: userPrompt }] }],
+          ...(companyContext?.trim() ? { systemInstruction: { parts: [{ text: companyContext.trim() }] } } : {}),
+        }),
         signal: AbortSignal.timeout(30000),
       }
     );
     const json = await res.json();
     if (!res.ok) { console.error("[Gemini error]", json); return null; }
-    const raw = json.candidates?.[0]?.content?.parts?.[0]?.text?.trim()
-      ?.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "") ?? "";
+    const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim()
+      .replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
     return JSON.parse(raw);
   } catch (e) {
-    console.error("[Gemini error]", e);
+    console.error("[Claude error]", e);
     return null;
   }
 }
@@ -615,7 +612,7 @@ Deno.serve(async (req) => {
       const rssItems = parseRSS(xml);
       console.log(`[RSS] ${source.source_name}: ${rssItems.length}개`);
 
-      // URL 해석 병렬처리 후 기사 생성은 순차처리 (Gemini 병렬 호출 방지)
+      // URL 해석 병렬처리 후 기사 생성은 순차처리 (Claude 병렬 호출 방지)
       const resolved = await Promise.all(
         rssItems.map(async (item) => {
           const absLink = toAbsoluteUrl(item.link, source.url);
