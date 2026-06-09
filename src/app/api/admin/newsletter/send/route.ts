@@ -88,12 +88,29 @@ export async function POST(req: NextRequest) {
     .toISOString()
     .split("T")[0];
 
-  // Vol number = 실제 발송 완료(status=sent)된 건수 + 1 (테스트/드래프트는 미포함)
+  // Vol number: 오늘(KST) 이미 발송된 호가 있으면 같은 Vol 재사용, 없으면 새 번호
+  // → 같은 날 분할발송·재발송해도 Vol이 증가하지 않음
+  const todayKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+  const todayKSTStr = todayKST.toISOString().split("T")[0];
+  const kstDayStart = new Date(`${todayKSTStr}T00:00:00+09:00`).toISOString();
+  const kstDayEnd   = new Date(`${todayKSTStr}T23:59:59+09:00`).toISOString();
+
+  const { data: todayIssues } = await supabase
+    .from("newsletter_issues")
+    .select("vol_number")
+    .eq("status", "sent")
+    .gte("sent_at", kstDayStart)
+    .lte("sent_at", kstDayEnd)
+    .order("sent_at", { ascending: true })
+    .limit(1);
+
   const { count: issueCount } = await supabase
     .from("newsletter_issues")
     .select("*", { count: "exact", head: true })
     .eq("status", "sent");
-  const vol_number = (issueCount ?? 0) + 1;
+
+  // 오늘 발송분 있으면 그 Vol 사용, 없으면 전체 발송 횟수 + 1
+  const vol_number = todayIssues?.[0]?.vol_number ?? (issueCount ?? 0) + 1;
 
   const y = today.getFullYear();
   const mo = String(today.getMonth() + 1).padStart(2, "0");
