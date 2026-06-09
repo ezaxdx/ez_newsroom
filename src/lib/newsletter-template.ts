@@ -100,7 +100,8 @@ function newsCard(item: NewsCard, vol: number, site_url: string, is_email = fals
            style="display:block;width:255px;height:129px;object-fit:cover;">`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
-           <span style="font-size:13px;font-weight:500;color:#9E9587;font-family:Arial,sans-serif;">EZ Letter</span>
+           <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
+                style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
          </td></tr>
        </table>`;
   const summary = item.summary;
@@ -131,7 +132,8 @@ function pickCard(ev: EventCard, vol: number, site_url: string, is_email = false
        </table>`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
-           <span style="font-size:13px;font-weight:500;color:#9E9587;font-family:Arial,sans-serif;">EZ Letter</span>
+           <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
+                style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
          </td></tr>
        </table>`;
   const link = ev.website
@@ -301,7 +303,8 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <!-- ── FOOTER ── -->
     <tr>
       <td style="background:${C.white};border-top:1px solid ${C.border};padding:28px 32px 40px;text-align:center;">
-        <p style="margin:0 0 10px;font-size:20px;font-weight:700;color:${C.dark};font-family:${FONT_TOKKI};letter-spacing:0.05em;">EZ Letter</p>
+        <img src="${site_url}/images/ez-letter-logo.png" width="80" alt="EZ Letter"
+             style="display:inline-block;max-width:80px;height:auto;margin-bottom:14px;">
         <p style="margin:0 0 8px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
           <a href="${withUTM(site_url, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">EZ 뉴스룸 바로가기</a>
         </p>
