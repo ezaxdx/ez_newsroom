@@ -66,7 +66,7 @@ export async function GET() {
     .order("start_date", { ascending: true })
     .limit(200);
 
-  const scored = (eventsPool ?? [])
+  const scoredAll = (eventsPool ?? [])
     .map((e) => ({ ...e, _score: scoreEvent({
       event_name: e.event_name ?? "",
       event_name_en: e.event_name_en ?? null,
@@ -76,6 +76,15 @@ export async function GET() {
       venue: e.venue ?? "",
       start_date: e.start_date ?? todayStr,
     }, today) }))
+    .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
+
+  // 동시개최 중복 제거: 같은 venue + start_date 조합은 점수 1위만 남김
+  const venueDateMap = new Map<string, typeof scoredAll[number]>();
+  for (const e of scoredAll) {
+    const key = `${(e.venue ?? "").trim()}:${e.start_date ?? ""}`;
+    if (!venueDateMap.has(key)) venueDateMap.set(key, e);
+  }
+  const scored = Array.from(venueDateMap.values())
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
   // 최근 2개 발송 호에 나온 Pick 행사 제외 (중복 방지)
