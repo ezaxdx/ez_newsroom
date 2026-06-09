@@ -6,7 +6,7 @@ import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/token-crypto";
 
-async function getGmailClient() {
+export async function getGmailClient() {
   const clientId = process.env.GMAIL_CLIENT_ID;
   const clientSecret = process.env.GMAIL_CLIENT_SECRET;
   const redirectUri = process.env.GMAIL_REDIRECT_URI;
@@ -50,7 +50,7 @@ async function getGmailClient() {
 }
 
 /** RFC2822 형식 이메일 메시지 생성 */
-function makeRawMessage(params: {
+export function makeRawMessage(params: {
   from: string;
   to: string;
   subject: string;

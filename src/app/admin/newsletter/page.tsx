@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink } from "lucide-react";
 
 type Subscriber = {
@@ -15,9 +15,11 @@ type Issue = {
   id: string;
   vol_number: number;
   editorial_text: string | null;
-  status: string;
+  status: "draft" | "sending" | "sent" | "partial" | "failed" | string;
   total_sent: number;
   total_failed: number;
+  target_count: number | null;
+  html_content: string | null;
   sent_at: string | null;
   created_at: string;
 };
@@ -91,6 +93,15 @@ export default function NewsletterPage() {
 
   // ── 이력 로그 모드 ──
   const [logMode, setLogMode] = useState<"all" | "failed">("all");
+
+  // ── 미수신자 조회 + 재발송 ──
+  type UnsentEntry = { email: string; name: string | null };
+  const [unsentPanel, setUnsentPanel]   = useState<string | null>(null);              // 열린 issue_id
+  const [unsentMap,   setUnsentMap]     = useState<Record<string, UnsentEntry[]>>({}); // issue_id → 미수신자
+  const [unsentLoading, setUnsentLoading] = useState<string | null>(null);
+  const [checkedEmails, setCheckedEmails] = useState<Record<string, Set<string>>>({}); // issue_id → checked set
+  const [resendingId,   setResendingId]   = useState<string | null>(null);
+  const [resendResult,  setResendResult]  = useState<Record<string, string>>({});
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -418,6 +429,77 @@ export default function NewsletterPage() {
       setIssueLogs([]);
     } finally {
       setLogsLoading(false);
+    }
+  }
+
+  // 미수신자 패널 토글 + 조회
+  async function toggleUnsentPanel(issue: Issue) {
+    if (unsentPanel === issue.id) { setUnsentPanel(null); return; }
+    setUnsentPanel(issue.id);
+    if (unsentMap[issue.id]) return; // 이미 로드됨
+    setUnsentLoading(issue.id);
+    try {
+      const res = await fetch(`/api/admin/newsletter/resend?issue_id=${issue.id}`);
+      const json = await res.json();
+      if (res.ok) {
+        setUnsentMap(prev => ({ ...prev, [issue.id]: json.unsent ?? [] }));
+        // 기본으로 전체 체크
+        setCheckedEmails(prev => ({
+          ...prev,
+          [issue.id]: new Set((json.unsent ?? []).map((u: { email: string }) => u.email)),
+        }));
+      }
+    } catch { /* ignore */ }
+    finally { setUnsentLoading(null); }
+  }
+
+  function toggleCheck(issueId: string, email: string) {
+    setCheckedEmails(prev => {
+      const s = new Set(prev[issueId] ?? []);
+      s.has(email) ? s.delete(email) : s.add(email);
+      return { ...prev, [issueId]: s };
+    });
+  }
+
+  function toggleAllCheck(issueId: string, allEmails: string[]) {
+    setCheckedEmails(prev => {
+      const s = prev[issueId] ?? new Set<string>();
+      const allChecked = allEmails.every(e => s.has(e));
+      return { ...prev, [issueId]: allChecked ? new Set() : new Set(allEmails) };
+    });
+  }
+
+  async function handleResend(issue: Issue) {
+    const emails = Array.from(checkedEmails[issue.id] ?? []);
+    if (emails.length === 0) { alert("발송할 수신자를 선택해주세요."); return; }
+    const confirmed = window.confirm(`Vol.${issue.vol_number} — 선택한 ${emails.length}명에게 재발송합니다.\n계속하시겠습니까?`);
+    if (!confirmed) return;
+
+    setResendingId(issue.id);
+    setResendResult(prev => ({ ...prev, [issue.id]: "" }));
+    try {
+      const res = await fetch("/api/admin/newsletter/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issue_id: issue.id, emails }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        setResendResult(prev => ({
+          ...prev,
+          [issue.id]: `✅ 재발송 완료: 성공 ${json.total_sent}건 / 실패 ${json.total_failed}건`,
+        }));
+        // 패널 데이터 갱신
+        setUnsentMap(prev => { const n = { ...prev }; delete n[issue.id]; return n; });
+        setCheckedEmails(prev => { const n = { ...prev }; delete n[issue.id]; return n; });
+        await fetchHistory();
+      } else {
+        setResendResult(prev => ({ ...prev, [issue.id]: `❌ ${json.error ?? "재발송 실패"}` }));
+      }
+    } catch {
+      setResendResult(prev => ({ ...prev, [issue.id]: "❌ 네트워크 오류" }));
+    } finally {
+      setResendingId(null);
     }
   }
 
@@ -1097,18 +1179,32 @@ export default function NewsletterPage() {
                         <th style={{ ...thStyle, textAlign: "center" }}>성공</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>실패</th>
                         <th style={thStyle}>상태</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>재발송</th>
                       </tr>
                     </thead>
                     <tbody>
                       {issues.length === 0 ? (
                         <tr>
-                          <td colSpan={5} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+                          <td colSpan={7} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
                             발송 이력이 없습니다.
                           </td>
                         </tr>
                       ) : (
-                        issues.map((issue) => (
-                          <tr key={issue.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                        issues.map((issue) => {
+                          const s = issue.status;
+                          const statusBg    = s === "sent" ? "#D4EDDA" : s === "partial" ? "#FFF3CD" : s === "sending" ? "#D1ECF1" : s === "failed" ? "#F8D7DA" : "var(--surface-container-highest)";
+                          const statusColor = s === "sent" ? "#155724" : s === "partial" ? "#856404" : s === "sending" ? "#0c5460" : s === "failed" ? "#721C24" : "var(--on-surface-variant)";
+                          const statusLabel = s === "sent" ? "발송완료" : s === "partial" ? "일부발송" : s === "sending" ? "발송중..." : s === "failed" ? "실패" : s === "draft" ? "임시저장" : s;
+                          const canResend   = (s === "partial" || s === "failed" || s === "sending") && !!issue.html_content;
+                          const unsent      = unsentMap[issue.id] ?? [];
+                          const checked     = checkedEmails[issue.id] ?? new Set<string>();
+                          const isPanelOpen = unsentPanel === issue.id;
+                          const allEmails   = unsent.map(u => u.email);
+                          const allChecked  = allEmails.length > 0 && allEmails.every(e => checked.has(e));
+
+                          return (
+                          <React.Fragment key={issue.id}>
+                          <tr style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
                             <td style={tdStyle}>Vol.{issue.vol_number}</td>
                             <td style={tdStyle}>
                               {issue.sent_at
@@ -1116,14 +1212,10 @@ export default function NewsletterPage() {
                                 : new Date(issue.created_at).toLocaleDateString("ko-KR")}
                             </td>
                             <td style={{ ...tdStyle, textAlign: "center" }}>
-                              <button
-                                onClick={() => fetchIssueLogs(issue, "all")}
-                                style={{
-                                  background: "none", border: "none", cursor: "pointer",
-                                  color: "var(--primary)", fontWeight: 700, fontSize: 13, textDecoration: "underline",
-                                }}
-                                title="전체 발송 내역 보기"
-                              >
+                              <button onClick={() => fetchIssueLogs(issue, "all")}
+                                style={{ background: "none", border: "none", cursor: "pointer",
+                                  color: "var(--primary)", fontWeight: 700, fontSize: 13, textDecoration: "underline" }}
+                                title="전체 발송 내역 보기">
                                 {issue.total_sent + issue.total_failed}
                               </button>
                             </td>
@@ -1132,32 +1224,145 @@ export default function NewsletterPage() {
                             </td>
                             <td style={{ ...tdStyle, textAlign: "center" }}>
                               {issue.total_failed > 0 ? (
-                                <button
-                                  onClick={() => fetchIssueLogs(issue, "failed")}
-                                  style={{
-                                    background: "none", border: "none", cursor: "pointer",
-                                    color: "#c0392b", fontWeight: 700, fontSize: 13, textDecoration: "underline",
-                                  }}
-                                  title="실패 로그만 보기"
-                                >
+                                <button onClick={() => fetchIssueLogs(issue, "failed")}
+                                  style={{ background: "none", border: "none", cursor: "pointer",
+                                    color: "#c0392b", fontWeight: 700, fontSize: 13, textDecoration: "underline" }}
+                                  title="실패 로그만 보기">
                                   {issue.total_failed}
                                 </button>
-                              ) : (
-                                <span>0</span>
-                              )}
+                              ) : <span>0</span>}
                             </td>
                             <td style={tdStyle}>
-                              <span style={{
-                                display: "inline-block",
-                                padding: "2px 8px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                                background: issue.status === "sent" ? "#D4EDDA" : "var(--surface-container-highest)",
-                                color: issue.status === "sent" ? "#155724" : "var(--on-surface-variant)",
-                              }}>
-                                {issue.status === "sent" ? "발송완료" : issue.status === "draft" ? "임시저장" : issue.status}
+                              <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4,
+                                fontSize: 11, fontWeight: 600, background: statusBg, color: statusColor }}>
+                                {statusLabel}
                               </span>
                             </td>
+                            {/* 미수신자 보기 버튼 */}
+                            <td style={{ ...tdStyle, textAlign: "center" }}>
+                              {canResend ? (
+                                <button
+                                  onClick={() => toggleUnsentPanel(issue)}
+                                  style={{
+                                    padding: "4px 10px", borderRadius: 5,
+                                    border: `1px solid ${isPanelOpen ? "var(--primary)" : "#aaa"}`,
+                                    background: isPanelOpen ? "color-mix(in srgb, var(--primary) 10%, transparent)" : "var(--surface-container)",
+                                    color: isPanelOpen ? "var(--primary)" : "var(--on-surface-variant)",
+                                    fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  {unsentLoading === issue.id
+                                    ? <Loader2 size={11} style={{ animation: "spin 1s linear infinite", verticalAlign: "middle" }} />
+                                    : isPanelOpen ? "▲ 닫기" : "↩ 미수신자"}
+                                </button>
+                              ) : (
+                                <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>—</span>
+                              )}
+                            </td>
                           </tr>
-                        ))
+
+                          {/* 재발송 결과 메시지 */}
+                          {resendResult[issue.id] && (
+                            <tr key={`${issue.id}-result`}
+                              style={{ background: resendResult[issue.id].startsWith("✅") ? "#D4EDDA" : "#F8D7DA" }}>
+                              <td colSpan={7} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600,
+                                color: resendResult[issue.id].startsWith("✅") ? "#155724" : "#721C24" }}>
+                                {resendResult[issue.id]}
+                              </td>
+                            </tr>
+                          )}
+
+                          {/* 미수신자 패널 */}
+                          {isPanelOpen && (
+                            <tr key={`${issue.id}-unsent`}>
+                              <td colSpan={7} style={{ padding: "0 0 4px" }}>
+                                <div style={{
+                                  margin: "0 4px 8px",
+                                  border: "1px solid var(--surface-container-highest)",
+                                  borderRadius: 8, overflow: "hidden",
+                                  background: "var(--surface-container-low)",
+                                }}>
+                                  {/* 패널 헤더 */}
+                                  <div style={{
+                                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                                    padding: "10px 14px",
+                                    background: "var(--surface-container)",
+                                    borderBottom: "1px solid var(--surface-container-highest)",
+                                  }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                      <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={allChecked}
+                                          onChange={() => toggleAllCheck(issue.id, allEmails)}
+                                          style={{ width: 15, height: 15, cursor: "pointer" }}
+                                        />
+                                        전체선택
+                                      </label>
+                                      <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
+                                        미수신자 {unsent.length}명 중 {checked.size}명 선택
+                                      </span>
+                                    </div>
+                                    <button
+                                      onClick={() => handleResend(issue)}
+                                      disabled={resendingId === issue.id || checked.size === 0}
+                                      style={{
+                                        display: "flex", alignItems: "center", gap: 5,
+                                        padding: "6px 14px", borderRadius: 6, border: "none",
+                                        background: checked.size === 0 ? "var(--surface-container-highest)" : "var(--primary)",
+                                        color: checked.size === 0 ? "var(--on-surface-variant)" : "#fff",
+                                        fontWeight: 700, fontSize: 13,
+                                        cursor: (resendingId === issue.id || checked.size === 0) ? "not-allowed" : "pointer",
+                                        opacity: resendingId === issue.id ? 0.6 : 1,
+                                      }}
+                                    >
+                                      {resendingId === issue.id
+                                        ? <><Loader2 size={13} style={{ animation: "spin 1s linear infinite" }} /> 발송 중...</>
+                                        : `↩ ${checked.size}명에게 재발송`}
+                                    </button>
+                                  </div>
+
+                                  {/* 미수신자 목록 */}
+                                  {unsentLoading === issue.id ? (
+                                    <div style={{ padding: "16px 14px", fontSize: 13, color: "var(--on-surface-variant)" }}>
+                                      불러오는 중...
+                                    </div>
+                                  ) : unsent.length === 0 ? (
+                                    <div style={{ padding: "16px 14px", fontSize: 13, color: "#155724", fontWeight: 600 }}>
+                                      ✅ 모든 활성 수신자가 이미 수신했습니다.
+                                    </div>
+                                  ) : (
+                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
+                                      {unsent.map(u => (
+                                        <label key={u.email} style={{
+                                          display: "flex", alignItems: "center", gap: 10,
+                                          padding: "8px 14px", cursor: "pointer",
+                                          borderBottom: "1px solid var(--surface-container-highest)",
+                                          background: checked.has(u.email)
+                                            ? "color-mix(in srgb, var(--primary) 6%, transparent)"
+                                            : "transparent",
+                                        }}>
+                                          <input
+                                            type="checkbox"
+                                            checked={checked.has(u.email)}
+                                            onChange={() => toggleCheck(issue.id, u.email)}
+                                            style={{ width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                                          />
+                                          <span style={{ fontSize: 13, color: "var(--on-surface)", flex: 1 }}>{u.email}</span>
+                                          {u.name && (
+                                            <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{u.name}</span>
+                                          )}
+                                        </label>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                          </React.Fragment>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
