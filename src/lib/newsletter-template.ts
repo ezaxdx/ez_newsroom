@@ -122,8 +122,9 @@ function pickCard(ev: EventCard, vol: number, site_url: string): string {
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
     ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
-         <tr><td height="129" style="height:129px;background:#EEEBE5 url('${proxied}') center/cover no-repeat;background-size:cover;background-position:center;background-repeat:no-repeat;line-height:0;font-size:0;overflow:hidden;">
-           &nbsp;
+         <tr><td height="129" style="height:129px;background:#EEEBE5;overflow:hidden;line-height:0;font-size:0;">
+           <img src="${proxied}" width="255" height="129" alt=""
+                style="display:block;width:255px;height:129px;object-fit:cover;border:0;">
          </td></tr>
        </table>`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">

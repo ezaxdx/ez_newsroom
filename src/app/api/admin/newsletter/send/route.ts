@@ -211,32 +211,15 @@ export async function POST(req: NextRequest) {
   }
   const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
-  // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시
-  const descMap = await fillEventDescriptions(
-    featuredRaw.map((e) => ({
-      id: e.id,
-      event_name: e.event_name,
-      description: (e as { description?: string | null }).description ?? null,
-      website: e.website ?? null,
-      industry: e.industry ?? null,
-      category: e.category ?? null,
-      organizer: e.organizer ?? null,
-    })),
-    supabase,
-    process.env.GOOGLE_AI_API_KEY
-  );
-
-  // image_url 없으면 og:image 폴백 (병렬 요청)
-  const featuredEvents: EventCard[] = await Promise.all(
-    featuredRaw.map(async (e) => {
-      const imageUrl = await fetchEventImage(e.event_name, e.website ?? null, e.image_url ?? null);
-      return {
-        name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-        venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,
-        description: descMap[e.id] ?? null,
-      };
-    })
-  );
+  // 발송 시: 외부 API 호출 없이 DB 값만 사용 (Gemini·네이버 스킵 → 타임아웃 방지)
+  // description·image_url이 없으면 null로 처리 (미리보기에서 이미 캐시됨)
+  const featuredEvents: EventCard[] = featuredRaw.map((e) => ({
+    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
+    venue: e.venue ?? null,
+    image_url: (e as { image_url?: string | null }).image_url ?? null,
+    website: e.website ?? null,
+    description: (e as { description?: string | null }).description ?? null,
+  }));
 
   // Weekly Event List: 이번 주 행사 중 스코어 순 (Pick 제외, 최소 스코어 + 제외 키워드 필터)
   const featuredIds = new Set(featuredRaw.map((e) => e.id));
