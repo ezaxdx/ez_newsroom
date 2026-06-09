@@ -36,6 +36,7 @@ export default function NewsletterPage() {
   // ── Send tab state ──
   const [editorialText, setEditorialText] = useState("");
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
@@ -225,6 +226,7 @@ export default function NewsletterPage() {
       const json = await res.json();
       if (res.ok && json.html) {
         setPreviewHtml(json.html);
+        setPreviewMeta({ vol_number: json.vol_number, send_date: json.send_date, featured_ids: json.featured_ids ?? [] });
       } else {
         setSendResult({ ok: false, message: json.error ?? "미리보기 실패" });
       }
@@ -251,7 +253,16 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editorial_text: editorialText, dry_run: false }),
+        body: JSON.stringify({
+          editorial_text: editorialText,
+          dry_run: false,
+          ...(previewHtml && previewMeta ? {
+            cached_html: previewHtml,
+            cached_vol: previewMeta.vol_number,
+            cached_send_date: previewMeta.send_date,
+            cached_featured_ids: previewMeta.featured_ids,
+          } : {}),
+        }),
       });
       const json = await res.json();
       if (res.ok) {

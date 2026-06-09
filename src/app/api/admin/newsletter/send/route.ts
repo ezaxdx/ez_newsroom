@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  let body: { editorial_text?: string; dry_run?: boolean };
+  let body: { editorial_text?: string; dry_run?: boolean; cached_html?: string; cached_vol?: number; cached_send_date?: string; cached_featured_ids?: string[] };
   try {
     body = await req.json();
   } catch {
@@ -22,6 +22,44 @@ export async function POST(req: NextRequest) {
 
   const editorial_text = body.editorial_text ?? "";
   const dry_run = body.dry_run === true;
+
+  // 미리보기에서 생성된 HTML이 있으면 콘텐츠 재생성 스킵하고 바로 발송
+  if (!dry_run && body.cached_html) {
+    const supabaseFast = createAdminClient();
+    const { data: subscribers } = await supabaseFast
+      .from("newsletter_subscribers")
+      .select("email")
+      .eq("is_active", true);
+    if (!subscribers || subscribers.length === 0) {
+      return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
+    }
+    const vol_number = body.cached_vol ?? 1;
+    const send_date = body.cached_send_date ?? new Date().toISOString().split("T")[0];
+    const subject = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+    const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+    const { results } = await sendNewsletterViaGmail({
+      fromName: "EZ Letter", fromEmail, subject,
+      html: body.cached_html,
+      recipients: subscribers.map((s) => s.email),
+    });
+    let total_sent = 0, total_failed = 0;
+    const logEntries = [];
+    for (const r of results) {
+      if (r.status === "success") total_sent++; else total_failed++;
+      logEntries.push(r);
+    }
+    const { data: issue } = await supabaseFast.from("newsletter_issues").insert({
+      vol_number, editorial_text, status: "sent",
+      total_sent, total_failed, sent_at: new Date().toISOString(),
+      featured_event_ids: body.cached_featured_ids ?? [],
+    }).select().single();
+    if (issue && logEntries.length > 0) {
+      await supabaseFast.from("newsletter_send_logs").insert(
+        logEntries.map((l) => ({ ...l, issue_id: issue.id }))
+      );
+    }
+    return NextResponse.json({ ok: true, vol_number, total_sent, total_failed });
+  }
 
   const supabase = createAdminClient();
   const prod_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
@@ -229,7 +267,7 @@ export async function POST(req: NextRequest) {
 
   // ── Dry run: return preview HTML ──
   if (dry_run) {
-    return NextResponse.json({ ok: true, html, vol_number, send_date });
+    return NextResponse.json({ ok: true, html, vol_number, send_date, featured_ids: featuredRaw.map(e => e.id) });
   }
 
   // ── Real send ──
