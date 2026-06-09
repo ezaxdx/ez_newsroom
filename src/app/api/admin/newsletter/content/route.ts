@@ -61,6 +61,7 @@ export async function GET() {
     .from("convention_events")
     .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description")
     .eq("is_published", true)
+    .neq("is_concurrent", true)   // 동시개최 행사 제외 (메인 행사만)
     .gte("start_date", todayStr)
     .lte("start_date", new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
     .order("start_date", { ascending: true })
@@ -79,9 +80,17 @@ export async function GET() {
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
   // 동시개최 중복 제거: 같은 venue + start_date 조합은 점수 1위만 남김
+  // 장소명 정규화: 영문·괄호·공백 제거 후 한글 핵심 이름만 추출
+  function normalizeVenue(venue: string): string {
+    return venue
+      .replace(/\(.*?\)/g, "")   // 괄호 및 내용 제거: "킨텍스 (KINTEX)" → "킨텍스 "
+      .replace(/[A-Za-z]/g, "")  // 영문 제거
+      .replace(/\s+/g, "")       // 공백 제거
+      .trim();
+  }
   const venueDateMap = new Map<string, typeof scoredAll[number]>();
   for (const e of scoredAll) {
-    const key = `${(e.venue ?? "").trim()}:${e.start_date ?? ""}`;
+    const key = `${normalizeVenue(e.venue ?? "")}:${e.start_date ?? ""}`;
     if (!venueDateMap.has(key)) venueDateMap.set(key, e);
   }
   const scored = Array.from(venueDateMap.values())
@@ -98,14 +107,21 @@ export async function GET() {
     (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
   );
 
-  // Pick 선정: 30일 이내 우선 → 부족하면 60일 → 부족하면 90일 전체
+  // Pick 선정: 14일 이내 우선 → 부족하면 30일 이내로 보충 → 그래도 부족하면 90일 전체로 보충
+  // ※ 전체 교체가 아닌 보충 방식 — 가까운 날짜 행사가 항상 우선 포함됨
+  const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d60 = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
-  let pickPool = fresh.filter(e => e.start_date <= d30);
-  if (pickPool.length < 4) pickPool = fresh.filter(e => e.start_date <= d60);
-  if (pickPool.length < 4) pickPool = fresh;
-  if (pickPool.length < 4) pickPool = scored; // 정말 없으면 중복 허용
+  const near = fresh.filter(e => e.start_date <= d14);
+  const mid  = fresh.filter(e => e.start_date > d14 && e.start_date <= d30);
+  const far  = fresh.filter(e => e.start_date > d30);
+  const seenIds = new Set<string>();
+  const pickPool: typeof fresh = [];
+  for (const e of [...near, ...mid, ...far, ...scored]) {
+    if (pickPool.length >= 4) break;
+    if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
+  }
+  const _debug = { d14, d30, near: near.length, mid: mid.length, far: far.length, near_top5: near.slice(0,5).map(e => `${e.event_name}(${e.start_date},${e._score})`), pick: pickPool.map(e => `${e.event_name}(${e.start_date})`) };
   const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시
@@ -165,5 +181,6 @@ export async function GET() {
     ezpmp_news: ezpmpNews,
     featured_events: featuredEvents,
     upcoming_events: upcomingEvents,
+    _debug,
   });
 }

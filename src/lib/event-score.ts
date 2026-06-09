@@ -19,7 +19,10 @@ export const EZPMP_HIGH_MATCH: string[] = [
   "콘텐츠", "content", "K-콘텐츠", "문화", "디자인",
 
   // AI·스마트·디지털 (국제회의·산업전시 맥락)
-  "AI", "인공지능", "스마트", "디지털", "ICT", "정보통신",
+  "AI", "인공지능", "스마트", "디지털", "ICT", "정보통신", "빅데이터", "데이터",
+
+  // 박람회·전시 일반 (이름에 박람회 없어도 엑스포·팜·쇼 포함)
+  "팜", "K-팜", "케이팜", "쇼",
 
   // 정부·공공 행사
   "정부", "공공", "행정", "혁신", "국제",
@@ -143,26 +146,29 @@ export function scoreEvent(event: EventForScore, today: Date): number {
 
   let score = 0;
 
+  // 키워드 매칭: 콘텐츠 관련성 우선
   for (const kw of EZPMP_HIGH_MATCH) {
-    if (searchText.includes(kw.toLowerCase())) score += 15;
+    if (searchText.includes(kw.toLowerCase())) score += 30;
   }
   for (const kw of EZPMP_MEDIUM_MATCH) {
-    if (searchText.includes(kw.toLowerCase())) score += 5;
+    if (searchText.includes(kw.toLowerCase())) score += 10;
   }
 
   if (event.category === "전시") score += 10;
   if (event.category === "회의") score += 8;
 
-  if (PREFERRED_VENUES.includes(event.venue)) score += 8;
+  // EZPMP 파트너 주최: 키워드 매칭 보조 역할 (콘텐츠 관련성보다 낮게)
+  if (isEzpmpPartner(event.organizer)) score += 15;
 
-  if (isEzpmpPartner(event.organizer)) score += 30;
-
-  const startMs  = new Date(event.start_date).getTime();
-  const daysUntil = (startMs - today.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysUntil >= 0  && daysUntil < 7)        score += 50; // 이번 주
-  else if (daysUntil >= 7 && daysUntil <= 30)  score += 40; // 이번 달
-  else if (daysUntil > 30 && daysUntil <= 60)  score += 10; // 다음 달
-  else if (daysUntil > 60 && daysUntil <= 90)  score += 5;  // 2달 후
+  // 날짜 근접도 (KST 기준): 7일·14일·30일·그 이후
+  const todayKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+  const todayDateStr = todayKST.toISOString().split("T")[0];
+  const startDateStr = event.start_date; // "YYYY-MM-DD"
+  const daysUntil = (new Date(startDateStr).getTime() - new Date(todayDateStr).getTime()) / (1000 * 60 * 60 * 24);
+  if (daysUntil >= 0 && daysUntil < 7)         score += 50; // 7일 이내
+  else if (daysUntil >= 7 && daysUntil < 14)   score += 40; // 14일 이내
+  else if (daysUntil >= 14 && daysUntil <= 30) score += 20; // 30일 이내
+  else if (daysUntil > 30)                     score += 5;  // 그 이후
 
   return score;
 }

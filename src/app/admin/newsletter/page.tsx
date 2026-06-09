@@ -1222,9 +1222,9 @@ export default function NewsletterPage() {
             </Section>
 
             <Section title="STEP 2 · 행사 데이터 확인">
-              <Item text="EZ Letter Pick: 30일 이내 행사 우선 선정 (부족하면 60일→90일 확장), 최근 2개 호 중복 제외" />
-              <Indent><b>이미지 우선순위:</b> 네이버 이미지 자동 검색 → 웹사이트 og:image → 직접 등록 이미지 → EZ 로고</Indent>
-              <Indent><b>설명 문구 우선순위:</b> DB description → 웹사이트 og:description → Gemini AI 자동 생성 후 DB 저장</Indent>
+              <Item text="EZ Letter Pick: 14일 이내 행사 우선 선정 (부족하면 30일→90일로 보충), 최근 2개 호 중복 제외" />
+              <Indent><b>이미지 우선순위:</b> 직접 등록 이미지 → 네이버 이미지 자동 검색 → 웹사이트 og:image → EZ 로고</Indent>
+              <Indent><b>설명 문구 우선순위:</b> DB description → Gemini AI 자동 생성 후 DB 저장</Indent>
               <Indent><b>Pick 선정 기준:</b> MICE·전시·박람회·국제회의 + 관광·환경·콘텐츠·AI 분야 + 주요 컨벤션센터 보정</Indent>
               <Item text="Weekly Event List: 이번 주 시작 행사 중 스코어 13점 이상만 표시 (최대 7개, Pick 제외)" />
               <Indent><b>자동 제외 키워드:</b> 정기총회, 임시총회, 이사회, 간담회, 위원회, 강의, 교육, 워크숍, 세미나, 육아, 웨딩 등</Indent>
@@ -1289,9 +1289,9 @@ export default function NewsletterPage() {
             </Section>
 
             <Section title="🖼️ 행사 이미지 직접 등록">
-              <Item text="발송 탭 → 🖼️ Pick 이미지 관리에서 🔄 자동 버튼 클릭 (네이버 이미지 자동 검색)" />
-              <Item text="자동 수집 결과가 마음에 안 들면 직접 이미지 URL 입력 후 저장" />
-              <Note>이미지 우선순위: 네이버 검색 → 홈페이지 og:image → 직접 등록 URL → EZ 로고</Note>
+              <Item text="발송 탭 → 🖼️ Pick 이미지 관리에서 직접 URL 입력 후 저장 → 저장된 이미지가 최우선 적용" />
+              <Item text="자동으로 찾으려면 🔄 자동 버튼 클릭 (네이버 이미지 자동 검색)" />
+              <Note>이미지 우선순위: 직접 등록 URL → 네이버 검색 → 홈페이지 og:image → EZ 로고</Note>
             </Section>
 
           </div>

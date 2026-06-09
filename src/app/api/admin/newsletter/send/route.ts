@@ -103,18 +103,17 @@ export async function POST(req: NextRequest) {
 
   // 후보 행사 풀 (90일 이내, score 계산용 컬럼 포함)
   const ninetyDaysLater = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const { data: eventsPool, error: eventsError } = await supabase
+  const { data: eventsPool } = await supabase
     .from("convention_events")
     .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description")
     .eq("is_published", true)
+    .neq("is_concurrent", true)   // 동시개최 행사 제외 (메인 행사만)
     .gte("start_date", todayStr)
     .lte("start_date", ninetyDaysLater)
     .order("start_date", { ascending: true })
     .limit(200);
 
-  // 쿼리 실패 시 basic 컬럼으로 fallback
-  const eventsData = eventsPool ?? (eventsError ? [] : []);
-  const scored = eventsData
+  const scoredAll = (eventsPool ?? [])
     .map((e) => ({
       ...e,
       _score: scoreEvent({
@@ -129,6 +128,22 @@ export async function POST(req: NextRequest) {
     }))
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
+  // 동시개최 중복 제거: 같은 venue + start_date 조합은 점수 1위만 남김
+  function normalizeVenue(venue: string): string {
+    return venue
+      .replace(/\(.*?\)/g, "")
+      .replace(/[A-Za-z]/g, "")
+      .replace(/\s+/g, "")
+      .trim();
+  }
+  const venueDateMap = new Map<string, typeof scoredAll[number]>();
+  for (const e of scoredAll) {
+    const key = `${normalizeVenue(e.venue ?? "")}:${e.start_date ?? ""}`;
+    if (!venueDateMap.has(key)) venueDateMap.set(key, e);
+  }
+  const scored = Array.from(venueDateMap.values())
+    .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
+
   // 최근 2개 발송 호에 나온 Pick 행사 제외 (중복 방지)
   const { data: recentIssues } = await supabase
     .from("newsletter_issues")
@@ -140,14 +155,19 @@ export async function POST(req: NextRequest) {
     (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
   );
 
-  // Pick 선정: 30일 이내 우선 → 부족하면 60일 → 부족하면 90일 전체
+  // Pick 선정: 14일 이내 우선 → 부족하면 30일 이내 보충 → 그래도 부족하면 90일 전체로 보충
+  const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d60 = new Date(today.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
-  let pickPool = fresh.filter(e => e.start_date <= d30);
-  if (pickPool.length < 4) pickPool = fresh.filter(e => e.start_date <= d60);
-  if (pickPool.length < 4) pickPool = fresh;
-  if (pickPool.length < 4) pickPool = scored;
+  const near = fresh.filter(e => e.start_date <= d14);
+  const mid  = fresh.filter(e => e.start_date > d14 && e.start_date <= d30);
+  const far  = fresh.filter(e => e.start_date > d30);
+  const seenIds = new Set<string>();
+  const pickPool: typeof fresh = [];
+  for (const e of [...near, ...mid, ...far, ...scored]) {
+    if (pickPool.length >= 4) break;
+    if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
+  }
   const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시

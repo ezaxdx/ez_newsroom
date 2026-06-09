@@ -1,10 +1,8 @@
 /**
  * Pick 행사 카드용 짧은 소개 문구 생성
- * 우선순위: DB description → URL에서 og:description → Gemini AI 생성
+ * 우선순위: DB description → Gemini AI 생성
  * 생성 후 DB에 캐시 저장
  */
-
-import { fetchOgDescription } from "@/lib/fetch-og-description";
 
 type EventInput = {
   id: string;
@@ -33,27 +31,8 @@ export async function fillEventDescriptions(
   const needsDesc = events.filter((e) => !e.description);
   if (needsDesc.length === 0) return result;
 
-  // 1단계: URL에서 og:description 병렬 조회
-  const urlDescResults = await Promise.all(
-    needsDesc.map(async (e) => ({
-      id: e.id,
-      desc: await fetchOgDescription(e.website),
-    }))
-  );
-
-  const stillNeedsDesc: EventInput[] = [];
-  for (const { id, desc } of urlDescResults) {
-    if (desc) {
-      result[id] = desc;
-      // DB에 캐시 저장
-      await supabase.from("convention_events").update({ description: desc }).eq("id", id);
-    } else {
-      const ev = needsDesc.find((e) => e.id === id)!;
-      stillNeedsDesc.push(ev);
-    }
-  }
-
-  // 2단계: URL에서도 못 가져온 행사 → Gemini로 일괄 생성
+  // Gemini로 일괄 생성
+  const stillNeedsDesc = needsDesc;
   if (stillNeedsDesc.length === 0 || !apiKey) return result;
 
   const lines = stillNeedsDesc.map((e, i) => {
@@ -62,11 +41,13 @@ export async function fillEventDescriptions(
   });
 
   const prompt = `아래 전시·행사 각각에 대해 15~22자의 짧고 생생한 한 줄 소개를 한국어로 써줘.
-분야 나열이 아니라 행사의 핵심을 담은 짧은 문장이어야 해.
-예시: "AI·로봇·반도체 기업이 총집결" / "전력·에너지 기업 상담과 기술 시연" / "국내외 식품기업의 최신 기술을 한눈에"
+분야 나열이 아니라 행사의 핵심을 담은 짧은 문구여야 해.
+반드시 명사 또는 명사형으로 끝나야 해 (동사·형용사 어미 금지).
+예시: "AI·로봇·반도체 기업이 총집결" / "전력·에너지 기업 상담과 기술 시연" / "국내외 식품기업의 최신 기술을 한눈에" / "스마트 농업의 미래, 농기계와 축산의 혁신"
 
 금지어: 향연, 대향연, 집결지, 성지 (절대 사용 금지)
-어미는 '~이다', '~하다' 등 간결한 형태로, 합쇼체(~습니다) 불필요.
+금지 어미: ~하다, ~이다, ~경험하다, ~만나다 등 동사 원형 어미 사용 금지
+합쇼체(~습니다) 불필요.
 
 ${lines.join("\n")}
 

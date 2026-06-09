@@ -49,7 +49,8 @@ function cleanDesc(raw: string): string {
     .replace(/&#039;/g, "'")
     .replace(/\s+/g, " ")
     .trim()
-    // 25자 초과 시 자연스러운 위치에서 자르기
-    .slice(0, 40)
+    // 60자 이내로 자르기 (문장 부호 기준 우선, 없으면 60자에서 절단)
+    .replace(/^(.{1,60})[.!?。].*$/, "$1")
+    .slice(0, 60)
     .replace(/[,\s]+$/, "");
 }
