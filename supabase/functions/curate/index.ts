@@ -533,6 +533,17 @@ Deno.serve(async (req) => {
   const existingUrls = new Set((existingNews ?? []).map((n: { original_url: string }) => n.original_url));
   const results = { created: 0, skipped: 0, failed: 0 };
 
+  // 동시개최 중복 제거: 같은 venue + 같은 시작일 조합은 1건만 허용
+  const venueDateSeen = new Set<string>();
+  const VENUES = ["킨텍스", "코엑스", "벡스코", "엑스코", "aT센터", "세텍", "KINTEX", "COEX", "BEXCO", "EXCO"];
+  function extractVenueDateKey(text: string): string | null {
+    const venue = VENUES.find((v) => text.includes(v));
+    if (!venue) return null;
+    const dateMatch = text.match(/\d{4}[-./]?\d{2}[-./]?\d{2}/);
+    if (!dateMatch) return null;
+    return `${venue}:${dateMatch[0].replace(/[-./]/g, "")}`;
+  }
+
   for (const source of sources) {
     const category = source.default_category.toUpperCase();
     const setting = catSettings[category] ?? {
@@ -550,6 +561,15 @@ Deno.serve(async (req) => {
         existingUrls.add(url);
         return;
       }
+      // 동시개최 중복 제거: 같은 장소·날짜 조합이 이미 처리됐으면 스킵
+      const vdKey = extractVenueDateKey(articleText);
+      if (vdKey && venueDateSeen.has(vdKey)) {
+        console.log(`[SKIP] 동시개최 중복 (${vdKey}): ${url}`);
+        results.skipped++;
+        existingUrls.add(url);
+        return;
+      }
+      if (vdKey) venueDateSeen.add(vdKey);
       const generated = await generateArticle(apiKey, articleText, url, setting.persona, setting.audience, setting.keywords, catLevelPrompts, companyContext);
       if (!generated) { results.failed++; return; }
       const score = generated.quality_score ?? 5;
