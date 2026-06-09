@@ -61,7 +61,7 @@ export default function NewsletterPage() {
   // ── 수신자 탭 - 엑셀 업로드 ──
   const excelFileRef = useRef<HTMLInputElement>(null);
   const [excelUploading, setExcelUploading] = useState(false);
-  const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number } | null>(null);
+  const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number; duplicates: string[] } | null>(null);
 
   // ── AI 인사말 생성 ──
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
@@ -341,11 +341,11 @@ export default function NewsletterPage() {
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, string>>(ws);
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { raw: false, defval: "" });
       const subs = rows.map(r => ({
-        email: (r["email"] || r["이메일"] || "").toString().trim(),
-        name: (r["name"] || r["이름"] || "").toString().trim() || undefined,
-      })).filter(s => s.email);
+        email: String(r["email"] ?? r["이메일"] ?? "").trim().toLowerCase(),
+        name: String(r["name"] ?? r["이름"] ?? "").trim() || undefined,
+      })).filter(s => s.email.includes("@")); // @ 없는 행은 무시
       const res = await fetch("/api/admin/newsletter/subscribers/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -353,7 +353,7 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (res.ok) {
-        setExcelResult({ inserted: json.inserted, skipped: json.skipped });
+        setExcelResult({ inserted: json.inserted, skipped: json.skipped, duplicates: json.duplicates ?? [] });
         await fetchSubscribers();
       } else {
         setSubError(json.error ?? "업로드 실패");
@@ -973,9 +973,15 @@ export default function NewsletterPage() {
                     {excelUploading ? "업로드 중..." : "파일 선택"}
                   </button>
                   {excelResult && (
-                    <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-                      ✅ 추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명
-                    </span>
+                    <div style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
+                      <span>✅ 추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명</span>
+                      {excelResult.duplicates.length > 0 && (
+                        <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 6, background: "#FFF3CD", color: "#856404", lineHeight: 1.6 }}>
+                          <strong>이미 등록된 이메일 ({excelResult.duplicates.length}명):</strong><br />
+                          {excelResult.duplicates.join(", ")}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
                 <input

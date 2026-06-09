@@ -13,24 +13,24 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient();
   let inserted = 0;
-  let skipped = 0;
+  const duplicates: string[] = [];
   const errors: string[] = [];
 
   for (const sub of subscribers) {
     const email = sub.email?.trim().toLowerCase();
-    if (!email) { skipped++; continue; }
+    if (!email) continue;
     const { error } = await supabase
       .from("newsletter_subscribers")
       .insert({ email, name: sub.name?.trim() || null })
       .select()
       .single();
     if (error) {
-      if (error.code === "23505") skipped++; // duplicate
+      if (error.code === "23505") duplicates.push(email); // 중복
       else errors.push(`${email}: ${error.message}`);
     } else {
       inserted++;
     }
   }
 
-  return NextResponse.json({ ok: true, inserted, skipped, errors: errors.slice(0, 5) });
+  return NextResponse.json({ ok: true, inserted, skipped: duplicates.length, duplicates, errors: errors.slice(0, 5) });
 }
