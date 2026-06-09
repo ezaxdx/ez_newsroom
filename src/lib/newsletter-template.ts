@@ -26,6 +26,7 @@ export type NewsletterData = {
   featured_events: EventCard[]; // 최대 4개
   upcoming_events: EventCard[];  // 이번 주 행사만
   site_url: string;
+  is_email?: boolean; // true이면 이미지 프록시 우회 (실제 발송용)
 };
 
 // ── 팔레트 ─────────────────────────────────────────────────
@@ -79,9 +80,11 @@ function sectionDivider(title: string): string {
 }
 
 // ── 외부 이미지 → 프록시 URL 변환 ────────────────────────
-function proxyImg(image_url: string | null, site_url: string): string | null {
+// is_email=true 이면 원본 URL 그대로 (Gmail이 자체 프록시 처리)
+// is_email=false(미리보기)면 /api/image-proxy 경유 (일부 서버가 직접 접근 차단)
+function proxyImg(image_url: string | null, site_url: string, is_email = false): string | null {
   if (!image_url) return null;
-  // 이미 자체 도메인 이미지거나 data URI면 그대로 사용
+  if (is_email) return image_url; // 발송용: 원본 URL 그대로
   if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
@@ -90,15 +93,14 @@ function proxyImg(image_url: string | null, site_url: string): string | null {
 const NEWS_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
 
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
-function newsCard(item: NewsCard, vol: number, site_url: string): string {
-  const proxied = proxyImg(item.image_url, site_url);
+function newsCard(item: NewsCard, vol: number, site_url: string, is_email = false): string {
+  const proxied = proxyImg(item.image_url, site_url, is_email);
   const img = proxied
     ? `<img src="${proxied}" alt="" width="255" height="129"
            style="display:block;width:255px;height:129px;object-fit:cover;">`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
-           <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
-                style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
+           <span style="font-size:13px;font-weight:500;color:#9E9587;font-family:Arial,sans-serif;">EZ Letter</span>
          </td></tr>
        </table>`;
   const summary = item.summary;
@@ -117,8 +119,8 @@ function newsCard(item: NewsCard, vol: number, site_url: string): string {
 }
 
 // ── Pick 행사 카드 ────────────────────────────────────────
-function pickCard(ev: EventCard, vol: number, site_url: string): string {
-  const proxied = proxyImg(ev.image_url ?? null, site_url);
+function pickCard(ev: EventCard, vol: number, site_url: string, is_email = false): string {
+  const proxied = proxyImg(ev.image_url ?? null, site_url, is_email);
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
     ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
@@ -129,8 +131,7 @@ function pickCard(ev: EventCard, vol: number, site_url: string): string {
        </table>`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
-           <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
-                style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
+           <span style="font-size:13px;font-weight:500;color:#9E9587;font-family:Arial,sans-serif;">EZ Letter</span>
          </td></tr>
        </table>`;
   const link = ev.website
@@ -178,9 +179,9 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
 }
 
 // ── 뉴스 카테고리 블록 ────────────────────────────────────
-function newsSection(label: string, items: NewsCard[], vol: number, site_url: string): string {
+function newsSection(label: string, items: NewsCard[], vol: number, site_url: string, is_email = false): string {
   if (items.length === 0) return "";
-  const cards = items.slice(0, 2).map(n => newsCard(n, vol, site_url)).join(`<td width="22"></td>`);
+  const cards = items.slice(0, 2).map(n => newsCard(n, vol, site_url, is_email)).join(`<td width="22"></td>`);
   return `
 <tr>
   <td style="background:${C.white};padding:0 32px 24px;">
@@ -196,12 +197,12 @@ function newsSection(label: string, items: NewsCard[], vol: number, site_url: st
 export function generateNewsletterHTML(data: NewsletterData): string {
   const { vol_number: vol, send_date, editorial_text,
           mice_news, tourism_news, ai_news, ezpmp_news,
-          featured_events, upcoming_events, site_url } = data;
+          featured_events, upcoming_events, site_url, is_email = false } = data;
 
   // Pick 4개 → 2행
   const picks = featured_events.slice(0, 4);
-  const pickRow1 = picks.slice(0, 2).map(e => pickCard(e, vol, site_url)).join(`<td width="22"></td>`);
-  const pickRow2 = picks.slice(2, 4).map(e => pickCard(e, vol, site_url)).join(`<td width="22"></td>`);
+  const pickRow1 = picks.slice(0, 2).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="22"></td>`);
+  const pickRow2 = picks.slice(2, 4).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="22"></td>`);
 
   // 행사 리스트
   const listRows = upcoming_events.map((ev, i) =>
@@ -227,12 +228,22 @@ export function generateNewsletterHTML(data: NewsletterData): string {
   <table width="600" cellpadding="0" cellspacing="0" border="0"
          style="max-width:600px;width:100%;background:${C.white};">
 
-    <!-- ── HEADER IMAGE (배경) + Vol./Date 텍스트 (이미지 내부 상단에 오버레이) ── -->
+    <!-- ── HEADER (배경 이미지 + Vol./Date 오버레이) ── -->
+    <!-- background="" : 이메일 클라이언트 대응 / CSS background-image: 브라우저 미리보기 대응 -->
     <tr>
-      <td style="background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% 100%;background-repeat:no-repeat;background-color:${C.white};height:440px;padding:35px 0 0;text-align:center;vertical-align:top;">
-        <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
-          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
-        </p>
+      <td background="${site_url}/images/ez-letter-header.png"
+          bgcolor="${C.bg}"
+          style="background-color:${C.bg};background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% 100%;background-repeat:no-repeat;"
+          height="440" align="center" valign="top">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+          <tr>
+            <td style="padding:35px 0 0;text-align:center;">
+              <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
+                Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
+              </p>
+            </td>
+          </tr>
+        </table>
       </td>
     </tr>
 
@@ -253,10 +264,10 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     ${sectionDivider("News")}
 
     <!-- MICE / Tourism / EZPMP / AI 뉴스 (없으면 섹션 자동 제거) -->
-    ${newsSection("MICE", mice_news, vol, site_url)}
-    ${newsSection("Tourism", tourism_news, vol, site_url)}
-    ${newsSection("EZPMP", ezpmp_news, vol, site_url)}
-    ${newsSection("AI", ai_news, vol, site_url)}
+    ${newsSection("MICE", mice_news, vol, site_url, is_email)}
+    ${newsSection("Tourism", tourism_news, vol, site_url, is_email)}
+    ${newsSection("EZPMP", ezpmp_news, vol, site_url, is_email)}
+    ${newsSection("AI", ai_news, vol, site_url, is_email)}
 
     <!-- ── EZ LETTER PICK 섹션 구분선 ── -->
     ${sectionDivider("ez letter Pick !")}
@@ -290,8 +301,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <!-- ── FOOTER ── -->
     <tr>
       <td style="background:${C.white};border-top:1px solid ${C.border};padding:28px 32px 40px;text-align:center;">
-        <img src="${site_url}/images/ez-letter-logo.png" width="80" alt="EZ Letter"
-             style="display:inline-block;max-width:80px;height:auto;margin-bottom:14px;">
+        <p style="margin:0 0 10px;font-size:20px;font-weight:700;color:${C.dark};font-family:${FONT_TOKKI};letter-spacing:0.05em;">EZ Letter</p>
         <p style="margin:0 0 8px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
           <a href="${withUTM(site_url, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">EZ 뉴스룸 바로가기</a>
         </p>

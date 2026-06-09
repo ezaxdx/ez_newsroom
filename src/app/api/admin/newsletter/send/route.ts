@@ -37,9 +37,14 @@ export async function POST(req: NextRequest) {
     const send_date = body.cached_send_date ?? new Date().toISOString().split("T")[0];
     const subject = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-    // 미리보기 HTML의 localhost URL → production URL로 교체
+    // 미리보기 HTML 후처리:
+    // 1. localhost URL → production URL 교체
+    // 2. /api/image-proxy?url=... 프록시 래퍼를 원본 URL로 복원 (이메일은 직접 외부 URL 사용)
     const prodUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
-    const sendHtml = body.cached_html.replace(/https?:\/\/localhost:\d+/g, prodUrl);
+    const sendHtml = body.cached_html
+      .replace(/https?:\/\/localhost:\d+/g, prodUrl)
+      .replace(/https?:\/\/[^/]+\/api\/image-proxy\?url=([^"'\s&]+)/g,
+        (_: string, encoded: string) => decodeURIComponent(encoded));
     const { results } = await sendNewsletterViaGmail({
       fromName: "EZ Letter", fromEmail, subject,
       html: sendHtml,
@@ -249,6 +254,7 @@ export async function POST(req: NextRequest) {
     featured_events: featuredEvents,
     upcoming_events: upcomingEvents,
     site_url,
+    is_email: !dry_run, // 미리보기는 false(프록시 사용), 발송은 true(원본 URL)
   });
 
   // ── Dry run: return preview HTML ──
