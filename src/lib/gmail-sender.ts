@@ -91,30 +91,36 @@ export async function sendNewsletterViaGmail(params: {
   let total_sent = 0;
   let total_failed = 0;
 
-  for (const to of params.recipients) {
-    try {
-      const raw = makeRawMessage({
-        from: `"${params.fromName}" <${params.fromEmail}>`,
-        to,
-        subject: params.subject,
-        html: params.html,
-      });
-
-      await gmail.users.messages.send({
-        userId: "me",
-        requestBody: { raw },
-      });
-
-      total_sent++;
-      results.push({ email: to, status: "success", error_message: null });
-    } catch (err) {
-      total_failed++;
-      results.push({
-        email: to,
-        status: "failed",
-        error_message: err instanceof Error ? err.message : String(err),
-      });
-    }
+  // 10명씩 병렬 발송 (Gmail API 레이트 리밋 고려)
+  const BATCH_SIZE = 10;
+  for (let i = 0; i < params.recipients.length; i += BATCH_SIZE) {
+    const batch = params.recipients.slice(i, i + BATCH_SIZE);
+    const batchResults = await Promise.all(
+      batch.map(async (to) => {
+        try {
+          const raw = makeRawMessage({
+            from: `"${params.fromName}" <${params.fromEmail}>`,
+            to,
+            subject: params.subject,
+            html: params.html,
+          });
+          await gmail.users.messages.send({
+            userId: "me",
+            requestBody: { raw },
+          });
+          total_sent++;
+          return { email: to, status: "success" as const, error_message: null };
+        } catch (err) {
+          total_failed++;
+          return {
+            email: to,
+            status: "failed" as const,
+            error_message: err instanceof Error ? err.message : String(err),
+          };
+        }
+      })
+    );
+    results.push(...batchResults);
   }
 
   return { results, total_sent, total_failed };
