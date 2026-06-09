@@ -37,9 +37,12 @@ export async function POST(req: NextRequest) {
     const send_date = body.cached_send_date ?? new Date().toISOString().split("T")[0];
     const subject = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+    // 미리보기 HTML의 localhost URL → production URL로 교체
+    const prodUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+    const sendHtml = body.cached_html.replace(/https?:\/\/localhost:\d+/g, prodUrl);
     const { results } = await sendNewsletterViaGmail({
       fromName: "EZ Letter", fromEmail, subject,
-      html: body.cached_html,
+      html: sendHtml,
       recipients: subscribers.map((s) => s.email),
     });
     let total_sent = 0, total_failed = 0;
