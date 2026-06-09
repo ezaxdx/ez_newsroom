@@ -91,10 +91,11 @@ export async function sendNewsletterViaGmail(params: {
   let total_sent = 0;
   let total_failed = 0;
 
-  // 10명씩 병렬 발송 (Gmail API 레이트 리밋 고려)
-  const BATCH_SIZE = 10;
+  // 5명씩 병렬 발송 + 배치 간 200ms 대기 (Gmail API 레이트 리밋 대응)
+  const BATCH_SIZE = 5;
   for (let i = 0; i < params.recipients.length; i += BATCH_SIZE) {
     const batch = params.recipients.slice(i, i + BATCH_SIZE);
+    if (i > 0) await new Promise(r => setTimeout(r, 200));
     const batchResults = await Promise.all(
       batch.map(async (to) => {
         try {
