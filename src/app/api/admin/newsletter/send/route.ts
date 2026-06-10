@@ -147,16 +147,19 @@ export async function POST(req: NextRequest) {
     .gte("sent_at", kstDayStart).lte("sent_at", kstDayEnd)
     .order("sent_at", { ascending: true }).limit(1);
 
-  const { count: issueCount } = await supabase
-    .from("newsletter_issues").select("*", { count: "exact", head: true })
-    .in("status", ["sent", "partial"]);
+  const { data: maxVolData } = await supabase
+    .from("newsletter_issues")
+    .select("vol_number")
+    .in("status", ["sent", "partial"])
+    .order("vol_number", { ascending: false })
+    .limit(1);
 
-  const vol_number = todayIssues?.[0]?.vol_number ?? (issueCount ?? 0) + 1;
+  const maxVol = maxVolData?.[0]?.vol_number ?? 0;
+  const vol_number = todayIssues?.[0]?.vol_number ?? maxVol + 1;
 
-  const y  = today.getFullYear();
-  const mo = String(today.getMonth() + 1).padStart(2, "0");
-  const d  = String(today.getDate()).padStart(2, "0");
-  const send_date = `${y}.${mo}.${d}`;
+  // send_date는 KST 기준
+  const [ky, km, kd] = todayKSTStr.split("-");
+  const send_date = `${ky}.${km}.${kd}`;
 
   // ── 뉴스 수집 ──
   type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
