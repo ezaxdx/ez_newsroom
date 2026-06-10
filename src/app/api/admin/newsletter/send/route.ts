@@ -82,12 +82,10 @@ export async function POST(req: NextRequest) {
     const subject    = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
     const fromEmail  = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
 
-    // 미리보기 HTML 후처리: localhost → prod URL, 프록시 래퍼 제거
+    // 미리보기 HTML 후처리: localhost → prod URL (프록시 유지 — 이메일 클라이언트 호환성)
     const prodUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
     const sendHtml = body.cached_html
-      .replace(/https?:\/\/localhost:\d+/g, prodUrl)
-      .replace(/https?:\/\/[^/]+\/api\/image-proxy\?url=([^"'\s&]+)/g,
-        (_: string, encoded: string) => decodeURIComponent(encoded));
+      .replace(/https?:\/\/localhost:\d+/g, prodUrl);
 
     const recipients = subscribers.map(s => s.email);
 

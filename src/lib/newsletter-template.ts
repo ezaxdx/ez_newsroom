@@ -82,9 +82,9 @@ function sectionDivider(title: string): string {
 // ── 외부 이미지 → 프록시 URL 변환 ────────────────────────
 // is_email=true 이면 원본 URL 그대로 (Gmail이 자체 프록시 처리)
 // is_email=false(미리보기)면 /api/image-proxy 경유 (일부 서버가 직접 접근 차단)
-function proxyImg(image_url: string | null, site_url: string, is_email = false): string | null {
+function proxyImg(image_url: string | null, site_url: string, _is_email = false): string | null {
   if (!image_url) return null;
-  if (is_email) return image_url; // 발송용: 원본 URL 그대로
+  // 미리보기/발송 모두 프록시 사용 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
   if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
