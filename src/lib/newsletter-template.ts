@@ -36,7 +36,7 @@ const C = {
   green:   "#54713B",
   dark:    "#423C25",
   darkAlt: "#413C26",
-  beige:   "rgba(242,234,223,0.5)",
+  beige:   "#F5EDE3",
   muted:   "#7A6E5F",
   gray:    "#D9D9D9",
   border:  "#000000",
@@ -95,9 +95,14 @@ const NEWS_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 function newsCard(item: NewsCard, vol: number, site_url: string, is_email = false): string {
   const proxied = proxyImg(item.image_url, site_url, is_email);
+  // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
   const img = proxied
-    ? `<img src="${proxied}" alt="" width="255" height="129"
-           style="display:block;width:255px;height:129px;object-fit:cover;">`
+    ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
+         <tr><td width="255" height="129" style="width:255px;height:129px;overflow:hidden;line-height:0;font-size:0;">
+           <img src="${proxied}" alt="" width="255" height="129"
+                style="display:block;width:255px;height:129px;border:0;">
+         </td></tr>
+       </table>`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
            <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
@@ -125,9 +130,9 @@ function pickCard(ev: EventCard, vol: number, site_url: string, is_email = false
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
     ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
-         <tr><td height="129" style="height:129px;background:#EEEBE5;overflow:hidden;line-height:0;font-size:0;">
+         <tr><td width="255" height="129" style="width:255px;height:129px;overflow:hidden;line-height:0;font-size:0;">
            <img src="${proxied}" width="255" height="129" alt=""
-                style="display:block;width:255px;height:129px;object-fit:cover;border:0;">
+                style="display:block;width:255px;height:129px;border:0;">
          </td></tr>
        </table>`
     : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
@@ -254,7 +259,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
       <td style="background:${C.white};padding:24px 20px;">
         <table cellpadding="0" cellspacing="0" width="100%">
           <tr>
-            <td style="background:rgba(242,234,223,0.5);border-radius:15px;padding:24px 28px;">
+            <td style="background:#F5EDE3;border-radius:15px;padding:24px 28px;">
               <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
               <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
             </td>
