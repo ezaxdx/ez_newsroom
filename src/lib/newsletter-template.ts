@@ -255,7 +255,8 @@ export function generateNewsletterHTML(data: NewsletterData): string {
         <table cellpadding="0" cellspacing="0" width="100%">
           <tr>
             <td style="background:rgba(242,234,223,0.5);border-radius:15px;padding:24px 28px;">
-              <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;white-space:pre-line;font-family:${FONT_NOTO};">${editorial_text || "이번 호 인사말이 없습니다."}</p>
+              <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+              <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
             </td>
           </tr>
         </table>
