@@ -173,9 +173,9 @@ export async function POST(req: NextRequest) {
     const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
     const { data: latestRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true).gte("published_at", twoWeeksAgo)
+      .eq("is_published", true)
       .or(orFilter).neq("id", excludeId)
-      .order("published_at", { ascending: false }).limit(1);
+      .order("display_order", { ascending: true }).limit(1);
     return [...top, ...(latestRaw ?? []) as RawNews[]].map(toNewsCard);
   }
 
