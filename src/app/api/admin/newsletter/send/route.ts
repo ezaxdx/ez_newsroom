@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   let body: {
-    editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean;
+    editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean; reuse_prev_pick?: boolean;
     cached_html?: string; cached_vol?: number; cached_send_date?: string; cached_featured_ids?: string[];
   };
   try { body = await req.json(); }
@@ -112,12 +112,28 @@ export async function POST(req: NextRequest) {
     if (issueErr || !issue)
       return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
 
-    const { total_sent, total_failed } = await sendAndSaveLogs({
-      supabase, issueId: issue.id, html: sendHtml,
-      subject, fromEmail, recipients,
-    });
+    let total_sent = 0, total_failed = 0;
+    try {
+      ({ total_sent, total_failed } = await sendAndSaveLogs({
+        supabase, issueId: issue.id, html: sendHtml,
+        subject, fromEmail, recipients,
+      }));
+    } catch (err) {
+      // 타임아웃 또는 예외 발생 시 — 완료된 로그 기준으로 집계 후 상태 갱신
+      console.error("[newsletter/send] sendAndSaveLogs error:", err);
+      const { count: sentCount } = await supabase
+        .from("newsletter_send_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("issue_id", issue.id).eq("status", "success");
+      const { count: failedCount } = await supabase
+        .from("newsletter_send_logs")
+        .select("*", { count: "exact", head: true })
+        .eq("issue_id", issue.id).eq("status", "failed");
+      total_sent = sentCount ?? 0;
+      total_failed = failedCount ?? 0;
+    }
 
-    const finalStatus = total_sent === 0 ? "failed" : total_failed === 0 ? "sent" : "partial";
+    const finalStatus = total_sent === 0 ? "failed" : total_sent >= recipients.length ? "sent" : "partial";
     await supabase.from("newsletter_issues")
       .update({ status: finalStatus, total_sent, total_failed })
       .eq("id", issue.id);
@@ -308,12 +324,27 @@ export async function POST(req: NextRequest) {
   if (issueErr || !issue)
     return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
 
-  const { total_sent, total_failed } = await sendAndSaveLogs({
-    supabase, issueId: issue.id, html,
-    subject, fromEmail, recipients,
-  });
+  let total_sent = 0, total_failed = 0;
+  try {
+    ({ total_sent, total_failed } = await sendAndSaveLogs({
+      supabase, issueId: issue.id, html,
+      subject, fromEmail, recipients,
+    }));
+  } catch (err) {
+    console.error("[newsletter/send] sendAndSaveLogs error:", err);
+    const { count: sentCount } = await supabase
+      .from("newsletter_send_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("issue_id", issue.id).eq("status", "success");
+    const { count: failedCount } = await supabase
+      .from("newsletter_send_logs")
+      .select("*", { count: "exact", head: true })
+      .eq("issue_id", issue.id).eq("status", "failed");
+    total_sent = sentCount ?? 0;
+    total_failed = failedCount ?? 0;
+  }
 
-  const finalStatus = total_sent === 0 ? "failed" : total_failed === 0 ? "sent" : "partial";
+  const finalStatus = total_sent === 0 ? "failed" : total_sent >= recipients.length ? "sent" : "partial";
   await supabase.from("newsletter_issues")
     .update({ status: finalStatus, total_sent, total_failed })
     .eq("id", issue.id);
