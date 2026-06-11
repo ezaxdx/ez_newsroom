@@ -92,6 +92,8 @@ export async function POST(req: NextRequest) {
 
     const batchResults = await Promise.all(
       batch.map(async (to) => {
+        // 1. 발송 시도 (15초 개별 타임아웃)
+        let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
         try {
           const raw = makeRawMessage({ from, to, subject, html: issue.html_content! });
           await Promise.race([
@@ -100,18 +102,17 @@ export async function POST(req: NextRequest) {
               setTimeout(() => reject(new Error("Gmail send timeout after 15000ms")), 15000)
             ),
           ]);
-          return { email: to, status: "success" as const, error_message: null };
+          result = { email: to, issue_id, status: "success", error_message: null };
         } catch (err) {
-          return {
-            email: to, status: "failed" as const,
+          result = {
+            email: to, issue_id, status: "failed",
             error_message: err instanceof Error ? err.message : String(err),
           };
         }
+        // 2. 발송 완료 즉시 개별 로그 저장
+        await supabase.from("newsletter_send_logs").insert([result]);
+        return result;
       })
-    );
-
-    await supabase.from("newsletter_send_logs").insert(
-      batchResults.map(r => ({ ...r, issue_id }))
     );
 
     total_sent  += batchResults.filter(r => r.status === "success").length;

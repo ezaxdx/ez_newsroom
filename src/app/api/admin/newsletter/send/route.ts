@@ -8,7 +8,7 @@ import { getGmailClient, makeRawMessage } from "@/lib/gmail-sender";
 export const maxDuration = 60;
 
 // ── 배치 발송 + 즉시 로그 저장 헬퍼 ──────────────────────
-// Vercel 60초 타임아웃 중간에 끊겨도 완료된 배치의 로그는 보존됨
+// 이메일 1건 완료 즉시 개별 로그 저장 → 타임아웃으로 끊겨도 완료된 건은 무조건 기록됨
 async function sendAndSaveLogs({
   supabase, issueId, html, subject, fromEmail, recipients,
 }: {
@@ -21,7 +21,7 @@ async function sendAndSaveLogs({
 }): Promise<{ total_sent: number; total_failed: number }> {
   const gmail = await getGmailClient();
   const from = `"EZ Letter" <${fromEmail}>`;
-  // 125명 기준: 10명/배치 = 13배치 × ~1.5s = ~20s → 60초 안에 안전하게 완료
+  // 125명 기준: 10명/배치 = 13배치 × ~2s = ~26s → 60초 안에 안전하게 완료
   const BATCH_SIZE = 10;
   let total_sent = 0, total_failed = 0;
 
@@ -31,28 +31,27 @@ async function sendAndSaveLogs({
 
     const batchResults = await Promise.all(
       batch.map(async (to) => {
+        // 1. 발송 시도 (15초 개별 타임아웃)
+        let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
         try {
           const raw = makeRawMessage({ from, to, subject, html });
-          // 단건 15초 타임아웃 (Gmail API 무한 대기 방지)
           await Promise.race([
             gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
             new Promise<never>((_, reject) =>
               setTimeout(() => reject(new Error("Gmail send timeout after 15000ms")), 15000)
             ),
           ]);
-          return { email: to, status: "success" as const, error_message: null };
+          result = { email: to, issue_id: issueId, status: "success", error_message: null };
         } catch (err) {
-          return {
-            email: to, status: "failed" as const,
+          result = {
+            email: to, issue_id: issueId, status: "failed",
             error_message: err instanceof Error ? err.message : String(err),
           };
         }
+        // 2. 발송 완료 즉시 개별 로그 저장 (배치 전체 대기 없이)
+        await supabase.from("newsletter_send_logs").insert([result]);
+        return result;
       })
-    );
-
-    // 배치 완료 즉시 DB에 저장 (타임아웃으로 끊겨도 이전 배치는 보존)
-    await supabase.from("newsletter_send_logs").insert(
-      batchResults.map(r => ({ ...r, issue_id: issueId }))
     );
 
     total_sent  += batchResults.filter(r => r.status === "success").length;
