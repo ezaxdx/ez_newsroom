@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   let body: {
-    editorial_text?: string; dry_run?: boolean;
+    editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean;
     cached_html?: string; cached_vol?: number; cached_send_date?: string; cached_featured_ids?: string[];
   };
   try { body = await req.json(); }
@@ -74,6 +74,7 @@ export async function POST(req: NextRequest) {
 
   const editorial_text = body.editorial_text ?? "";
   const dry_run = body.dry_run === true;
+  const skip_ezpmp = body.skip_ezpmp === true;
   const supabase = createAdminClient();
 
   // ── 미리보기에서 생성된 HTML 캐시로 바로 발송 ──────────
@@ -272,7 +273,7 @@ export async function POST(req: NextRequest) {
 
   const html = generateNewsletterHTML({
     vol_number, send_date, editorial_text,
-    mice_news: miceNews, tourism_news: tourismNews, ai_news: aiNews, ezpmp_news: ezpmpNews,
+    mice_news: miceNews, tourism_news: tourismNews, ai_news: aiNews, ezpmp_news: skip_ezpmp ? [] : ezpmpNews,
     featured_events: featuredEvents, upcoming_events: upcomingEvents,
     site_url, is_email: !dry_run,
   });

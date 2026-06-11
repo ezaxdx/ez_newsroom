@@ -37,6 +37,7 @@ export default function NewsletterPage() {
 
   // ── Send tab state ──
   const [editorialText, setEditorialText] = useState("");
+  const [skipEzpmp, setSkipEzpmp] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
   const [previewing, setPreviewing] = useState(false);
@@ -232,7 +233,7 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editorial_text: editorialText, dry_run: true }),
+        body: JSON.stringify({ editorial_text: editorialText, dry_run: true, skip_ezpmp: skipEzpmp }),
       });
       const json = await res.json();
       if (res.ok && json.html) {
@@ -267,6 +268,7 @@ export default function NewsletterPage() {
         body: JSON.stringify({
           editorial_text: editorialText,
           dry_run: false,
+          skip_ezpmp: skipEzpmp,
           ...(previewHtml && previewMeta ? {
             cached_html: previewHtml,
             cached_vol: previewMeta.vol_number,
@@ -661,6 +663,17 @@ export default function NewsletterPage() {
                 }}
               />
             </div>
+
+            <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, fontSize: 13, cursor: "pointer", userSelect: "none", width: "fit-content" }}>
+              <input
+                type="checkbox"
+                checked={skipEzpmp}
+                onChange={e => { setSkipEzpmp(e.target.checked); setPreviewHtml(null); }}
+              />
+              <span style={{ color: skipEzpmp ? "#dc2626" : "var(--on-surface-variant)" }}>
+                EZPMP 섹션 제외 {skipEzpmp ? "✓" : ""}
+              </span>
+            </label>
 
             <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
               <button
