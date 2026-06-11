@@ -83,18 +83,23 @@ export async function POST(req: NextRequest) {
   const send_date = `${todayKST.getUTCFullYear()}.${String(todayKST.getUTCMonth() + 1).padStart(2, "0")}.${String(todayKST.getUTCDate()).padStart(2, "0")}`;
   const subject = `[EZ Letter] Vol.${issue.vol_number} · ${send_date}`;
 
-  const BATCH_SIZE = 5;
+  const BATCH_SIZE = 10;
   let total_sent = 0, total_failed = 0;
 
   for (let i = 0; i < emails.length; i += BATCH_SIZE) {
     const batch = emails.slice(i, i + BATCH_SIZE);
-    if (i > 0) await new Promise(r => setTimeout(r, 200));
+    if (i > 0) await new Promise(r => setTimeout(r, 300));
 
     const batchResults = await Promise.all(
       batch.map(async (to) => {
         try {
           const raw = makeRawMessage({ from, to, subject, html: issue.html_content! });
-          await gmail.users.messages.send({ userId: "me", requestBody: { raw } });
+          await Promise.race([
+            gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("Gmail send timeout after 15000ms")), 15000)
+            ),
+          ]);
           return { email: to, status: "success" as const, error_message: null };
         } catch (err) {
           return {
