@@ -163,7 +163,7 @@ export async function POST(req: NextRequest) {
   const kstDayEnd   = new Date(`${todayKSTStr}T23:59:59+09:00`).toISOString();
 
   const { data: todayIssues } = await supabase
-    .from("newsletter_issues").select("vol_number")
+    .from("newsletter_issues").select("vol_number, featured_event_ids")
     .in("status", ["sent", "partial", "sending"])
     .gte("sent_at", kstDayStart).lte("sent_at", kstDayEnd)
     .order("sent_at", { ascending: true }).limit(1);
@@ -244,34 +244,73 @@ export async function POST(req: NextRequest) {
   const scored = Array.from(venueDateMap.values())
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
-  const { data: recentIssues } = await supabase.from("newsletter_issues")
-    .select("featured_event_ids").in("status", ["sent", "partial"])
-    .order("sent_at", { ascending: false }).limit(2);
-  const recentlyFeatured = new Set<string>(
-    (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
-  );
+  // 같은 날(KST) 이미 발송된 호가 있으면 그 Pick 행사를 그대로 재사용 → 같은 호는 항상 같은 Pick
+  const existingFeaturedIds = (todayIssues?.[0]?.featured_event_ids as string[] | null) ?? [];
 
-  const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
-  const seenIds = new Set<string>(); const pickPool: typeof fresh = [];
-  for (const e of [
-    ...fresh.filter(e => e.start_date <= d14),
-    ...fresh.filter(e => e.start_date > d14 && e.start_date <= d30),
-    ...fresh.filter(e => e.start_date > d30),
-    ...scored,
-  ]) {
-    if (pickPool.length >= 4) break;
-    if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
+  type FeaturedEventRaw = {
+    id: string; event_name: string; start_date: string; end_date: string | null;
+    venue: string | null; website: string | null; image_url: string | null; description: string | null;
+  };
+  let featuredRaw: FeaturedEventRaw[];
+
+  if (existingFeaturedIds.length > 0) {
+    // ── 기존 발송 Pick 재사용 ──
+    const { data: reusedEvents } = await supabase.from("convention_events")
+      .select("id, event_name, start_date, end_date, venue, website, image_url, description")
+      .in("id", existingFeaturedIds);
+    const byId = new Map((reusedEvents ?? []).map(e => [e.id, e]));
+    featuredRaw = existingFeaturedIds
+      .map(id => byId.get(id))
+      .filter((e): e is NonNullable<ReturnType<typeof byId.get>> => e != null)
+      .map(e => ({
+        id: e.id,
+        event_name: e.event_name ?? "",
+        start_date: e.start_date ?? todayStr,
+        end_date: e.end_date ?? null,
+        venue: e.venue ?? null,
+        website: e.website ?? null,
+        image_url: (e as { image_url?: string | null }).image_url ?? null,
+        description: (e as { description?: string | null }).description ?? null,
+      }))
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  } else {
+    // ── 스코어링 알고리즘으로 새 Pick 선정 ──
+    const { data: recentIssues } = await supabase.from("newsletter_issues")
+      .select("featured_event_ids").in("status", ["sent", "partial"])
+      .order("sent_at", { ascending: false }).limit(2);
+    const recentlyFeatured = new Set<string>(
+      (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
+    );
+    const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
+    const seenIds = new Set<string>(); const pickPool: typeof fresh = [];
+    for (const e of [
+      ...fresh.filter(e => e.start_date <= d14),
+      ...fresh.filter(e => e.start_date > d14 && e.start_date <= d30),
+      ...fresh.filter(e => e.start_date > d30),
+      ...scored,
+    ]) {
+      if (pickPool.length >= 4) break;
+      if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
+    }
+    featuredRaw = pickPool.slice(0, 4)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date))
+      .map(e => ({
+        id: e.id,
+        event_name: e.event_name ?? "",
+        start_date: e.start_date ?? todayStr,
+        end_date: e.end_date ?? null,
+        venue: e.venue ?? null,
+        website: e.website ?? null,
+        image_url: (e as { image_url?: string | null }).image_url ?? null,
+        description: (e as { description?: string | null }).description ?? null,
+      }));
   }
-  const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   const featuredEvents: EventCard[] = featuredRaw.map(e => ({
-    name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-    venue: e.venue ?? null,
-    image_url: (e as { image_url?: string | null }).image_url ?? null,
-    website: e.website ?? null,
-    description: (e as { description?: string | null }).description ?? null,
+    name: e.event_name, start_date: e.start_date, end_date: e.end_date,
+    venue: e.venue, image_url: e.image_url, website: e.website, description: e.description,
   }));
 
   const featuredIds = new Set(featuredRaw.map(e => e.id));
