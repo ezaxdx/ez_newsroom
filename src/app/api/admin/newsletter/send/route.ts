@@ -7,21 +7,6 @@ import { getGmailClient, makeRawMessage } from "@/lib/gmail-sender";
 
 export const maxDuration = 60;
 
-// ── 단건 발송 타임아웃 래퍼 (15초) ────────────────────────
-// Gmail API 호출이 무한정 대기하지 않도록 개별 타임아웃 적용
-function sendWithTimeout(
-  gmail: Awaited<ReturnType<typeof getGmailClient>>,
-  payload: Parameters<typeof gmail.users.messages.send>[0],
-  timeoutMs = 15000,
-): Promise<unknown> {
-  return Promise.race([
-    gmail.users.messages.send(payload),
-    new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error(`Gmail send timeout after ${timeoutMs}ms`)), timeoutMs)
-    ),
-  ]);
-}
-
 // ── 배치 발송 + 즉시 로그 저장 헬퍼 ──────────────────────
 // Vercel 60초 타임아웃 중간에 끊겨도 완료된 배치의 로그는 보존됨
 async function sendAndSaveLogs({
@@ -48,7 +33,13 @@ async function sendAndSaveLogs({
       batch.map(async (to) => {
         try {
           const raw = makeRawMessage({ from, to, subject, html });
-          await sendWithTimeout(gmail, { userId: "me", requestBody: { raw } });
+          // 단건 15초 타임아웃 (Gmail API 무한 대기 방지)
+          await Promise.race([
+            gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
+            new Promise<never>((_, reject) =>
+              setTimeout(() => reject(new Error("Gmail send timeout after 15000ms")), 15000)
+            ),
+          ]);
           return { email: to, status: "success" as const, error_message: null };
         } catch (err) {
           return {
