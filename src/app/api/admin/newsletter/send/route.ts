@@ -21,8 +21,8 @@ async function sendAndSaveLogs({
 }): Promise<{ total_sent: number; total_failed: number }> {
   const gmail = await getGmailClient();
   const from = `"EZ Letter" <${fromEmail}>`;
-  // 125명 기준: 10명/배치 = 13배치 × ~2s = ~26s → 60초 안에 안전하게 완료
-  const BATCH_SIZE = 10;
+  // 125명 기준: 20명/배치 = 7배치 × ~5s = ~35s → 60초 안에 안전하게 완료
+  const BATCH_SIZE = 20;
   let total_sent = 0, total_failed = 0;
 
   for (let i = 0; i < recipients.length; i += BATCH_SIZE) {

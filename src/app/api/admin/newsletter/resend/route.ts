@@ -119,8 +119,18 @@ export async function POST(req: NextRequest) {
     total_failed += batchResults.filter(r => r.status === "failed").length;
   }
 
-  const newTotalSent  = (issue.total_sent  ?? 0) + total_sent;
-  const newTotalFailed = total_failed;
+  // 첫 발송이 타임아웃으로 강제 종료된 경우 issue.total_sent가 0일 수 있으므로
+  // 로그 DB에서 실제 전체 성공/실패 수를 집계
+  const { count: logSentCount } = await supabase
+    .from("newsletter_send_logs")
+    .select("*", { count: "exact", head: true })
+    .eq("issue_id", issue_id).eq("status", "success");
+  const { count: logFailedCount } = await supabase
+    .from("newsletter_send_logs")
+    .select("*", { count: "exact", head: true })
+    .eq("issue_id", issue_id).eq("status", "failed");
+  const newTotalSent   = logSentCount   ?? total_sent;
+  const newTotalFailed = logFailedCount ?? total_failed;
   const allSent = newTotalSent >= (issue.target_count ?? 0) && newTotalFailed === 0;
   const finalStatus = newTotalSent === 0 ? "failed" : allSent ? "sent" : "partial";
 
