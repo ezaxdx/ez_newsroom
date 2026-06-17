@@ -73,18 +73,49 @@ function toAbsoluteUrl(link: string, sourceUrl: string): string {
   }
 }
 
+/**
+ * Google News 기사 URL base64 디코딩
+ * CBMi... 형식: bytes[0-2]=프로토버프 헤더, bytes[3]=URL길이, bytes[4~]=원문URL
+ */
+function decodeGoogleNewsArticleUrl(googleUrl: string): string | null {
+  try {
+    const match = googleUrl.match(/articles\/([A-Za-z0-9_=-]+)/);
+    if (!match) return null;
+    let b64 = match[1].replace(/-/g, "+").replace(/_/g, "/");
+    while (b64.length % 4) b64 += "=";
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    // byte[3]이 URL 길이, byte[4~]부터 원문 URL
+    if (bytes.length < 5) return null;
+    const urlBytes = bytes.slice(4);
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(urlBytes);
+    const urlMatch = text.match(/^https?:\/\/[^\s\x00-\x08\x0e-\x1f]+/);
+    if (!urlMatch) return null;
+    // 비ASCII·제어문자 이후 잘라내기
+    const cleaned = urlMatch[0].replace(/[\x00-\x1f\x7f-\x9f].*$/, "");
+    return cleaned.startsWith("http") ? cleaned : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Google News 리다이렉트 → 실제 원문 URL 추출 */
 async function resolveGoogleNewsUrl(url: string): Promise<string> {
   if (!url.includes("news.google.com")) return url;
+
+  // 1단계: base64 디코딩으로 즉시 추출 (HTTP 요청 없이)
+  const decoded = decodeGoogleNewsArticleUrl(url);
+  if (decoded) return decoded;
+
+  // 2단계: HTTP 리다이렉트 폴백
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
       redirect: "follow",
       signal: AbortSignal.timeout(8000),
     });
-    // 리다이렉트 후 최종 URL 반환
     if (res.url && !res.url.includes("news.google.com")) return res.url;
-    // 리다이렉트가 안 된 경우 HTML에서 실제 링크 추출
     const html = await res.text();
     const canonical = html.match(/<link[^>]+rel=["']canonical["'][^>]+href=["']([^"']+)["']/i)?.[1];
     if (canonical && !canonical.includes("news.google.com")) return canonical;
