@@ -107,21 +107,19 @@ export const EZPMP_PARTNERS: string[] = [
 
 export function isEzpmpPartner(organizer: string | null | undefined): boolean {
   if (!organizer) return false;
-  const orgBase = organizer
-    .replace(/\([^)]*\)/g, "")
+  // 쉼표·슬래시로 구분된 복수 기관을 각각 개별 매칭
+  const orgs = organizer
     .replace(/（[^）]*）/g, "")
-    .trim()
-    .toLowerCase();
-  return EZPMP_PARTNERS.some((p) => {
-    if (p.length < 2) return false;
-    const pl = p.toLowerCase();
-    return (
-      orgBase === pl ||
-      orgBase.startsWith(pl + " ") ||
-      orgBase.endsWith(" " + pl) ||
-      (orgBase.includes(pl) && pl.length / orgBase.length >= 0.8)
-    );
-  });
+    .split(/[,\/]/)
+    .map((o) => o.replace(/\([^)]*\)/g, "").trim().toLowerCase())
+    .filter(Boolean);
+  return orgs.some((orgBase) =>
+    EZPMP_PARTNERS.some((p) => {
+      if (p.length < 2) return false;
+      const pl = p.toLowerCase();
+      return orgBase === pl || orgBase.includes(pl) || pl.includes(orgBase);
+    })
+  );
 }
 
 export type EventForScore = {

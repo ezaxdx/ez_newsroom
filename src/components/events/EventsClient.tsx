@@ -110,24 +110,19 @@ const EZPMP_PARTNERS: string[] = [
 
 function isEzpmpPartner(organizer: string | null): boolean {
   if (!organizer) return false;
-  // 괄호·약어 제거 후 정규화
-  const orgBase = organizer
-    .replace(/\([^)]*\)/g, "")
+  // 쉼표·슬래시로 구분된 복수 기관을 각각 개별 매칭
+  const orgs = organizer
     .replace(/（[^）]*）/g, "")
-    .trim().toLowerCase();
-  return EZPMP_PARTNERS.some((p) => {
-    if (p.length < 4) return false;
-    const pl = p.toLowerCase();
-    // 파트너명이 organizer 전체이거나, organizer가 파트너명과 동일하게 시작/끝나는 경우만 매칭
-    // (단순 부분 포함은 false-positive 유발)
-    return (
-      orgBase === pl ||
-      orgBase.startsWith(pl + " ") ||
-      orgBase.endsWith(" " + pl) ||
-      // 파트너명이 organizer 길이의 80% 이상을 차지할 때만 포함 매칭 허용
-      (orgBase.includes(pl) && pl.length / orgBase.length >= 0.8)
-    );
-  });
+    .split(/[,\/]/)
+    .map((o) => o.replace(/\([^)]*\)/g, "").trim().toLowerCase())
+    .filter(Boolean);
+  return orgs.some((orgBase) =>
+    EZPMP_PARTNERS.some((p) => {
+      if (p.length < 4) return false;
+      const pl = p.toLowerCase();
+      return orgBase === pl || orgBase.includes(pl) || pl.includes(orgBase);
+    })
+  );
 }
 
 function scoreEvent(event: ConventionEvent, today: Date): number {
@@ -153,7 +148,7 @@ function scoreEvent(event: ConventionEvent, today: Date): number {
   if (event.category === "회의") score += 8;
 
   // 주요 컨벤션센터 보너스
-  if (PREFERRED_VENUES.includes(event.venue)) score += 8;
+  if (PREFERRED_VENUES.some((v) => event.venue?.includes(v))) score += 8;
 
   // EZPMP 파트너 기관 보너스
   if (isEzpmpPartner(event.organizer)) score += 30;
@@ -197,11 +192,12 @@ const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","
 
 export default function EventsClient({ events }: Props) {
   const today = new Date();
+  const todayDateStr = today.toISOString().split("T")[0];
 
   // ── 이즈피엠피 맞춤 추천 (상위 4건) ─────────────────────────────
   const recommendations = useMemo(() => {
     return [...events]
-      .filter((e) => new Date(e.start_date) >= today) // 지난 행사 제외
+      .filter((e) => e.start_date >= todayDateStr) // 지난 행사 제외 (날짜 문자열 비교 → KST 기준 오늘 포함)
       .map((e) => ({ event: e, score: scoreEvent(e, today) }))
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
