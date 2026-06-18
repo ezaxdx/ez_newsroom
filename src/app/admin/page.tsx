@@ -48,10 +48,34 @@ async function fetchSettings(): Promise<{
   } catch { return defaults; }
 }
 
+type CurationLog = {
+  id: string;
+  run_at: string;
+  duration_ms: number;
+  fetched: number;
+  published: number;
+  staged: number;
+  skipped: number;
+  failed: number;
+};
+
+async function fetchCurationLogs(): Promise<CurationLog[]> {
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("curation_logs")
+      .select("id, run_at, duration_ms, fetched, published, staged, skipped, failed")
+      .order("run_at", { ascending: false })
+      .limit(10);
+    return (data ?? []) as CurationLog[];
+  } catch { return []; }
+}
+
 export default async function AdminPage() {
-  const [news, { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories }] = await Promise.all([
+  const [news, { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories }, curationLogs] = await Promise.all([
     fetchAllNews(),
     fetchSettings(),
+    fetchCurationLogs(),
   ]);
 
   return (
@@ -78,6 +102,48 @@ export default async function AdminPage() {
       </div>
 
       <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} scheduleHour={scheduleHour} scheduleEnabled={scheduleEnabled} navCategories={navCategories} />
+
+      {/* 큐레이션 실행 로그 */}
+      <div className="mt-8 mb-8">
+        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-3" style={{ color: "var(--on-surface-variant)" }}>
+          큐레이션 실행 로그
+        </p>
+        {curationLogs.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--on-surface-variant)" }}>아직 실행 기록이 없습니다.</p>
+        ) : (
+          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--outline-variant)" }}>
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ background: "var(--surface-container-lowest)" }}>
+                  {["실행 시각", "가져옴", "발행", "대기", "스킵", "실패", "소요"].map((h) => (
+                    <th key={h} className="px-3 py-2 text-left text-[0.68rem] font-semibold tracking-[0.05em] uppercase" style={{ color: "var(--on-surface-variant)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {curationLogs.map((log, i) => {
+                  const kst = new Date(new Date(log.run_at).getTime() + 9 * 60 * 60 * 1000);
+                  const dateStr = `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, "0")}-${String(kst.getDate()).padStart(2, "0")} ${String(kst.getHours()).padStart(2, "0")}:${String(kst.getMinutes()).padStart(2, "0")}`;
+                  const mins = Math.floor((log.duration_ms ?? 0) / 60000);
+                  const secs = Math.floor(((log.duration_ms ?? 0) % 60000) / 1000);
+                  const dur = mins > 0 ? `${mins}분 ${secs}초` : `${secs}초`;
+                  return (
+                    <tr key={log.id} style={{ borderTop: i > 0 ? "1px solid var(--outline-variant)" : undefined }}>
+                      <td className="px-3 py-2 font-mono" style={{ color: "var(--on-surface-variant)" }}>{dateStr}</td>
+                      <td className="px-3 py-2">{log.fetched ?? "-"}</td>
+                      <td className="px-3 py-2 font-semibold" style={{ color: log.published > 0 ? "var(--primary)" : undefined }}>{log.published ?? "-"}</td>
+                      <td className="px-3 py-2">{log.staged ?? "-"}</td>
+                      <td className="px-3 py-2">{log.skipped ?? "-"}</td>
+                      <td className="px-3 py-2" style={{ color: (log.failed ?? 0) > 0 ? "var(--error)" : undefined }}>{log.failed ?? "-"}</td>
+                      <td className="px-3 py-2" style={{ color: "var(--on-surface-variant)" }}>{dur}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       <HelpPanel title="큐레이션 보드 가이드">
         <p style={{ marginBottom: 12 }}>

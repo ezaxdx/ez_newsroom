@@ -558,11 +558,13 @@ Deno.serve(async (req) => {
   const qualityThresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
   const companyContext: string = settings?.company_context ?? "";
 
-  await supabase.from("news").delete().eq("is_published", false);
-
   const { data: existingNews } = await supabase.from("news").select("original_url");
   const existingUrls = new Set((existingNews ?? []).map((n: { original_url: string }) => n.original_url));
-  const results = { created: 0, skipped: 0, failed: 0 };
+  const results = { published: 0, staged: 0, skipped: 0, failed: 0 };
+  const runStart = Date.now();
+  const scoreDist: Record<string, number> = {};
+  const sourceStats: Array<{ name: string; type: string; fetched: number; published: number; staged: number; skipped: number; failed: number }> = [];
+  const runErrors: Array<{ source: string; url?: string; error: string }> = [];
 
   // 동시개최 중복 제거: 같은 venue + 같은 시작일 조합은 1건만 허용
   const venueDateSeen = new Set<string>();
@@ -583,12 +585,15 @@ Deno.serve(async (req) => {
       keywords: [],
     };
     const catLevelPrompts = allLevelPrompts[category] ?? {};
+    const stat = { name: source.source_name, type: source.source_type, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0 };
+    sourceStats.push(stat);
 
     const insertArticle = async (articleText: string, url: string, image_url: string | null, pubDate?: string) => {
+      stat.fetched++;
       // 원문이 너무 짧으면 (봇 차단·접근 불가) 스킵 — 환각 기사 방지
       if (articleText.length < 200) {
         console.log(`[SKIP] 원문 너무 짧음 (${articleText.length}자): ${url}`);
-        results.skipped++;
+        results.skipped++; stat.skipped++;
         existingUrls.add(url);
         return;
       }
@@ -596,15 +601,16 @@ Deno.serve(async (req) => {
       const vdKey = extractVenueDateKey(articleText);
       if (vdKey && venueDateSeen.has(vdKey)) {
         console.log(`[SKIP] 동시개최 중복 (${vdKey}): ${url}`);
-        results.skipped++;
+        results.skipped++; stat.skipped++;
         existingUrls.add(url);
         return;
       }
       if (vdKey) venueDateSeen.add(vdKey);
       const generated = await generateArticle(apiKey, articleText, url, setting.persona, setting.audience, setting.keywords, catLevelPrompts, companyContext);
-      if (!generated) { results.failed++; return; }
+      if (!generated) { results.failed++; stat.failed++; runErrors.push({ source: source.source_name, url, error: "generateArticle 실패" }); return; }
       const score = generated.quality_score ?? 5;
-      if (score < qualityThresholds.staging) { results.skipped++; existingUrls.add(url); return; }
+      scoreDist[score] = (scoreDist[score] ?? 0) + 1;
+      if (score < qualityThresholds.staging) { results.skipped++; stat.skipped++; existingUrls.add(url); return; }
       const shouldAutoPublish = score >= qualityThresholds.auto_publish;
       const { error } = await supabase.from("news").insert({
         title: generated.title, summary_short: generated.summary_short,
@@ -616,8 +622,15 @@ Deno.serve(async (req) => {
         priority_score: source.weight * 10, display_order: 1000 - score * 10,
         published_at: shouldAutoPublish ? new Date().toISOString() : safeDateISO(pubDate),
       });
-      if (error) { console.error("[DB insert 실패]", error.message, url); results.failed++; }
-      else { results.created++; existingUrls.add(url); }
+      if (error) {
+        console.error("[DB insert 실패]", error.message, url);
+        results.failed++; stat.failed++;
+        runErrors.push({ source: source.source_name, url, error: error.message });
+      } else {
+        if (shouldAutoPublish) { results.published++; stat.published++; }
+        else { results.staged++; stat.staged++; }
+        existingUrls.add(url);
+      }
     };
 
     if (source.source_type === "url") {
@@ -682,8 +695,21 @@ Deno.serve(async (req) => {
     }
   }
 
-  console.log(`[완료] created:${results.created} skipped:${results.skipped} failed:${results.failed}`);
-  return new Response(JSON.stringify({ ok: true, ...results }), {
+  const durationMs = Date.now() - runStart;
+  const fetched = sourceStats.reduce((s, r) => s + r.fetched, 0);
+  console.log(`[완료] published:${results.published} staged:${results.staged} skipped:${results.skipped} failed:${results.failed} (${durationMs}ms)`);
+  await supabase.from("curation_logs").insert({
+    duration_ms: durationMs,
+    fetched,
+    published: results.published,
+    staged: results.staged,
+    skipped: results.skipped,
+    failed: results.failed,
+    score_dist: scoreDist,
+    source_stats: sourceStats,
+    errors: runErrors,
+  });
+  return new Response(JSON.stringify({ ok: true, ...results, duration_ms: durationMs }), {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
   });
 });
