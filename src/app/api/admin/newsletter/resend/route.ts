@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
           await Promise.race([
             gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
             new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Gmail send timeout after 15000ms")), 15000)
+              setTimeout(() => reject(new Error("Gmail send timeout after 8000ms")), 8000)
             ),
           ]);
           result = { email: to, issue_id, status: "success", error_message: null };
