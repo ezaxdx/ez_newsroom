@@ -23,11 +23,12 @@ async function fetchNavCategories(): Promise<string[]> {
 async function fetchEvents(): Promise<ConventionEvent[]> {
   try {
     const supabase = createAdminClient();
+    const kstDateStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
     const { data, error } = await supabase
       .from("convention_events")
       .select("id, venue, venue_region, event_name, event_name_en, start_date, end_date, location, category, industry, organizer, website")
       .eq("is_published", true)
-      .gte("start_date", new Date().toISOString().split("T")[0])
+      .or(`start_date.gte.${kstDateStr},end_date.gte.${kstDateStr}`)
       .order("start_date", { ascending: true });
 
     if (error) console.error("[fetchEvents]", error);

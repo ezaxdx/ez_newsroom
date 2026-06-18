@@ -202,6 +202,7 @@ export default function EventsClient({ events }: Props) {
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
       .slice(0, 4)
+      .sort((a, b) => a.event.start_date.localeCompare(b.event.start_date))
       .map(({ event }) => event);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events]);
