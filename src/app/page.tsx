@@ -161,6 +161,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       .filter(({ score }) => score >= EZPMP_PICK_MIN_SCORE)
       .sort((a, b) => b.score - a.score)
       .slice(0, 8)
+      .sort((a, b) => a.event.start_date.localeCompare(b.event.start_date))
       .map(({ event }) => ({
         id:         event.id,
         event_name: event.event_name,
