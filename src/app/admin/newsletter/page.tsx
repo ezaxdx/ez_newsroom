@@ -96,13 +96,14 @@ export default function NewsletterPage() {
   const [logMode, setLogMode] = useState<"all" | "failed">("all");
 
   // ── 미수신자 조회 + 재발송 ──
-  type UnsentEntry = { email: string; name: string | null };
-  const [unsentPanel, setUnsentPanel]   = useState<string | null>(null);              // 열린 issue_id
-  const [unsentMap,   setUnsentMap]     = useState<Record<string, UnsentEntry[]>>({}); // issue_id → 미수신자
+  type UnsentEntry = { id: string; email: string; name: string | null; error_message: string | null };
+  const [unsentPanel, setUnsentPanel]   = useState<string | null>(null);
+  const [unsentMap,   setUnsentMap]     = useState<Record<string, UnsentEntry[]>>({});
   const [unsentLoading, setUnsentLoading] = useState<string | null>(null);
-  const [checkedEmails, setCheckedEmails] = useState<Record<string, Set<string>>>({}); // issue_id → checked set
+  const [checkedEmails, setCheckedEmails] = useState<Record<string, Set<string>>>({});
   const [resendingId,   setResendingId]   = useState<string | null>(null);
   const [resendResult,  setResendResult]  = useState<Record<string, string>>({});
+  const [deactivating,  setDeactivating]  = useState<string | null>(null); // subscriber id
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -469,6 +470,30 @@ export default function NewsletterPage() {
       const allChecked = allEmails.every(e => s.has(e));
       return { ...prev, [issueId]: allChecked ? new Set() : new Set(allEmails) };
     });
+  }
+
+  async function handleDeactivate(issueId: string, subscriberId: string, email: string) {
+    if (!window.confirm(`${email} 구독자를 비활성화합니다. 계속하시겠습니까?`)) return;
+    setDeactivating(subscriberId);
+    try {
+      const res = await fetch(`/api/admin/newsletter/subscribers/${subscriberId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: false }),
+      });
+      if (res.ok) {
+        setUnsentMap(prev => ({
+          ...prev,
+          [issueId]: (prev[issueId] ?? []).filter(u => u.id !== subscriberId),
+        }));
+        setCheckedEmails(prev => {
+          const s = new Set(prev[issueId] ?? []);
+          s.delete(email);
+          return { ...prev, [issueId]: s };
+        });
+      }
+    } catch { /* ignore */ }
+    finally { setDeactivating(null); }
   }
 
   async function handleResend(issue: Issue) {
@@ -1345,28 +1370,56 @@ export default function NewsletterPage() {
                                       ✅ 모든 활성 수신자가 이미 수신했습니다.
                                     </div>
                                   ) : (
-                                    <div style={{ maxHeight: 260, overflowY: "auto" }}>
-                                      {unsent.map(u => (
-                                        <label key={u.email} style={{
-                                          display: "flex", alignItems: "center", gap: 10,
-                                          padding: "8px 14px", cursor: "pointer",
-                                          borderBottom: "1px solid var(--surface-container-highest)",
-                                          background: checked.has(u.email)
-                                            ? "color-mix(in srgb, var(--primary) 6%, transparent)"
-                                            : "transparent",
-                                        }}>
-                                          <input
-                                            type="checkbox"
-                                            checked={checked.has(u.email)}
-                                            onChange={() => toggleCheck(issue.id, u.email)}
-                                            style={{ width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
-                                          />
-                                          <span style={{ fontSize: 13, color: "var(--on-surface)", flex: 1 }}>{u.email}</span>
-                                          {u.name && (
-                                            <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{u.name}</span>
-                                          )}
-                                        </label>
-                                      ))}
+                                    <div style={{ maxHeight: 320, overflowY: "auto" }}>
+                                      {unsent.map(u => {
+                                        const err = u.error_message;
+                                        const isTimeout = err?.includes("timeout") || err?.includes("Too many concurrent");
+                                        const isAddrErr = !isTimeout && !!err;
+                                        const errLabel = isTimeout ? "재시도가능" : isAddrErr ? "주소오류" : null;
+                                        const errStyle = isAddrErr
+                                          ? { background: "#F8D7DA", color: "#721C24" }
+                                          : { background: "#FFF3CD", color: "#856404" };
+                                        return (
+                                          <div key={u.email} style={{
+                                            display: "flex", alignItems: "center", gap: 8,
+                                            padding: "8px 14px",
+                                            borderBottom: "1px solid var(--surface-container-highest)",
+                                            background: checked.has(u.email)
+                                              ? "color-mix(in srgb, var(--primary) 6%, transparent)"
+                                              : "transparent",
+                                          }}>
+                                            <input
+                                              type="checkbox"
+                                              checked={checked.has(u.email)}
+                                              onChange={() => toggleCheck(issue.id, u.email)}
+                                              style={{ width: 14, height: 14, cursor: "pointer", flexShrink: 0 }}
+                                            />
+                                            <span style={{ fontSize: 13, color: "var(--on-surface)", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{u.email}</span>
+                                            {u.name && (
+                                              <span style={{ fontSize: 12, color: "var(--on-surface-variant)", flexShrink: 0 }}>{u.name}</span>
+                                            )}
+                                            {errLabel && (
+                                              <span style={{ fontSize: 11, padding: "2px 6px", borderRadius: 4, fontWeight: 600, flexShrink: 0, ...errStyle }}>
+                                                {errLabel}
+                                              </span>
+                                            )}
+                                            {isAddrErr && (
+                                              <button
+                                                onClick={() => handleDeactivate(issue.id, u.id, u.email)}
+                                                disabled={deactivating === u.id}
+                                                title="구독 비활성화"
+                                                style={{
+                                                  flexShrink: 0, padding: "2px 7px", borderRadius: 4, border: "1px solid #F8D7DA",
+                                                  background: "transparent", color: "#721C24", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                                                  opacity: deactivating === u.id ? 0.5 : 1,
+                                                }}
+                                              >
+                                                {deactivating === u.id ? "..." : "비활성화"}
+                                              </button>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>

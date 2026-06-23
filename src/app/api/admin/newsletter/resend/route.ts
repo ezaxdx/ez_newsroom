@@ -25,15 +25,25 @@ export async function GET(req: NextRequest) {
 
   const sentEmails = new Set((successLogs ?? []).map(l => l.email as string));
 
-  // 현재 활성 수신자 전체
+  // 실패 로그에서 에러 메시지 수집
+  const { data: failedLogs } = await supabase
+    .from("newsletter_send_logs")
+    .select("email, error_message")
+    .eq("issue_id", issue_id)
+    .eq("status", "failed");
+  const failedMap = new Map((failedLogs ?? []).map(l => [l.email as string, l.error_message as string | null]));
+
+  // 현재 활성 수신자 전체 (id 포함 — 비활성화 버튼용)
   const { data: subscribers } = await supabase
     .from("newsletter_subscribers")
-    .select("email, name")
+    .select("id, email, name")
     .eq("is_active", true)
     .order("email");
 
-  const unsent = (subscribers ?? []).filter(s => !sentEmails.has(s.email));
-  const sent   = (subscribers ?? []).filter(s =>  sentEmails.has(s.email));
+  const unsent = (subscribers ?? [])
+    .filter(s => !sentEmails.has(s.email))
+    .map(s => ({ id: s.id, email: s.email, name: s.name, error_message: failedMap.get(s.email) ?? null }));
+  const sent   = (subscribers ?? []).filter(s => sentEmails.has(s.email));
 
   return NextResponse.json({
     ok: true,
