@@ -57,6 +57,8 @@ type CurationLog = {
   staged: number;
   skipped: number;
   failed: number;
+  errors: Array<{ source: string; url?: string; error: string }> | null;
+  source_stats: Array<{ source_name: string; fetched: number; published: number; staged: number; failed: number }> | null;
 };
 
 async function fetchCurationLogs(): Promise<CurationLog[]> {
@@ -64,7 +66,7 @@ async function fetchCurationLogs(): Promise<CurationLog[]> {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_logs")
-      .select("id, run_at, duration_ms, fetched, published, staged, skipped, failed")
+      .select("id, run_at, duration_ms, fetched, published, staged, skipped, failed, errors, source_stats")
       .order("run_at", { ascending: false })
       .limit(10);
     return (data ?? []) as CurationLog[];
@@ -134,7 +136,24 @@ export default async function AdminPage() {
                       <td className="px-3 py-2 font-semibold" style={{ color: log.published > 0 ? "var(--primary)" : undefined }}>{log.published ?? "-"}</td>
                       <td className="px-3 py-2">{log.staged ?? "-"}</td>
                       <td className="px-3 py-2">{log.skipped ?? "-"}</td>
-                      <td className="px-3 py-2" style={{ color: (log.failed ?? 0) > 0 ? "var(--error)" : undefined }}>{log.failed ?? "-"}</td>
+                      <td className="px-3 py-2" style={{ color: (log.failed ?? 0) > 0 ? "var(--error)" : undefined }}>
+                        {(log.failed ?? 0) > 0 && log.errors && log.errors.length > 0 ? (
+                          <details>
+                            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--error)" }}>
+                              {log.failed}
+                            </summary>
+                            <div style={{ marginTop: 6, padding: "6px 8px", borderRadius: 4, background: "var(--surface-container-low)", fontSize: "0.68rem", lineHeight: 1.6, minWidth: 200 }}>
+                              {log.errors.map((e, i) => (
+                                <div key={i} style={{ marginBottom: i < log.errors!.length - 1 ? 4 : 0 }}>
+                                  <span style={{ fontWeight: 600 }}>{e.source}</span>
+                                  {e.url && <span style={{ color: "var(--on-surface-variant)", marginLeft: 4, wordBreak: "break-all" }}>{e.url}</span>}
+                                  <div style={{ color: "var(--error)" }}>{e.error}</div>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        ) : (log.failed ?? "-")}
+                      </td>
                       <td className="px-3 py-2" style={{ color: "var(--on-surface-variant)" }}>{dur}</td>
                     </tr>
                   );

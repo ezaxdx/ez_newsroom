@@ -42,6 +42,8 @@ export default function NewsletterPage() {
   const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendElapsed, setSendElapsed] = useState(0);
+  const sendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [activeCount, setActiveCount] = useState<number | null>(null);
 
@@ -104,6 +106,7 @@ export default function NewsletterPage() {
   const [resendingId,   setResendingId]   = useState<string | null>(null);
   const [resendResult,  setResendResult]  = useState<Record<string, string>>({});
   const [deactivating,  setDeactivating]  = useState<string | null>(null); // subscriber id
+  const [recoveringId,  setRecoveringId]  = useState<string | null>(null);
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -261,7 +264,9 @@ export default function NewsletterPage() {
     if (!confirmed) return;
 
     setSending(true);
+    setSendElapsed(0);
     setSendResult(null);
+    sendTimerRef.current = setInterval(() => setSendElapsed(s => s + 1), 1000);
     try {
       const res = await fetch("/api/admin/newsletter/send", {
         method: "POST",
@@ -290,6 +295,7 @@ export default function NewsletterPage() {
     } catch {
       setSendResult({ ok: false, message: "네트워크 오류" });
     } finally {
+      if (sendTimerRef.current) { clearInterval(sendTimerRef.current); sendTimerRef.current = null; }
       setSending(false);
     }
   }
@@ -530,6 +536,28 @@ export default function NewsletterPage() {
     }
   }
 
+  async function handleRecoverStatus(issue: Issue) {
+    if (!window.confirm(`Vol.${issue.vol_number} — 실제 발송 로그 기준으로 상태를 복구합니다. 계속하시겠습니까?`)) return;
+    setRecoveringId(issue.id);
+    try {
+      const res = await fetch("/api/admin/newsletter/recover-status", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issue_id: issue.id }),
+      });
+      const json = await res.json();
+      if (res.ok) {
+        await fetchHistory();
+      } else {
+        alert(json.error ?? "복구 실패");
+      }
+    } catch {
+      alert("네트워크 오류");
+    } finally {
+      setRecoveringId(null);
+    }
+  }
+
   async function fetchImageEvents() {
     setImageEventsLoading(true);
     try {
@@ -737,6 +765,28 @@ export default function NewsletterPage() {
                 </span>
               )}
             </div>
+
+            {sending && (
+              <div style={{
+                padding: "10px 14px", borderRadius: 6, marginBottom: 16,
+                background: "#D1ECF1", color: "#0c5460",
+                fontSize: 13, fontWeight: 500,
+                display: "flex", alignItems: "center", gap: 10,
+              }}>
+                <Loader2 size={14} style={{ animation: "spin 1s linear infinite", flexShrink: 0 }} />
+                <span>
+                  발송 중... {sendElapsed}초 경과
+                  {activeCount && activeCount > 0 && (
+                    <span style={{ marginLeft: 6, fontWeight: 400, color: "#0c5460", opacity: 0.8 }}>
+                      (예상 소요: {Math.ceil(activeCount * 0.4)}초)
+                    </span>
+                  )}
+                  <span style={{ display: "block", fontSize: 11, marginTop: 2, fontWeight: 400 }}>
+                    창을 닫지 마세요. 발송이 완료되면 자동으로 결과가 표시됩니다.
+                  </span>
+                </span>
+              </div>
+            )}
 
             {sendResult && (
               <div style={{
@@ -1275,6 +1325,21 @@ export default function NewsletterPage() {
                                 fontSize: 11, fontWeight: 600, background: statusBg, color: statusColor }}>
                                 {statusLabel}
                               </span>
+                              {s === "sending" && (
+                                <button
+                                  onClick={() => handleRecoverStatus(issue)}
+                                  disabled={recoveringId === issue.id}
+                                  title="실제 발송 로그 기준으로 상태 복구"
+                                  style={{
+                                    marginLeft: 6, padding: "2px 7px", borderRadius: 4, fontSize: 11,
+                                    border: "1px solid #0c5460", background: "transparent", color: "#0c5460",
+                                    cursor: recoveringId === issue.id ? "not-allowed" : "pointer",
+                                    opacity: recoveringId === issue.id ? 0.6 : 1, fontWeight: 600,
+                                  }}
+                                >
+                                  {recoveringId === issue.id ? "..." : "복구"}
+                                </button>
+                              )}
                             </td>
                             {/* 미수신자 보기 버튼 */}
                             <td style={{ ...tdStyle, textAlign: "center" }}>
