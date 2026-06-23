@@ -857,7 +857,7 @@ export default function NewsletterPage() {
                   ) : (
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                        오늘부터 90일 이내 행사 {imageEvents.length}개 · 이미지 URL을 직접 입력하거나 비워두면 웹사이트 대표 이미지를 자동 사용합니다.
+                        이미지 URL을 직접 입력하거나 비워두면 웹사이트 대표 이미지를 자동 사용합니다.
                       </p>
                       {imageEvents.map((ev) => (
                         <div key={ev.id} style={{
@@ -1661,6 +1661,7 @@ export default function NewsletterPage() {
             <Section title="🖼️ 행사 이미지 직접 등록">
               <Item text="발송 탭 → 🖼️ Pick 이미지 관리에서 직접 URL 입력 후 저장 → 저장된 이미지가 최우선 적용" />
               <Item text="자동으로 찾으려면 🔄 자동 버튼 클릭 (네이버 이미지 자동 검색)" />
+              <Item text="목록에는 오늘 이후 행사 중 과거에 발송된 적 없는 행사만 표시됩니다. 이미 EZ Letter에 포함된 행사는 자동으로 제외됩니다." />
               <Note>이미지 우선순위: 직접 등록 URL → 네이버 검색 → 홈페이지 og:image → EZ 로고</Note>
             </Section>
 
