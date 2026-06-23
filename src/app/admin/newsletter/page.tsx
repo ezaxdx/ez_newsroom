@@ -561,13 +561,30 @@ export default function NewsletterPage() {
   async function fetchImageEvents() {
     setImageEventsLoading(true);
     try {
-      const today = new Date().toISOString().split("T")[0];
+      // KST 기준 오늘 날짜
+      const todayKST = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
       const ninetyDays = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-      const res = await fetch(`/api/admin/events?from=${today}&to=${ninetyDays}`);
-      const json = await res.json();
-      const events: EventForImage[] = (json.data ?? []).filter((e: EventForImage) => e.is_published);
+
+      // 최근 2호 featured_event_ids 조회 (이미 발송된 행사 제외용)
+      const [eventsRes, historyRes] = await Promise.all([
+        fetch(`/api/admin/events?from=${todayKST}&to=${ninetyDays}`),
+        fetch("/api/admin/newsletter/history"),
+      ]);
+      const eventsJson = await eventsRes.json();
+      const historyJson = await historyRes.json();
+
+      const recentIssues: Array<{ status: string; featured_event_ids: string[] | null }> =
+        (historyJson.data ?? []).filter((i: { status: string }) =>
+          i.status === "sent" || i.status === "partial"
+        ).slice(0, 2);
+      const recentlyFeatured = new Set<string>(
+        recentIssues.flatMap(i => i.featured_event_ids ?? [])
+      );
+
+      const events: EventForImage[] = (eventsJson.data ?? [])
+        .filter((e: EventForImage) => e.is_published && !recentlyFeatured.has(e.id));
+
       setImageEvents(events);
-      // 편집값 초기화 (image_url 현재값으로)
       const edits: Record<string, string> = {};
       for (const e of events) edits[e.id] = e.image_url ?? "";
       setImageEdits(edits);
