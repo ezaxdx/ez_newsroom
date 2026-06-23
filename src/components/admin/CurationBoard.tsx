@@ -601,8 +601,11 @@ function ArticleCard({
                   ? "rgba(26,28,29,0.15)"
                   : "var(--surface-container-highest)",
                 color: item.quality_score >= qualityThresholds.auto_publish ? "#fff" : "var(--on-surface-variant)",
+                cursor: item.quality_criteria ? "help" : "default",
               }}
-              title={`자동발행 기준: ${qualityThresholds.auto_publish}점 / 대기열 기준: ${qualityThresholds.staging}점`}
+              title={item.quality_criteria
+                ? `관련성 ${item.quality_criteria.relevance} · 구체성 ${item.quality_criteria.specificity} · 실용성 ${item.quality_criteria.practicality} · 원문품질 ${item.quality_criteria.source_quality}\n자동발행 기준: ${qualityThresholds.auto_publish}점 / 대기열 기준: ${qualityThresholds.staging}점`
+                : `자동발행 기준: ${qualityThresholds.auto_publish}점 / 대기열 기준: ${qualityThresholds.staging}점`}
             >
               ★ {item.quality_score}
             </span>

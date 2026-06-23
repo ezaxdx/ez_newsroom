@@ -13,6 +13,12 @@ export type NewsItem = {
   display_order: number;
   published_at: string;
   quality_score?: number | null;
+  quality_criteria?: {
+    relevance: number;
+    specificity: number;
+    practicality: number;
+    source_quality: number;
+  } | null;
   created_at?: string;
 };
 

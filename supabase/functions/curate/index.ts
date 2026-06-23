@@ -460,17 +460,22 @@ async function generateArticle(
   persona: string, audience: string, keywords: string[],
   levelPrompts: Record<string, string>,
   companyContext?: string
-): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number } | null> {
+): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number; quality_criteria: { relevance: number; specificity: number; practicality: number; source_quality: number } } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
   const userPrompt = `${persona}
 타겟 독자: ${audience}${keywordHint}
 
-퀄리티 점수 기준 (1~10):
-- 9~10: 업계 핵심 인사이트, 구체적 수치/사례 풍부, 즉시 실행 가능한 시사점
-- 7~8: 관련성 높고 실용적, 부분적으로 구체적
-- 5~6: 일반적 내용, 시사점이 다소 추상적
-- 3~4: 관련성 낮거나 원문 접근 불가로 내용 빈약
-- 1~2: 카테고리와 무관하거나 정보 없음
+퀄리티 점수 기준 (각 항목 1~10점, quality_score는 종합 판단):
+- relevance(카테고리 관련성): 카테고리·페르소나·키워드와의 일치도
+- specificity(구체성): 수치·사례·데이터의 풍부함
+- practicality(실용성): 즉시 활용 가능한 시사점 여부
+- source_quality(원문품질): 원문 접근 가능성 및 내용 충실도
+- quality_score(종합): 위 4항목을 종합한 최종 점수
+  9~10: 업계 핵심 인사이트, 구체적 수치/사례 풍부, 즉시 실행 가능한 시사점
+  7~8: 관련성 높고 실용적, 부분적으로 구체적
+  5~6: 일반적 내용, 시사점이 다소 추상적
+  3~4: 관련성 낮거나 원문 접근 불가로 내용 빈약
+  1~2: 카테고리와 무관하거나 정보 없음
 
 레벨 판정 (체크리스트로 엄격히 판단):
 
@@ -497,7 +502,7 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 문체 규칙: '~습니다/~입니다' 경어체로 작성하되, 딱딱하지 않고 읽기 편한 뉴스레터 톤으로 작성하세요. 신문체('~다', '~한다') 사용 금지.
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
-{"quality_score":점수,"level":"레벨","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
+{"quality_score":종합점수,"quality_criteria":{"relevance":점수,"specificity":점수,"practicality":점수,"source_quality":점수},"level":"레벨","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
 
 원문 URL: ${url}
 ${articleText.length > 50 ? `원문:\n${articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
@@ -618,7 +623,9 @@ Deno.serve(async (req) => {
         level: generated.level ?? "Intermediate",
         image_url: image_url ?? getCategoryDefaultImage(category),
         original_url: url,
-        category, quality_score: score, is_published: shouldAutoPublish,
+        category, quality_score: score,
+        quality_criteria: generated.quality_criteria ?? null,
+        is_published: shouldAutoPublish,
         priority_score: source.weight * 10, display_order: 1000 - score * 10,
         published_at: shouldAutoPublish ? new Date().toISOString() : safeDateISO(pubDate),
       });
