@@ -37,7 +37,7 @@ export async function GET(req: NextRequest) {
 
   return NextResponse.json({
     ok: true,
-    unsent,          // { email, name }[]
+    unsent,
     sent_count: sent.length,
     unsent_count: unsent.length,
   });
@@ -83,40 +83,40 @@ export async function POST(req: NextRequest) {
   const send_date = `${todayKST.getUTCFullYear()}.${String(todayKST.getUTCMonth() + 1).padStart(2, "0")}.${String(todayKST.getUTCDate()).padStart(2, "0")}`;
   const subject = `[EZ Letter] Vol.${issue.vol_number} · ${send_date}`;
 
-  const BATCH_SIZE = 10;
+  // 이미 성공한 수신자 미리 로드 → 중복 발송 방지
+  const { data: alreadySentLogs } = await supabase
+    .from("newsletter_send_logs").select("email")
+    .eq("issue_id", issue_id).eq("status", "success");
+  const sentSet = new Set((alreadySentLogs ?? []).map((r: { email: string }) => r.email));
+
+  const SEND_INTERVAL_MS = 400;
   let total_sent = 0, total_failed = 0;
 
-  for (let i = 0; i < emails.length; i += BATCH_SIZE) {
-    const batch = emails.slice(i, i + BATCH_SIZE);
-    if (i > 0) await new Promise(r => setTimeout(r, 300));
+  for (let i = 0; i < emails.length; i++) {
+    const to = emails[i];
+    if (sentSet.has(to)) continue;
+    if (i > 0) await new Promise(r => setTimeout(r, SEND_INTERVAL_MS));
 
-    const batchResults = await Promise.all(
-      batch.map(async (to) => {
-        // 1. 발송 시도 (15초 개별 타임아웃)
-        let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
-        try {
-          const raw = makeRawMessage({ from, to, subject, html: issue.html_content! });
-          await Promise.race([
-            gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
-            new Promise<never>((_, reject) =>
-              setTimeout(() => reject(new Error("Gmail send timeout after 8000ms")), 8000)
-            ),
-          ]);
-          result = { email: to, issue_id, status: "success", error_message: null };
-        } catch (err) {
-          result = {
-            email: to, issue_id, status: "failed",
-            error_message: err instanceof Error ? err.message : String(err),
-          };
-        }
-        // 2. 발송 완료 즉시 개별 로그 저장
-        await supabase.from("newsletter_send_logs").insert([result]);
-        return result;
-      })
-    );
-
-    total_sent  += batchResults.filter(r => r.status === "success").length;
-    total_failed += batchResults.filter(r => r.status === "failed").length;
+    let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
+    try {
+      const raw = makeRawMessage({ from, to, subject, html: issue.html_content! });
+      await Promise.race([
+        gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Gmail send timeout after 20000ms")), 20000)
+        ),
+      ]);
+      result = { email: to, issue_id, status: "success", error_message: null };
+      sentSet.add(to);
+      total_sent++;
+    } catch (err) {
+      result = {
+        email: to, issue_id, status: "failed",
+        error_message: err instanceof Error ? err.message : String(err),
+      };
+      total_failed++;
+    }
+    await supabase.from("newsletter_send_logs").insert([result]);
   }
 
   // 첫 발송이 타임아웃으로 강제 종료된 경우 issue.total_sent가 0일 수 있으므로
