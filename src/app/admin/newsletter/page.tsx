@@ -573,12 +573,12 @@ export default function NewsletterPage() {
       const eventsJson = await eventsRes.json();
       const historyJson = await historyRes.json();
 
-      const recentIssues: Array<{ status: string; featured_event_ids: string[] | null }> =
+      const sentIssues: Array<{ status: string; featured_event_ids: string[] | null }> =
         (historyJson.data ?? []).filter((i: { status: string }) =>
           i.status === "sent" || i.status === "partial"
-        ).slice(0, 2);
+        );
       const recentlyFeatured = new Set<string>(
-        recentIssues.flatMap(i => i.featured_event_ids ?? [])
+        sentIssues.flatMap(i => i.featured_event_ids ?? [])
       );
 
       const events: EventForImage[] = (eventsJson.data ?? [])
