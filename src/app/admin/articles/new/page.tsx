@@ -17,6 +17,13 @@ type ArticleFields = {
   original_url: string;
   category: string;
   level: string;
+  quality_score?: number | null;
+  quality_criteria?: {
+    relevance: number;
+    specificity: number;
+    practicality: number;
+    source_quality: number;
+  } | null;
 };
 
 const EMPTY: ArticleFields = {
@@ -315,6 +322,9 @@ export default function NewArticlePage() {
         image_url: data.image_url ?? prev.image_url,
         original_url: data.original_url ?? prev.original_url,
         category: data.category ?? prev.category,
+        level: data.level ?? prev.level,
+        quality_score: data.quality_score ?? null,
+        quality_criteria: data.quality_criteria ?? null,
       }));
       setAiGenerated(true);
     } catch (e: unknown) {

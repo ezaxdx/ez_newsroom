@@ -24,6 +24,8 @@ export async function POST(req: NextRequest) {
     original_url: body.original_url || null,
     category: body.category,
     level: body.level ?? "Intermediate",
+    quality_score: body.quality_score ?? null,
+    quality_criteria: body.quality_criteria ?? null,
     is_published: body.is_published ?? false,
     priority_score: 100,
     display_order: 0,

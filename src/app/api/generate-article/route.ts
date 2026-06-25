@@ -1,24 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
+import { createAdminClient } from "@/lib/supabase/admin";
 
-const PERSONA_PROMPTS: Record<string, string> = {
+const DEFAULT_PERSONA_PROMPTS: Record<string, string> = {
   AI: "당신은 AI·디지털 전환 전문 에디터입니다. MICE·관광 산업 종사자가 즉시 활용할 수 있는 실용적 시각으로 AI 기술 뉴스를 분석합니다.",
   MICE: "당신은 MICE 산업 전문 에디터입니다. 컨벤션·전시·이벤트 기획자 관점에서 운영 효율화와 참가자 경험 향상에 초점을 맞춥니다.",
   TOURISM: "당신은 관광·여행 산업 전문 에디터입니다. 지자체·OTA·숙박업 관계자가 활용할 수 있는 관광 트렌드와 전략적 시사점을 분석합니다.",
-  STARTUP: "당신은 스타트업·벤처 전문 에디터입니다. 창업자와 투자자 관점에서 시장 기회와 리스크를 분석합니다.",
-  POLICY: "당신은 정책·규제 전문 에디터입니다. 업계 종사자가 대응해야 할 규제 변화와 정책 시사점을 명확하게 전달합니다.",
-  OPERATIONS: "당신은 운영·경영 전문 에디터입니다. 현장 관리자 관점에서 효율화 전략과 실행 방법론을 제시합니다.",
-  INDUSTRY: "당신은 산업 분석 전문 에디터입니다. 거시적 산업 트렌드와 시장 구조 변화를 심층 분석합니다.",
-  EZPMP: "당신은 EZPMP(이즈피엠피)의 홍보 에디터입니다. EZPMP는 MICE·행사 기획 및 운영 솔루션을 제공하는 기업입니다. EZPMP의 서비스·실적·소식을 중심으로, 고객사와 파트너사 관점에서 신뢰감 있고 전문적인 기업 소식으로 작성합니다. AI나 디지털 전환보다는 EZPMP가 직접 제공하는 가치와 성과에 초점을 맞추세요.",
+  EZPMP: "당신은 EZPMP(이즈피엠피)의 홍보 에디터입니다. EZPMP는 MICE·행사 기획 및 운영 솔루션을 제공하는 기업입니다. EZPMP의 서비스·실적·소식을 중심으로, 고객사와 파트너사 관점에서 신뢰감 있고 전문적인 기업 소식으로 작성합니다.",
 };
 
-const LEVEL_PROMPTS: Record<string, string> = {
-  Beginner:
-    "【독자 수준: 입문】 업계 배경지식이 없는 독자를 위해 전문 용어는 쉽게 풀어 설명하고, 짧고 명확한 문장으로 작성하세요. 왜 중요한지를 일상적인 비유로 전달하세요.",
-  Intermediate:
-    "【독자 수준: 실무】 업계 기본 지식을 보유한 실무 담당자를 위해 업계 용어를 자연스럽게 사용하고, 현장에서 즉시 적용 가능한 관점으로 작성하세요.",
-  Advanced:
-    "【독자 수준: 전략】 전략·기획자를 위해 산업 구조 변화와 거시적 시사점을 심층 분석하세요. 데이터, 인과관계, 경쟁 구도 변화 중심으로 논리적으로 작성하세요.",
+const DEFAULT_LEVEL_PROMPTS: Record<string, string> = {
+  Beginner: "【독자 수준: 입문】 업계 배경지식이 없는 독자를 위해 전문 용어는 쉽게 풀어 설명하고, 짧고 명확한 문장으로 작성하세요. 왜 중요한지를 일상적인 비유로 전달하세요.",
+  Intermediate: "【독자 수준: 실무】 업계 기본 지식을 보유한 실무 담당자를 위해 업계 용어를 자연스럽게 사용하고, 현장에서 즉시 적용 가능한 관점으로 작성하세요.",
+  Advanced: "【독자 수준: 전략】 전략·기획자를 위해 산업 구조 변화와 거시적 시사점을 심층 분석하세요. 데이터, 인과관계, 경쟁 구도 변화 중심으로 논리적으로 작성하세요.",
 };
 
 export async function POST(req: NextRequest) {
@@ -112,20 +106,66 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "원문 페이지를 불러올 수 없습니다." }, { status: 422 });
   }
 
-  const persona = persona_override ?? PERSONA_PROMPTS[category.toUpperCase()] ?? PERSONA_PROMPTS.AI;
-  const levelGuide = LEVEL_PROMPTS[level] ?? LEVEL_PROMPTS.Intermediate;
+  // DB에서 curation_settings 읽기
+  let personaPrompt = persona_override ?? DEFAULT_PERSONA_PROMPTS[category.toUpperCase()] ?? DEFAULT_PERSONA_PROMPTS.AI;
+  let levelGuide = DEFAULT_LEVEL_PROMPTS[level] ?? DEFAULT_LEVEL_PROMPTS.Intermediate;
+  let qualityThresholds = { auto_publish: 8, staging: 6 };
 
-  const prompt = `${persona}
+  try {
+    const supabase = createAdminClient();
+    const { data: settings } = await supabase
+      .from("curation_settings")
+      .select("category_settings, level_prompts, quality_thresholds, company_context")
+      .limit(1)
+      .single();
+
+    if (settings) {
+      if (!persona_override && settings.category_settings) {
+        const catKey = category.toUpperCase();
+        const catSettings = settings.category_settings[catKey] ?? settings.category_settings[category];
+        if (catSettings?.persona) {
+          personaPrompt = catSettings.persona;
+        }
+      }
+      if (settings.level_prompts?.[level]) {
+        levelGuide = settings.level_prompts[level];
+      }
+      if (settings.quality_thresholds) {
+        qualityThresholds = settings.quality_thresholds;
+      }
+    }
+  } catch {
+    // DB 조회 실패 시 기본값 사용
+  }
+
+  const prompt = `${personaPrompt}
 ${levelGuide}
 
 다음 기사를 분석해 아래 JSON 형식으로만 응답하세요. 마크다운 코드블록 없이 순수 JSON만 출력하세요.
 
 {
-  "title": "한국어 제목 (50자 이내, 핵심 사실 중심, 명사형 또는 단문으로 끝낼 것 — '~입니다' 금지)",
-  "summary_short": "한국어 요약 (2~3문장, 120자 이내, 반드시 '~했습니다', '~입니다' 등 합쇼체로 작성)",
-  "content_long": "한국어 상세 분석 (4~6문장, 독자가 원문 없이도 이해할 수 있도록, 반드시 합쇼체로 작성)",
-  "implications": "한국어 시사점 (2~3문장, 실행 가능한 인사이트, 반드시 합쇼체로 작성)"
+  "quality_score": 8,
+  "quality_criteria": {
+    "relevance": 9,
+    "specificity": 8,
+    "practicality": 7,
+    "source_quality": 8
+  },
+  "level": "Intermediate",
+  "title": "제목(50자이내, 핵심 사실 중심, 명사형 또는 단문으로 끝낼 것 — '~입니다' 금지)",
+  "summary_short": "요약(2~3문장, 120자이내, 반드시 합쇼체)",
+  "content_long": "상세분석(4~6문장, 독자가 원문 없이도 이해할 수 있도록, 반드시 합쇼체)",
+  "implications": "시사점(2~3문장, 실행 가능한 인사이트, 반드시 합쇼체)"
 }
+
+품질 점수 기준 (1~10점):
+- relevance(관련성): MICE·관광·AI 업계 실무자에게 얼마나 직접 관련 있는지
+- specificity(구체성): 수치·사례·타임라인 등 구체적 정보가 있는지
+- practicality(실용성): 독자가 즉시 활용하거나 참고할 수 있는 내용인지
+- source_quality(원문품질): 출처의 신뢰도와 정보의 완결성
+- quality_score: 위 4개 항목의 종합 평균 (소수점 반올림)
+- level: 기사 내용의 전문성 수준 ("Beginner" | "Intermediate" | "Advanced")
+- 자동발행 기준: ${qualityThresholds.auto_publish}점 이상 / 대기열 기준: ${qualityThresholds.staging}점 이상
 
 원문 URL: ${url}
 
@@ -163,6 +203,9 @@ ${articleText}`;
       summary_short: parsed.summary_short ?? "",
       content_long: parsed.content_long ?? "",
       implications: parsed.implications ?? "",
+      quality_score: typeof parsed.quality_score === "number" ? parsed.quality_score : null,
+      quality_criteria: parsed.quality_criteria ?? null,
+      level: parsed.level ?? level ?? "Intermediate",
       image_url,
       original_url: url,
       category: category.toUpperCase(),

@@ -16,11 +16,25 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  // 이미 성공한 수신자
+  // 같은 vol_number의 모든 issue_id 조회 → 중복 발송 방지
+  const { data: thisIssue } = await supabase
+    .from("newsletter_issues")
+    .select("vol_number")
+    .eq("id", issue_id)
+    .single();
+
+  const { data: sameVolIssues } = await supabase
+    .from("newsletter_issues")
+    .select("id")
+    .eq("vol_number", thisIssue?.vol_number ?? "");
+
+  const allIssueIds = (sameVolIssues ?? []).map(i => i.id);
+
+  // 같은 vol의 모든 issue에서 이미 성공한 수신자 합산
   const { data: successLogs } = await supabase
     .from("newsletter_send_logs")
     .select("email")
-    .eq("issue_id", issue_id)
+    .in("issue_id", allIssueIds.length > 0 ? allIssueIds : [issue_id])
     .eq("status", "success");
 
   const sentEmails = new Set((successLogs ?? []).map(l => l.email as string));
