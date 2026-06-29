@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getResendClient, getFromAddress } from "@/lib/resend-sender";
+import { getSmtpTransporter, getFromAddress } from "@/lib/gmail-smtp";
 
 export const maxDuration = 60;
 
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
     .update({ status: "sending" })
     .eq("id", issue_id);
 
-  const resend = getResendClient();
+  const transporter = getSmtpTransporter();
   const from = getFromAddress();
 
   const todayKST = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
@@ -119,8 +119,7 @@ export async function POST(req: NextRequest) {
 
     let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
     try {
-      const { error: sendError } = await resend.emails.send({ from, to, subject, html: issue.html_content! });
-      if (sendError) throw new Error(sendError.message);
+      await transporter.sendMail({ from, to, subject, html: issue.html_content! });
       result = { email: to, issue_id, status: "success", error_message: null };
       sentSet.add(to);
       total_sent++;

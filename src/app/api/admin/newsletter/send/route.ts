@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
-import { getResendClient, getFromAddress } from "@/lib/resend-sender";
+import { getSmtpTransporter, getFromAddress } from "@/lib/gmail-smtp";
 
 export const maxDuration = 60;
 
@@ -18,7 +18,7 @@ async function sendAndSaveLogs({
   subject: string;
   recipients: string[];
 }): Promise<{ total_sent: number; total_failed: number }> {
-  const resend = getResendClient();
+  const transporter = getSmtpTransporter();
   const from = getFromAddress();
   let total_sent = 0, total_failed = 0;
 
@@ -33,8 +33,7 @@ async function sendAndSaveLogs({
 
     let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
     try {
-      const { error } = await resend.emails.send({ from, to, subject, html });
-      if (error) throw new Error(error.message);
+      await transporter.sendMail({ from, to, subject, html });
       result = { email: to, issue_id: issueId, status: "success", error_message: null };
       sentSet.add(to);
       total_sent++;
