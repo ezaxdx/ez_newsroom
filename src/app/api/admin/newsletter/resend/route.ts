@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { getGmailClient, makeRawMessage } from "@/lib/gmail-sender";
+import { getResendClient, getFromAddress } from "@/lib/resend-sender";
 
 export const maxDuration = 60;
 
@@ -99,9 +99,8 @@ export async function POST(req: NextRequest) {
     .update({ status: "sending" })
     .eq("id", issue_id);
 
-  const gmail = await getGmailClient();
-  const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-  const from = `"EZ Letter" <${fromEmail}>`;
+  const resend = getResendClient();
+  const from = getFromAddress();
 
   const todayKST = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const send_date = `${todayKST.getUTCFullYear()}.${String(todayKST.getUTCMonth() + 1).padStart(2, "0")}.${String(todayKST.getUTCDate()).padStart(2, "0")}`;
@@ -113,23 +112,15 @@ export async function POST(req: NextRequest) {
     .eq("issue_id", issue_id).eq("status", "success");
   const sentSet = new Set((alreadySentLogs ?? []).map((r: { email: string }) => r.email));
 
-  const SEND_INTERVAL_MS = 400;
   let total_sent = 0, total_failed = 0;
 
-  for (let i = 0; i < emails.length; i++) {
-    const to = emails[i];
+  for (const to of emails) {
     if (sentSet.has(to)) continue;
-    if (i > 0) await new Promise(r => setTimeout(r, SEND_INTERVAL_MS));
 
     let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
     try {
-      const raw = makeRawMessage({ from, to, subject, html: issue.html_content! });
-      await Promise.race([
-        gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Gmail send timeout after 20000ms")), 20000)
-        ),
-      ]);
+      const { error: sendError } = await resend.emails.send({ from, to, subject, html: issue.html_content! });
+      if (sendError) throw new Error(sendError.message);
       result = { email: to, issue_id, status: "success", error_message: null };
       sentSet.add(to);
       total_sent++;

@@ -3,26 +3,23 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
-import { getGmailClient, makeRawMessage } from "@/lib/gmail-sender";
+import { getResendClient, getFromAddress } from "@/lib/resend-sender";
 
 export const maxDuration = 60;
 
 // ── 배치 발송 + 즉시 로그 저장 헬퍼 ──────────────────────
 // 이메일 1건 완료 즉시 개별 로그 저장 → 타임아웃으로 끊겨도 완료된 건은 무조건 기록됨
 async function sendAndSaveLogs({
-  supabase, issueId, html, subject, fromEmail, recipients,
+  supabase, issueId, html, subject, recipients,
 }: {
   supabase: ReturnType<typeof createAdminClient>;
   issueId: string;
   html: string;
   subject: string;
-  fromEmail: string;
   recipients: string[];
 }): Promise<{ total_sent: number; total_failed: number }> {
-  const gmail = await getGmailClient();
-  const from = `"EZ Letter" <${fromEmail}>`;
-  // 400ms 간격 순차 발송 → Gmail 초당 2.5건 쿼터 준수, 동시 요청 없음
-  const SEND_INTERVAL_MS = 400;
+  const resend = getResendClient();
+  const from = getFromAddress();
   let total_sent = 0, total_failed = 0;
 
   // 이미 성공한 수신자 미리 로드 → 중복 발송 방지
@@ -31,20 +28,13 @@ async function sendAndSaveLogs({
     .eq("issue_id", issueId).eq("status", "success");
   const sentSet = new Set((alreadySent ?? []).map((r: { email: string }) => r.email));
 
-  for (let i = 0; i < recipients.length; i++) {
-    const to = recipients[i];
+  for (const to of recipients) {
     if (sentSet.has(to)) continue;
-    if (i > 0) await new Promise(r => setTimeout(r, SEND_INTERVAL_MS));
 
     let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
     try {
-      const raw = makeRawMessage({ from, to, subject, html });
-      await Promise.race([
-        gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
-        new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("Gmail send timeout after 20000ms")), 20000)
-        ),
-      ]);
+      const { error } = await resend.emails.send({ from, to, subject, html });
+      if (error) throw new Error(error.message);
       result = { email: to, issue_id: issueId, status: "success", error_message: null };
       sentSet.add(to);
       total_sent++;
@@ -87,7 +77,6 @@ export async function POST(req: NextRequest) {
     const vol_number = body.cached_vol ?? 1;
     const send_date  = body.cached_send_date ?? new Date().toISOString().split("T")[0];
     const subject    = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
-    const fromEmail  = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
 
     // 미리보기 HTML 후처리: localhost → prod URL (프록시 유지 — 이메일 클라이언트 호환성)
     const prodUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
@@ -116,7 +105,7 @@ export async function POST(req: NextRequest) {
     try {
       ({ total_sent, total_failed } = await sendAndSaveLogs({
         supabase, issueId: issue.id, html: sendHtml,
-        subject, fromEmail, recipients,
+        subject, recipients,
       }));
     } catch (err) {
       // 타임아웃 또는 예외 발생 시 — 완료된 로그 기준으로 집계 후 상태 갱신
@@ -344,8 +333,7 @@ export async function POST(req: NextRequest) {
   if (!subscribers || subscribers.length === 0)
     return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
 
-  const subject   = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
-  const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  const subject    = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
   const recipients = subscribers.map(s => s.email);
 
   const { data: issue, error: issueErr } = await supabase
@@ -367,7 +355,7 @@ export async function POST(req: NextRequest) {
   try {
     ({ total_sent, total_failed } = await sendAndSaveLogs({
       supabase, issueId: issue.id, html,
-      subject, fromEmail, recipients,
+      subject, recipients,
     }));
   } catch (err) {
     console.error("[newsletter/send] sendAndSaveLogs error:", err);
