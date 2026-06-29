@@ -28,8 +28,10 @@ async function sendAndSaveLogs({
     .eq("issue_id", issueId).eq("status", "success");
   const sentSet = new Set((alreadySent ?? []).map((r: { email: string }) => r.email));
 
-  for (const to of recipients) {
+  for (let i = 0; i < recipients.length; i++) {
+    const to = recipients[i];
     if (sentSet.has(to)) continue;
+    if (i > 0) await new Promise(r => setTimeout(r, 200));
 
     let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
     try {

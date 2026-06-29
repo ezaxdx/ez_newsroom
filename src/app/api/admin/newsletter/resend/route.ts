@@ -114,8 +114,10 @@ export async function POST(req: NextRequest) {
 
   let total_sent = 0, total_failed = 0;
 
-  for (const to of emails) {
+  for (let i = 0; i < emails.length; i++) {
+    const to = emails[i];
     if (sentSet.has(to)) continue;
+    if (i > 0) await new Promise(r => setTimeout(r, 200));
 
     let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
     try {
