@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink } from "lucide-react";
+import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
 
 type Subscriber = {
   id: string;
@@ -783,6 +783,31 @@ export default function NewsletterPage() {
                 {previewing && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
                 미리보기
               </button>
+
+              {previewHtml && (
+                <button
+                  onClick={() => {
+                    const prodUrl = "https://ez-newsroom.vercel.app";
+                    const fixed = previewHtml.replace(/https?:\/\/localhost:\d+/g, prodUrl);
+                    const blob = new Blob([fixed], { type: "text/html;charset=utf-8" });
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `ez-letter-vol${previewMeta?.vol_number ?? ""}.html`;
+                    a.click();
+                    URL.revokeObjectURL(a.href);
+                  }}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 6,
+                    padding: "8px 18px", borderRadius: 6,
+                    border: "1px solid var(--on-surface-variant)",
+                    background: "transparent", color: "var(--on-surface-variant)", fontWeight: 600,
+                    fontSize: 14, cursor: "pointer",
+                  }}
+                >
+                  <Download size={14} />
+                  HTML 다운로드
+                </button>
+              )}
 
               <button
                 onClick={handleSend}
