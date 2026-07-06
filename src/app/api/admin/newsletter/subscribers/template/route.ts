@@ -15,14 +15,14 @@ export async function GET() {
 
   const ws = XLSX.utils.aoa_to_sheet([
     // 헤더 행
-    ["email", "name"],
+    ["name", "email"],
     // 예시 데이터 2행
-    ["hong@example.com", "홍길동"],
-    ["kim@example.com", "김철수"],
+    ["홍길동", "hong@example.com"],
+    ["김철수", "kim@example.com"],
   ]);
 
   // 컬럼 너비 설정
-  ws["!cols"] = [{ wch: 30 }, { wch: 20 }];
+  ws["!cols"] = [{ wch: 20 }, { wch: 30 }];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "수신자");
