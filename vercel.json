@@ -3,10 +3,6 @@
     {
       "path": "/api/cron/auto-curation",
       "schedule": "0 0 * * 2,4"
-    },
-    {
-      "path": "/api/cron/newsletter",
-      "schedule": "0 1 * * *"
     }
   ]
 }

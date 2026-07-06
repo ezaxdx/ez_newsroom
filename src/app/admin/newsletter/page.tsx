@@ -786,7 +786,7 @@ export default function NewsletterPage() {
 
               {previewHtml && (
                 <button
-                  onClick={() => {
+                  onClick={async () => {
                     const prodUrl = "https://ez-newsroom.vercel.app";
                     const fixed = previewHtml.replace(/https?:\/\/localhost:\d+/g, prodUrl);
                     const blob = new Blob([fixed], { type: "text/html;charset=utf-8" });
@@ -795,6 +795,18 @@ export default function NewsletterPage() {
                     a.download = `ez-letter-vol${previewMeta?.vol_number ?? ""}.html`;
                     a.click();
                     URL.revokeObjectURL(a.href);
+                    // Vol 번호 + 발송일 DB 기록
+                    if (previewMeta?.vol_number && previewMeta?.send_date) {
+                      await fetch("/api/admin/newsletter/record-download", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          vol_number: previewMeta.vol_number,
+                          send_date: previewMeta.send_date,
+                          editorial_text: editorialText,
+                        }),
+                      });
+                    }
                   }}
                   style={{
                     display: "flex", alignItems: "center", gap: 6,
