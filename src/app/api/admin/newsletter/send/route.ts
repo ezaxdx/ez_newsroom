@@ -3,53 +3,36 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
-import { getSmtpTransporter, getFromAddress } from "@/lib/gmail-smtp";
 
 export const maxDuration = 60;
 
-// ── 배치 발송 + 즉시 로그 저장 헬퍼 ──────────────────────
-// 이메일 1건 완료 즉시 개별 로그 저장 → 타임아웃으로 끊겨도 완료된 건은 무조건 기록됨
-async function sendAndSaveLogs({
-  supabase, issueId, html, subject, recipients,
+// ── Supabase Edge Function 호출 헬퍼 ────────────────────
+// Edge Function이 200 OK를 즉시 반환하고 백그라운드에서 발송 (최대 150초)
+async function triggerEdgeSend({
+  issueId, recipients, subject, html,
 }: {
-  supabase: ReturnType<typeof createAdminClient>;
   issueId: string;
-  html: string;
-  subject: string;
   recipients: string[];
-}): Promise<{ total_sent: number; total_failed: number }> {
-  const transporter = getSmtpTransporter();
-  const from = getFromAddress();
-  let total_sent = 0, total_failed = 0;
+  subject: string;
+  html: string;
+}): Promise<{ ok: boolean; error?: string }> {
+  const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/newsletter-send`;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-  // 이미 성공한 수신자 미리 로드 → 중복 발송 방지
-  const { data: alreadySent } = await supabase
-    .from("newsletter_send_logs").select("email")
-    .eq("issue_id", issueId).eq("status", "success");
-  const sentSet = new Set((alreadySent ?? []).map((r: { email: string }) => r.email));
+  const resp = await fetch(edgeFnUrl, {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${serviceKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ issue_id: issueId, recipients, subject, html }),
+  });
 
-  for (let i = 0; i < recipients.length; i++) {
-    const to = recipients[i];
-    if (sentSet.has(to)) continue;
-    if (i > 0) await new Promise(r => setTimeout(r, 200));
-
-    let result: { email: string; issue_id: string; status: "success" | "failed"; error_message: string | null };
-    try {
-      await transporter.sendMail({ from, to, subject, html });
-      result = { email: to, issue_id: issueId, status: "success", error_message: null };
-      sentSet.add(to);
-      total_sent++;
-    } catch (err) {
-      result = {
-        email: to, issue_id: issueId, status: "failed",
-        error_message: err instanceof Error ? err.message : String(err),
-      };
-      total_failed++;
-    }
-    await supabase.from("newsletter_send_logs").insert([result]);
+  if (!resp.ok) {
+    const text = await resp.text().catch(() => resp.statusText);
+    return { ok: false, error: text };
   }
-
-  return { total_sent, total_failed };
+  return { ok: true };
 }
 
 export async function POST(req: NextRequest) {
@@ -102,33 +85,18 @@ export async function POST(req: NextRequest) {
     if (issueErr || !issue)
       return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
 
-    let total_sent = 0, total_failed = 0;
-    try {
-      ({ total_sent, total_failed } = await sendAndSaveLogs({
-        supabase, issueId: issue.id, html: sendHtml,
-        subject, recipients,
-      }));
-    } catch (err) {
-      // 타임아웃 또는 예외 발생 시 — 완료된 로그 기준으로 집계 후 상태 갱신
-      console.error("[newsletter/send] sendAndSaveLogs error:", err);
-      const { count: sentCount } = await supabase
-        .from("newsletter_send_logs")
-        .select("*", { count: "exact", head: true })
-        .eq("issue_id", issue.id).eq("status", "success");
-      const { count: failedCount } = await supabase
-        .from("newsletter_send_logs")
-        .select("*", { count: "exact", head: true })
-        .eq("issue_id", issue.id).eq("status", "failed");
-      total_sent = sentCount ?? 0;
-      total_failed = failedCount ?? 0;
+    // Edge Function에 발송 위임 (즉시 200 반환, 백그라운드에서 최대 150초 실행)
+    const edgeResult = await triggerEdgeSend({
+      issueId: issue.id, recipients, subject, html: sendHtml,
+    });
+    if (!edgeResult.ok) {
+      await supabase.from("newsletter_issues")
+        .update({ status: "failed", total_failed: recipients.length })
+        .eq("id", issue.id);
+      return NextResponse.json({ error: `Edge Function 오류: ${edgeResult.error}` }, { status: 500 });
     }
 
-    const finalStatus = total_sent === 0 ? "failed" : total_sent >= recipients.length ? "sent" : "partial";
-    await supabase.from("newsletter_issues")
-      .update({ status: finalStatus, total_sent, total_failed })
-      .eq("id", issue.id);
-
-    return NextResponse.json({ ok: true, vol_number, total_sent, total_failed });
+    return NextResponse.json({ ok: true, vol_number, status: "sending", issue_id: issue.id, target_count: recipients.length });
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────
@@ -352,30 +320,16 @@ export async function POST(req: NextRequest) {
   if (issueErr || !issue)
     return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
 
-  let total_sent = 0, total_failed = 0;
-  try {
-    ({ total_sent, total_failed } = await sendAndSaveLogs({
-      supabase, issueId: issue.id, html,
-      subject, recipients,
-    }));
-  } catch (err) {
-    console.error("[newsletter/send] sendAndSaveLogs error:", err);
-    const { count: sentCount } = await supabase
-      .from("newsletter_send_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("issue_id", issue.id).eq("status", "success");
-    const { count: failedCount } = await supabase
-      .from("newsletter_send_logs")
-      .select("*", { count: "exact", head: true })
-      .eq("issue_id", issue.id).eq("status", "failed");
-    total_sent = sentCount ?? 0;
-    total_failed = failedCount ?? 0;
+  // Edge Function에 발송 위임 (즉시 200 반환, 백그라운드에서 최대 150초 실행)
+  const edgeResult = await triggerEdgeSend({
+    issueId: issue.id, recipients, subject, html,
+  });
+  if (!edgeResult.ok) {
+    await supabase.from("newsletter_issues")
+      .update({ status: "failed", total_failed: recipients.length })
+      .eq("id", issue.id);
+    return NextResponse.json({ error: `Edge Function 오류: ${edgeResult.error}` }, { status: 500 });
   }
 
-  const finalStatus = total_sent === 0 ? "failed" : total_sent >= recipients.length ? "sent" : "partial";
-  await supabase.from("newsletter_issues")
-    .update({ status: finalStatus, total_sent, total_failed })
-    .eq("id", issue.id);
-
-  return NextResponse.json({ ok: true, vol_number, total_sent, total_failed });
+  return NextResponse.json({ ok: true, vol_number, status: "sending", issue_id: issue.id, target_count: recipients.length });
 }

@@ -617,7 +617,7 @@ Deno.serve(async (req) => {
       scoreDist[score] = (scoreDist[score] ?? 0) + 1;
       if (score < qualityThresholds.staging) { results.skipped++; stat.skipped++; existingUrls.add(url); return; }
       const shouldAutoPublish = score >= qualityThresholds.auto_publish;
-      const { error } = await supabase.from("news").insert({
+      const { error } = await supabase.from("news").upsert({
         title: generated.title, summary_short: generated.summary_short,
         content_long: generated.content_long, implications: generated.implications,
         level: generated.level ?? "Intermediate",
@@ -628,9 +628,9 @@ Deno.serve(async (req) => {
         is_published: shouldAutoPublish,
         priority_score: source.weight * 10, display_order: 1000 - score * 10,
         published_at: shouldAutoPublish ? new Date().toISOString() : safeDateISO(pubDate),
-      });
+      }, { onConflict: "original_url", ignoreDuplicates: true });
       if (error) {
-        console.error("[DB insert 실패]", error.message, url);
+        console.error("[DB upsert 실패]", error.message, url);
         results.failed++; stat.failed++;
         runErrors.push({ source: source.source_name, url, error: error.message });
       } else {

@@ -64,6 +64,10 @@ export default function NewsletterPage() {
   const [issueLogs, setIssueLogs] = useState<SendLog[]>([]);
   const [logsLoading, setLogsLoading] = useState(false);
 
+  // ── 수신자 탭 - 선택 삭제 ──
+  const [selectedSubIds, setSelectedSubIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+
   // ── 수신자 탭 - 엑셀 업로드 ──
   const excelFileRef = useRef<HTMLInputElement>(null);
   const [excelUploading, setExcelUploading] = useState(false);
@@ -287,7 +291,7 @@ export default function NewsletterPage() {
       if (res.ok) {
         setSendResult({
           ok: true,
-          message: `발송 완료: Vol.${json.vol_number} · 성공 ${json.total_sent}건 / 실패 ${json.total_failed}건`,
+          message: `Vol.${json.vol_number} 발송 시작 (${json.target_count}명). 결과는 발송 이력 탭에서 확인하세요.`,
         });
       } else {
         setSendResult({ ok: false, message: json.error ?? "발송 실패" });
@@ -353,12 +357,31 @@ export default function NewsletterPage() {
       if (res.ok) {
         const deleted = subscribers.find((s) => s.id === id);
         setSubscribers((prev) => prev.filter((s) => s.id !== id));
+        setSelectedSubIds((prev) => { const s = new Set(prev); s.delete(id); return s; });
         if (deleted?.is_active) {
           setActiveCount((prev) => (prev !== null ? prev - 1 : null));
         }
       }
     } catch {
       // ignore
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (selectedSubIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedSubIds.size}명을 삭제하시겠습니까?`)) return;
+    setBulkDeleting(true);
+    try {
+      const ids = Array.from(selectedSubIds);
+      await Promise.all(ids.map((id) => fetch(`/api/admin/newsletter/subscribers/${id}`, { method: "DELETE" })));
+      const deletedActive = subscribers.filter((s) => ids.includes(s.id) && s.is_active).length;
+      setSubscribers((prev) => prev.filter((s) => !ids.includes(s.id)));
+      setActiveCount((prev) => (prev !== null ? prev - deletedActive : null));
+      setSelectedSubIds(new Set());
+    } catch {
+      // ignore
+    } finally {
+      setBulkDeleting(false);
     }
   }
 
@@ -520,7 +543,7 @@ export default function NewsletterPage() {
       if (res.ok) {
         setResendResult(prev => ({
           ...prev,
-          [issue.id]: `✅ 재발송 완료: 성공 ${json.total_sent}건 / 실패 ${json.total_failed}건`,
+          [issue.id]: `✅ 재발송 시작 (${json.target_count}명). 잠시 후 이력을 새로고침하세요.`,
         }));
         // 패널 데이터 갱신
         setUnsentMap(prev => { const n = { ...prev }; delete n[issue.id]; return n; });
@@ -1196,8 +1219,27 @@ export default function NewsletterPage() {
               )}
             </div>
 
-            <div style={{ marginBottom: 12, fontSize: 13, color: "var(--on-surface-variant)" }}>
-              총 <strong>{subscribers.length}명</strong> / 활성 <strong>{subscribers.filter((s) => s.is_active).length}명</strong>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+              <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>
+                총 <strong>{subscribers.length}명</strong> / 활성 <strong>{subscribers.filter((s) => s.is_active).length}명</strong>
+              </span>
+              {selectedSubIds.size > 0 && (
+                <button
+                  onClick={handleBulkDelete}
+                  disabled={bulkDeleting}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 5,
+                    padding: "6px 14px", borderRadius: 6, border: "none",
+                    background: "#dc2626", color: "#fff",
+                    fontWeight: 600, fontSize: 13,
+                    cursor: bulkDeleting ? "not-allowed" : "pointer",
+                    opacity: bulkDeleting ? 0.6 : 1,
+                  }}
+                >
+                  <Trash2 size={13} />
+                  {bulkDeleting ? "삭제 중..." : `선택 ${selectedSubIds.size}명 삭제`}
+                </button>
+              )}
             </div>
 
             {subLoading ? (
@@ -1210,6 +1252,17 @@ export default function NewsletterPage() {
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "var(--surface-container-high)" }}>
+                      <th style={{ ...thStyle, textAlign: "center", width: 36 }}>
+                        <input
+                          type="checkbox"
+                          checked={subscribers.length > 0 && subscribers.every((s) => selectedSubIds.has(s.id))}
+                          onChange={() => {
+                            const allSelected = subscribers.every((s) => selectedSubIds.has(s.id));
+                            setSelectedSubIds(allSelected ? new Set() : new Set(subscribers.map((s) => s.id)));
+                          }}
+                          style={{ width: 14, height: 14, cursor: "pointer" }}
+                        />
+                      </th>
                       <th style={thStyle}>이름</th>
                       <th style={thStyle}>이메일</th>
                       <th style={{ ...thStyle, textAlign: "center" }}>활성</th>
@@ -1220,13 +1273,30 @@ export default function NewsletterPage() {
                   <tbody>
                     {subscribers.length === 0 ? (
                       <tr>
-                        <td colSpan={5} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+                        <td colSpan={6} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
                           등록된 수신자가 없습니다.
                         </td>
                       </tr>
                     ) : (
                       subscribers.map((sub) => (
-                        <tr key={sub.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                        <tr key={sub.id} style={{
+                          borderTop: "1px solid var(--surface-container-highest)",
+                          background: selectedSubIds.has(sub.id) ? "color-mix(in srgb, #dc2626 6%, transparent)" : undefined,
+                        }}>
+                          <td style={{ ...tdStyle, textAlign: "center" }}>
+                            <input
+                              type="checkbox"
+                              checked={selectedSubIds.has(sub.id)}
+                              onChange={() => {
+                                setSelectedSubIds((prev) => {
+                                  const s = new Set(prev);
+                                  s.has(sub.id) ? s.delete(sub.id) : s.add(sub.id);
+                                  return s;
+                                });
+                              }}
+                              style={{ width: 14, height: 14, cursor: "pointer" }}
+                            />
+                          </td>
                           <td style={tdStyle}>{sub.name ?? "-"}</td>
                           <td style={tdStyle}>{sub.email}</td>
                           <td style={{ ...tdStyle, textAlign: "center" }}>
