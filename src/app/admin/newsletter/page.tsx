@@ -68,6 +68,7 @@ export default function NewsletterPage() {
   const [selectedSubIds, setSelectedSubIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
   const [bulkDeactivating, setBulkDeactivating] = useState(false);
+  const [bulkActivating, setBulkActivating] = useState(false);
 
   // ── 수신자 탭 - 엑셀 업로드 ──
   const excelFileRef = useRef<HTMLInputElement>(null);
@@ -365,6 +366,27 @@ export default function NewsletterPage() {
       }
     } catch {
       // ignore
+    }
+  }
+
+  async function handleBulkActivate() {
+    if (selectedSubIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedSubIds.size}명을 활성화하시겠습니까?`)) return;
+    setBulkActivating(true);
+    try {
+      const ids = Array.from(selectedSubIds);
+      await Promise.all(ids.map((id) => fetch(`/api/admin/newsletter/subscribers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: true }),
+      })));
+      setSubscribers((prev) => prev.map((s) => ids.includes(s.id) ? { ...s, is_active: true } : s));
+      setActiveCount((prev) => prev !== null ? prev + ids.filter(id => !subscribers.find(s => s.id === id)?.is_active).length : null);
+      setSelectedSubIds(new Set());
+    } catch {
+      // ignore
+    } finally {
+      setBulkActivating(false);
     }
   }
 
@@ -1284,6 +1306,20 @@ export default function NewsletterPage() {
               </span>
               {selectedSubIds.size > 0 && (
                 <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={handleBulkActivate}
+                    disabled={bulkActivating}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 14px", borderRadius: 6, border: "none",
+                      background: "#16a34a", color: "#fff",
+                      fontWeight: 600, fontSize: 13,
+                      cursor: bulkActivating ? "not-allowed" : "pointer",
+                      opacity: bulkActivating ? 0.6 : 1,
+                    }}
+                  >
+                    {bulkActivating ? "처리 중..." : `선택 ${selectedSubIds.size}명 활성화`}
+                  </button>
                   <button
                     onClick={handleBulkDeactivate}
                     disabled={bulkDeactivating}
