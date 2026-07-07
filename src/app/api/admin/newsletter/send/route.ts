@@ -39,23 +39,54 @@ export async function POST(req: NextRequest) {
     const sendHtml = body.cached_html
       .replace(/https?:\/\/localhost:\d+/g, prodUrl);
 
-    const recipients = subscribers.map(s => s.email);
+    const allRecipients = subscribers.map(s => s.email);
 
-    // 이슈를 먼저 생성 (status: sending) → 타임아웃으로 끊겨도 이슈 기록 남음
-    const { data: issue, error: issueErr } = await supabase
+    // 같은 vol_number 이슈가 이미 있으면 재사용 (재발송 시 중복 방지)
+    const { data: existingIssue } = await supabase
       .from("newsletter_issues")
-      .insert({
-        vol_number, editorial_text, status: "sending",
-        html_content: sendHtml,
-        target_count: recipients.length,
-        total_sent: 0, total_failed: 0,
-        sent_at: new Date().toISOString(),
-        featured_event_ids: body.cached_featured_ids ?? [],
-      })
-      .select().single();
+      .select("id, total_sent")
+      .eq("vol_number", vol_number)
+      .order("sent_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
 
-    if (issueErr || !issue)
-      return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
+    let issueId: string;
+    let prevSentCount = 0;
+
+    if (existingIssue) {
+      issueId = existingIssue.id;
+      prevSentCount = existingIssue.total_sent ?? 0;
+      await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId);
+    } else {
+      const { data: newIssue, error: issueErr } = await supabase
+        .from("newsletter_issues")
+        .insert({
+          vol_number, editorial_text, status: "sending",
+          html_content: sendHtml,
+          target_count: allRecipients.length,
+          total_sent: 0, total_failed: 0,
+          sent_at: new Date().toISOString(),
+          featured_event_ids: body.cached_featured_ids ?? [],
+        })
+        .select("id").single();
+      if (issueErr || !newIssue)
+        return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
+      issueId = newIssue.id;
+    }
+
+    // 이미 성공한 수신자 제외 → 재발송 이중 발송 방지
+    const { data: sentLogs } = await supabase
+      .from("newsletter_send_logs")
+      .select("email")
+      .eq("issue_id", issueId)
+      .eq("status", "success");
+    const alreadySent = new Set((sentLogs ?? []).map((l: { email: string }) => l.email));
+    const recipients = allRecipients.filter(e => !alreadySent.has(e));
+
+    if (recipients.length === 0) {
+      await supabase.from("newsletter_issues").update({ status: "sent" }).eq("id", issueId);
+      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent: prevSentCount, total_failed: 0 });
+    }
 
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
     let total_sent = 0, total_failed = 0;
@@ -71,20 +102,21 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       await supabase.from("newsletter_issues")
-        .update({ status: "failed", total_failed: recipients.length })
-        .eq("id", issue.id);
+        .update({ status: "failed", total_failed: allRecipients.length - prevSentCount })
+        .eq("id", issueId);
       return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 
-    const finalStatus = total_sent === 0 ? "failed" : total_failed === 0 ? "sent" : "partial";
+    const cumulativeSent = prevSentCount + total_sent;
+    const finalStatus = cumulativeSent === 0 ? "failed" : cumulativeSent >= allRecipients.length && total_failed === 0 ? "sent" : "partial";
     await supabase.from("newsletter_issues")
-      .update({ status: finalStatus, total_sent, total_failed })
-      .eq("id", issue.id);
+      .update({ status: finalStatus, total_sent: cumulativeSent, total_failed })
+      .eq("id", issueId);
     if (logEntries.length > 0)
       await supabase.from("newsletter_send_logs")
-        .insert(logEntries.map(l => ({ ...l, issue_id: issue.id })));
+        .insert(logEntries.map(l => ({ ...l, issue_id: issueId })));
 
-    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issue.id, target_count: recipients.length, total_sent, total_failed });
+    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent: cumulativeSent, total_failed });
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────
