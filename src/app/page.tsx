@@ -10,7 +10,7 @@ import type { CalendarEvent } from "@/components/newsroom/EventsColumn";
 
 export const dynamic = "force-dynamic"; // 항상 최신 데이터 fetch
 
-const CATEGORY_ORDER = ["MICE", "TOURISM", "AI", "STARTUP", "POLICY", "OPERATIONS", "INDUSTRY"];
+const CATEGORY_ORDER = ["MICE", "TOURISM", "AI", "EZPMP", "STARTUP", "POLICY", "OPERATIONS", "INDUSTRY"];
 
 function groupByCategory(items: NewsItem[]) {
   const map = new Map<string, NewsItem[]>();
