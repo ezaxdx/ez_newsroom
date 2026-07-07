@@ -130,7 +130,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       .eq("is_published", true)
       .gte("start_date", from)
       .order("start_date", { ascending: true })
-      .limit(200);
+      .limit(1000);
 
     if (!data?.length) return [];
 
