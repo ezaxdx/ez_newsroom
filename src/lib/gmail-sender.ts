@@ -84,6 +84,7 @@ export async function sendNewsletterViaGmail(params: {
   subject: string;
   html: string;
   recipients: string[];
+  onBatchComplete?: (results: SendResult[]) => Promise<void>;
 }): Promise<{ results: SendResult[]; total_sent: number; total_failed: number }> {
   const gmail = await getGmailClient();
 
@@ -122,6 +123,7 @@ export async function sendNewsletterViaGmail(params: {
       })
     );
     results.push(...batchResults);
+    if (params.onBatchComplete) await params.onBatchComplete(batchResults);
   }
 
   return { results, total_sent, total_failed };

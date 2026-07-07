@@ -89,34 +89,38 @@ export async function POST(req: NextRequest) {
     }
 
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-    let total_sent = 0, total_failed = 0;
-    const logEntries: { email: string; status: string; error_message: string | null }[] = [];
+    let total_sent = prevSentCount, total_failed = 0;
 
     try {
-      const { results } = await sendNewsletterViaGmail({
+      await sendNewsletterViaGmail({
         fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients,
+        onBatchComplete: async (batchResults) => {
+          const batchSent = batchResults.filter(r => r.status === "success").length;
+          const batchFailed = batchResults.filter(r => r.status === "failed").length;
+          total_sent += batchSent;
+          total_failed += batchFailed;
+          await Promise.all([
+            supabase.from("newsletter_send_logs")
+              .insert(batchResults.map(r => ({ ...r, issue_id: issueId }))),
+            supabase.from("newsletter_issues")
+              .update({ total_sent, total_failed })
+              .eq("id", issueId),
+          ]);
+        },
       });
-      for (const r of results) {
-        if (r.status === "success") total_sent++; else total_failed++;
-        logEntries.push(r);
-      }
     } catch (err) {
       await supabase.from("newsletter_issues")
-        .update({ status: "failed", total_failed: allRecipients.length - prevSentCount })
+        .update({ status: total_sent > prevSentCount ? "partial" : "failed", total_sent, total_failed })
         .eq("id", issueId);
       return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 
-    const cumulativeSent = prevSentCount + total_sent;
-    const finalStatus = cumulativeSent === 0 ? "failed" : cumulativeSent >= allRecipients.length && total_failed === 0 ? "sent" : "partial";
+    const finalStatus = total_sent === 0 ? "failed" : total_sent >= allRecipients.length && total_failed === 0 ? "sent" : "partial";
     await supabase.from("newsletter_issues")
-      .update({ status: finalStatus, total_sent: cumulativeSent, total_failed })
+      .update({ status: finalStatus, total_sent, total_failed })
       .eq("id", issueId);
-    if (logEntries.length > 0)
-      await supabase.from("newsletter_send_logs")
-        .insert(logEntries.map(l => ({ ...l, issue_id: issueId })));
 
-    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent: cumulativeSent, total_failed });
+    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent, total_failed });
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────
@@ -342,30 +346,35 @@ export async function POST(req: NextRequest) {
 
   const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
   let total_sent = 0, total_failed = 0;
-  const logEntries: { email: string; status: string; error_message: string | null }[] = [];
 
   try {
-    const { results } = await sendNewsletterViaGmail({
+    await sendNewsletterViaGmail({
       fromName: "EZ Letter", fromEmail, subject, html, recipients,
+      onBatchComplete: async (batchResults) => {
+        const batchSent = batchResults.filter(r => r.status === "success").length;
+        const batchFailed = batchResults.filter(r => r.status === "failed").length;
+        total_sent += batchSent;
+        total_failed += batchFailed;
+        await Promise.all([
+          supabase.from("newsletter_send_logs")
+            .insert(batchResults.map(r => ({ ...r, issue_id: issue.id }))),
+          supabase.from("newsletter_issues")
+            .update({ total_sent, total_failed })
+            .eq("id", issue.id),
+        ]);
+      },
     });
-    for (const r of results) {
-      if (r.status === "success") total_sent++; else total_failed++;
-      logEntries.push(r);
-    }
   } catch (err) {
     await supabase.from("newsletter_issues")
-      .update({ status: "failed", total_failed: recipients.length })
+      .update({ status: total_sent > 0 ? "partial" : "failed", total_sent, total_failed })
       .eq("id", issue.id);
     return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
   }
 
-  const finalStatus = total_sent === 0 ? "failed" : total_failed === 0 ? "sent" : "partial";
+  const finalStatus = total_sent === 0 ? "failed" : total_sent >= recipients.length && total_failed === 0 ? "sent" : "partial";
   await supabase.from("newsletter_issues")
     .update({ status: finalStatus, total_sent, total_failed })
     .eq("id", issue.id);
-  if (logEntries.length > 0)
-    await supabase.from("newsletter_send_logs")
-      .insert(logEntries.map(l => ({ ...l, issue_id: issue.id })));
 
   return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issue.id, target_count: recipients.length, total_sent, total_failed });
 }
