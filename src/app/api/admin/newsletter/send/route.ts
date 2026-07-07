@@ -3,37 +3,9 @@ import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
+import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 
 export const maxDuration = 60;
-
-// ── Supabase Edge Function 호출 헬퍼 ────────────────────
-// Edge Function이 200 OK를 즉시 반환하고 백그라운드에서 발송 (최대 150초)
-async function triggerEdgeSend({
-  issueId, recipients, subject, html,
-}: {
-  issueId: string;
-  recipients: string[];
-  subject: string;
-  html: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/newsletter-send`;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-  const resp = await fetch(edgeFnUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ issue_id: issueId, recipients, subject, html }),
-  });
-
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => resp.statusText);
-    return { ok: false, error: text };
-  }
-  return { ok: true };
-}
 
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
@@ -85,18 +57,34 @@ export async function POST(req: NextRequest) {
     if (issueErr || !issue)
       return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
 
-    // Edge Function에 발송 위임 (즉시 200 반환, 백그라운드에서 최대 150초 실행)
-    const edgeResult = await triggerEdgeSend({
-      issueId: issue.id, recipients, subject, html: sendHtml,
-    });
-    if (!edgeResult.ok) {
+    const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+    let total_sent = 0, total_failed = 0;
+    const logEntries: { email: string; status: string; error_message: string | null }[] = [];
+
+    try {
+      const { results } = await sendNewsletterViaGmail({
+        fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients,
+      });
+      for (const r of results) {
+        if (r.status === "success") total_sent++; else total_failed++;
+        logEntries.push(r);
+      }
+    } catch (err) {
       await supabase.from("newsletter_issues")
         .update({ status: "failed", total_failed: recipients.length })
         .eq("id", issue.id);
-      return NextResponse.json({ error: `Edge Function 오류: ${edgeResult.error}` }, { status: 500 });
+      return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 
-    return NextResponse.json({ ok: true, vol_number, status: "sending", issue_id: issue.id, target_count: recipients.length });
+    const finalStatus = total_sent === 0 ? "failed" : total_failed === 0 ? "sent" : "partial";
+    await supabase.from("newsletter_issues")
+      .update({ status: finalStatus, total_sent, total_failed })
+      .eq("id", issue.id);
+    if (logEntries.length > 0)
+      await supabase.from("newsletter_send_logs")
+        .insert(logEntries.map(l => ({ ...l, issue_id: issue.id })));
+
+    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issue.id, target_count: recipients.length, total_sent, total_failed });
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────
@@ -320,16 +308,32 @@ export async function POST(req: NextRequest) {
   if (issueErr || !issue)
     return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
 
-  // Edge Function에 발송 위임 (즉시 200 반환, 백그라운드에서 최대 150초 실행)
-  const edgeResult = await triggerEdgeSend({
-    issueId: issue.id, recipients, subject, html,
-  });
-  if (!edgeResult.ok) {
+  const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  let total_sent = 0, total_failed = 0;
+  const logEntries: { email: string; status: string; error_message: string | null }[] = [];
+
+  try {
+    const { results } = await sendNewsletterViaGmail({
+      fromName: "EZ Letter", fromEmail, subject, html, recipients,
+    });
+    for (const r of results) {
+      if (r.status === "success") total_sent++; else total_failed++;
+      logEntries.push(r);
+    }
+  } catch (err) {
     await supabase.from("newsletter_issues")
       .update({ status: "failed", total_failed: recipients.length })
       .eq("id", issue.id);
-    return NextResponse.json({ error: `Edge Function 오류: ${edgeResult.error}` }, { status: 500 });
+    return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true, vol_number, status: "sending", issue_id: issue.id, target_count: recipients.length });
+  const finalStatus = total_sent === 0 ? "failed" : total_failed === 0 ? "sent" : "partial";
+  await supabase.from("newsletter_issues")
+    .update({ status: finalStatus, total_sent, total_failed })
+    .eq("id", issue.id);
+  if (logEntries.length > 0)
+    await supabase.from("newsletter_send_logs")
+      .insert(logEntries.map(l => ({ ...l, issue_id: issue.id })));
+
+  return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issue.id, target_count: recipients.length, total_sent, total_failed });
 }
