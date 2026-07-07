@@ -67,6 +67,7 @@ export default function NewsletterPage() {
   // ── 수신자 탭 - 선택 삭제 ──
   const [selectedSubIds, setSelectedSubIds] = useState<Set<string>>(new Set());
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [bulkDeactivating, setBulkDeactivating] = useState(false);
 
   // ── 수신자 탭 - 엑셀 업로드 ──
   const excelFileRef = useRef<HTMLInputElement>(null);
@@ -364,6 +365,27 @@ export default function NewsletterPage() {
       }
     } catch {
       // ignore
+    }
+  }
+
+  async function handleBulkDeactivate() {
+    if (selectedSubIds.size === 0) return;
+    if (!window.confirm(`선택한 ${selectedSubIds.size}명을 비활성화하시겠습니까?`)) return;
+    setBulkDeactivating(true);
+    try {
+      const ids = Array.from(selectedSubIds);
+      await Promise.all(ids.map((id) => fetch(`/api/admin/newsletter/subscribers/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_active: false }),
+      })));
+      setSubscribers((prev) => prev.map((s) => ids.includes(s.id) ? { ...s, is_active: false } : s));
+      setActiveCount((prev) => prev !== null ? prev - ids.filter(id => subscribers.find(s => s.id === id)?.is_active).length : null);
+      setSelectedSubIds(new Set());
+    } catch {
+      // ignore
+    } finally {
+      setBulkDeactivating(false);
     }
   }
 
@@ -1261,21 +1283,37 @@ export default function NewsletterPage() {
                 총 <strong>{subscribers.length}명</strong> / 활성 <strong>{subscribers.filter((s) => s.is_active).length}명</strong>
               </span>
               {selectedSubIds.size > 0 && (
-                <button
-                  onClick={handleBulkDelete}
-                  disabled={bulkDeleting}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 5,
-                    padding: "6px 14px", borderRadius: 6, border: "none",
-                    background: "#dc2626", color: "#fff",
-                    fontWeight: 600, fontSize: 13,
-                    cursor: bulkDeleting ? "not-allowed" : "pointer",
-                    opacity: bulkDeleting ? 0.6 : 1,
-                  }}
-                >
-                  <Trash2 size={13} />
-                  {bulkDeleting ? "삭제 중..." : `선택 ${selectedSubIds.size}명 삭제`}
-                </button>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={handleBulkDeactivate}
+                    disabled={bulkDeactivating}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 14px", borderRadius: 6, border: "none",
+                      background: "#f59e0b", color: "#fff",
+                      fontWeight: 600, fontSize: 13,
+                      cursor: bulkDeactivating ? "not-allowed" : "pointer",
+                      opacity: bulkDeactivating ? 0.6 : 1,
+                    }}
+                  >
+                    {bulkDeactivating ? "처리 중..." : `선택 ${selectedSubIds.size}명 비활성화`}
+                  </button>
+                  <button
+                    onClick={handleBulkDelete}
+                    disabled={bulkDeleting}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 5,
+                      padding: "6px 14px", borderRadius: 6, border: "none",
+                      background: "#dc2626", color: "#fff",
+                      fontWeight: 600, fontSize: 13,
+                      cursor: bulkDeleting ? "not-allowed" : "pointer",
+                      opacity: bulkDeleting ? 0.6 : 1,
+                    }}
+                  >
+                    <Trash2 size={13} />
+                    {bulkDeleting ? "삭제 중..." : `선택 ${selectedSubIds.size}명 삭제`}
+                  </button>
+                </div>
               )}
             </div>
 
