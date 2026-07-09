@@ -53,11 +53,9 @@ export async function POST(req: NextRequest) {
       .maybeSingle();
 
     let issueId: string;
-    let prevSentCount = 0;
 
     if (existingIssue) {
       issueId = existingIssue.id;
-      prevSentCount = existingIssue.total_sent ?? 0;
       await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId);
     } else {
       const { data: newIssue, error: issueErr } = await supabase
@@ -86,13 +84,14 @@ export async function POST(req: NextRequest) {
     const remaining = allRecipients.filter(e => !alreadySent.has(e));
     const recipients = remaining.slice(0, BATCH_LIMIT);
 
-    if (remaining.length === 0) {
-      await supabase.from("newsletter_issues").update({ status: "sent" }).eq("id", issueId);
-      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent: prevSentCount, total_failed: 0, remaining_count: 0 });
-    }
-
+    // newsletter_issues.total_sent 는 수동 수정될 수 있으므로 실제 로그 기준으로 초기화
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-    let total_sent = prevSentCount, total_failed = 0;
+    let total_sent = alreadySent.size, total_failed = 0;
+
+    if (remaining.length === 0) {
+      await supabase.from("newsletter_issues").update({ status: "sent", total_sent }).eq("id", issueId);
+      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent, total_failed: 0, remaining_count: 0 });
+    }
 
     try {
       await sendNewsletterViaGmail({
@@ -330,55 +329,86 @@ export async function POST(req: NextRequest) {
   if (!subscribers || subscribers.length === 0)
     return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
 
-  const subject    = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
-  const recipients = subscribers.map(s => s.email);
+  const subject      = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+  const allRecipients2 = subscribers.map(s => s.email);
 
-  const { data: issue, error: issueErr } = await supabase
+  // 같은 vol_number 이슈 재사용 (캐시 경로와 동일한 중복방지 로직)
+  const { data: existingIssue2 } = await supabase
     .from("newsletter_issues")
-    .insert({
-      vol_number, editorial_text, status: "sending",
-      html_content: html,
-      target_count: recipients.length,
-      total_sent: 0, total_failed: 0,
-      sent_at: new Date().toISOString(),
-      featured_event_ids: featuredRaw.map(e => e.id),
-    })
-    .select().single();
+    .select("id")
+    .eq("vol_number", vol_number)
+    .order("sent_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
 
-  if (issueErr || !issue)
-    return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
+  let issueId2: string;
+  if (existingIssue2) {
+    issueId2 = existingIssue2.id;
+    await supabase.from("newsletter_issues").update({ status: "sending", html_content: html }).eq("id", issueId2);
+  } else {
+    const { data: newIssue2, error: issueErr2 } = await supabase
+      .from("newsletter_issues")
+      .insert({
+        vol_number, editorial_text, status: "sending",
+        html_content: html,
+        target_count: allRecipients2.length,
+        total_sent: 0, total_failed: 0,
+        sent_at: new Date().toISOString(),
+        featured_event_ids: featuredRaw.map(e => e.id),
+      })
+      .select("id").single();
+    if (issueErr2 || !newIssue2)
+      return NextResponse.json({ error: issueErr2?.message ?? "이슈 생성 실패" }, { status: 500 });
+    issueId2 = newIssue2.id;
+  }
 
-  const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-  let total_sent = 0, total_failed = 0;
+  // 이미 성공한 수신자 제외
+  const { data: sentLogs2 } = await supabase
+    .from("newsletter_send_logs")
+    .select("email")
+    .eq("issue_id", issueId2)
+    .eq("status", "success");
+  const alreadySent2 = new Set((sentLogs2 ?? []).map((l: { email: string }) => l.email));
+  const remaining2 = allRecipients2.filter(e => !alreadySent2.has(e));
+  const recipients2 = remaining2.slice(0, BATCH_LIMIT);
+
+  if (remaining2.length === 0) {
+    await supabase.from("newsletter_issues").update({ status: "sent", total_sent: alreadySent2.size }).eq("id", issueId2);
+    return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId2, target_count: allRecipients2.length, total_sent: alreadySent2.size, total_failed: 0, remaining_count: 0 });
+  }
+
+  const fromEmail2 = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  let total_sent2 = alreadySent2.size, total_failed2 = 0;
 
   try {
     await sendNewsletterViaGmail({
-      fromName: "EZ Letter", fromEmail, subject, html, recipients,
+      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html, recipients: recipients2,
       onBatchComplete: async (batchResults) => {
         const batchSent = batchResults.filter(r => r.status === "success").length;
         const batchFailed = batchResults.filter(r => r.status === "failed").length;
-        total_sent += batchSent;
-        total_failed += batchFailed;
+        total_sent2 += batchSent;
+        total_failed2 += batchFailed;
         await Promise.all([
           supabase.from("newsletter_send_logs")
-            .insert(batchResults.map(r => ({ ...r, issue_id: issue.id }))),
+            .insert(batchResults.map(r => ({ ...r, issue_id: issueId2 }))),
           supabase.from("newsletter_issues")
-            .update({ total_sent, total_failed })
-            .eq("id", issue.id),
+            .update({ total_sent: total_sent2, total_failed: total_failed2 })
+            .eq("id", issueId2),
         ]);
       },
     });
   } catch (err) {
     await supabase.from("newsletter_issues")
-      .update({ status: total_sent > 0 ? "partial" : "failed", total_sent, total_failed })
-      .eq("id", issue.id);
+      .update({ status: total_sent2 > alreadySent2.size ? "partial" : "failed", total_sent: total_sent2, total_failed: total_failed2 })
+      .eq("id", issueId2);
     return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
   }
 
-  const finalStatus = total_sent === 0 ? "failed" : total_sent >= recipients.length && total_failed === 0 ? "sent" : "partial";
+  const remainingAfter2 = remaining2.length - recipients2.length;
+  const finalStatus2 = total_sent2 === 0 ? "failed" : (total_sent2 >= allRecipients2.length && total_failed2 === 0) ? "sent" : "partial";
   await supabase.from("newsletter_issues")
-    .update({ status: finalStatus, total_sent, total_failed })
-    .eq("id", issue.id);
+    .update({ status: finalStatus2, total_sent: total_sent2, total_failed: total_failed2 })
+    .eq("id", issueId2);
 
-  return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issue.id, target_count: recipients.length, total_sent, total_failed });
+  return NextResponse.json({ ok: true, vol_number, status: finalStatus2, issue_id: issueId2, target_count: allRecipients2.length, total_sent: total_sent2, total_failed: total_failed2, remaining_count: remainingAfter2 });
 }

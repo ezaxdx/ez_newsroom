@@ -104,7 +104,10 @@ export async function POST(req: NextRequest) {
   const subject = `[EZ Letter] Vol.${issue.vol_number} · ${send_date}`;
 
   const fromEmail = process.env.GMAIL_FROM_EMAIL ?? "ez.micedx1@gmail.com";
-  let total_sent = issue.total_sent ?? 0;
+  // newsletter_issues.total_sent 은 수동 수정될 수 있으므로 실제 로그 기준으로 초기화
+  const { data: existingSuccessLogs } = await supabase
+    .from("newsletter_send_logs").select("email").eq("issue_id", issue_id).eq("status", "success");
+  let total_sent = existingSuccessLogs?.length ?? 0;
   let total_failed = issue.total_failed ?? 0;
 
   await sendNewsletterViaGmail({
