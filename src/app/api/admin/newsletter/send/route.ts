@@ -11,6 +11,8 @@ export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
+  const BATCH_LIMIT = 50;
+
   let body: {
     editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean; reuse_prev_pick?: boolean;
     cached_html?: string; cached_vol?: number; cached_send_date?: string; cached_featured_ids?: string[];
@@ -81,11 +83,12 @@ export async function POST(req: NextRequest) {
       .eq("issue_id", issueId)
       .eq("status", "success");
     const alreadySent = new Set((sentLogs ?? []).map((l: { email: string }) => l.email));
-    const recipients = allRecipients.filter(e => !alreadySent.has(e));
+    const remaining = allRecipients.filter(e => !alreadySent.has(e));
+    const recipients = remaining.slice(0, BATCH_LIMIT);
 
-    if (recipients.length === 0) {
+    if (remaining.length === 0) {
       await supabase.from("newsletter_issues").update({ status: "sent" }).eq("id", issueId);
-      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent: prevSentCount, total_failed: 0 });
+      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent: prevSentCount, total_failed: 0, remaining_count: 0 });
     }
 
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
@@ -115,12 +118,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 
-    const finalStatus = total_sent === 0 ? "failed" : total_sent >= allRecipients.length && total_failed === 0 ? "sent" : "partial";
+    const remainingAfter = remaining.length - recipients.length;
+    const finalStatus = total_sent === 0 ? "failed" : (total_sent >= allRecipients.length && total_failed === 0) ? "sent" : "partial";
     await supabase.from("newsletter_issues")
       .update({ status: finalStatus, total_sent, total_failed })
       .eq("id", issueId);
 
-    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent, total_failed });
+    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent, total_failed, remaining_count: remainingAfter });
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────

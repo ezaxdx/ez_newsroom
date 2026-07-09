@@ -45,6 +45,7 @@ export default function NewsletterPage() {
   const [sendElapsed, setSendElapsed] = useState(0);
   const sendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
+  const [sendProgress, setSendProgress] = useState<{ totalSent: number; targetCount: number; batchSize: number } | null>(null);
   const [activeCount, setActiveCount] = useState<number | null>(null);
 
   // ── Subscribers tab state ──
@@ -259,15 +260,21 @@ export default function NewsletterPage() {
     }
   }
 
+  const BATCH_SIZE = 50;
+
   async function handleSend() {
     if (!activeCount) {
       setSendResult({ ok: false, message: activeCount === null ? "수신자 수를 불러오는 중입니다. 잠시 후 다시 시도하세요." : "활성 수신자가 없습니다." });
       return;
     }
-    const confirmed = window.confirm(
-      `${activeCount}명의 수신자에게 뉴스레터를 발송합니다. 계속하시겠습니까?`
-    );
-    if (!confirmed) return;
+    // 첫 발송만 confirm
+    if (!sendProgress) {
+      const totalBatches = Math.ceil(activeCount / BATCH_SIZE);
+      const confirmed = window.confirm(
+        `${activeCount}명에게 ${BATCH_SIZE}명씩 총 ${totalBatches}회 발송합니다.\n지금 1/${totalBatches}회차를 시작합니다.`
+      );
+      if (!confirmed) return;
+    }
 
     setSending(true);
     setSendElapsed(0);
@@ -291,9 +298,17 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (res.ok) {
+        const newTotalSent = json.total_sent ?? 0;
+        const targetCount = json.target_count ?? activeCount ?? 0;
+        setSendProgress({ totalSent: newTotalSent, targetCount, batchSize: BATCH_SIZE });
+        const isDone = json.remaining_count === 0 || newTotalSent >= targetCount;
+        const currentBatch = Math.ceil(newTotalSent / BATCH_SIZE);
+        const totalBatches = Math.ceil(targetCount / BATCH_SIZE);
         setSendResult({
           ok: true,
-          message: `Vol.${json.vol_number} 발송 시작 (${json.target_count}명). 결과는 발송 이력 탭에서 확인하세요.`,
+          message: isDone
+            ? `✅ Vol.${json.vol_number} 발송 완료 (${newTotalSent}명)`
+            : `${currentBatch}/${totalBatches}회차 완료 (${newTotalSent}/${targetCount}명). 버튼을 눌러 다음 회차를 발송하세요.`,
         });
       } else {
         setSendResult({ ok: false, message: json.error ?? "발송 실패" });
@@ -865,20 +880,34 @@ export default function NewsletterPage() {
                 </button>
               )}
 
-              <button
-                onClick={handleSend}
-                disabled={sending}
-                style={{
-                  display: "flex", alignItems: "center", gap: 6,
-                  padding: "8px 18px", borderRadius: 6, border: "none",
-                  background: "var(--primary)", color: "#fff", fontWeight: 600,
-                  fontSize: 14, cursor: sending ? "not-allowed" : "pointer",
-                  opacity: sending ? 0.6 : 1,
-                }}
-              >
-                {sending && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
-                발송 {activeCount !== null ? `(${activeCount}명)` : ""}
-              </button>
+              {(() => {
+                const isDone = sendProgress && sendProgress.totalSent >= sendProgress.targetCount;
+                const currentBatch = sendProgress ? Math.ceil(sendProgress.totalSent / BATCH_SIZE) : 0;
+                const totalBatches = sendProgress ? Math.ceil(sendProgress.targetCount / BATCH_SIZE) : (activeCount ? Math.ceil(activeCount / BATCH_SIZE) : 1);
+                const nextBatch = currentBatch + 1;
+                const label = isDone
+                  ? "발송 완료"
+                  : sendProgress
+                    ? `발송 (${nextBatch}/${totalBatches})`
+                    : `발송 (1/${totalBatches})`;
+                return (
+                  <button
+                    onClick={handleSend}
+                    disabled={sending || !!isDone}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "8px 18px", borderRadius: 6, border: "none",
+                      background: isDone ? "#16a34a" : "var(--primary)",
+                      color: "#fff", fontWeight: 600,
+                      fontSize: 14, cursor: (sending || isDone) ? "not-allowed" : "pointer",
+                      opacity: (sending || isDone) ? 0.7 : 1,
+                    }}
+                  >
+                    {sending && <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />}
+                    {label}
+                  </button>
+                );
+              })()}
 
               {activeCount !== null && (
                 <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>
