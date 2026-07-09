@@ -298,6 +298,7 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (res.ok) {
+        const thisBatchSent = json.this_batch_sent ?? json.total_sent ?? 0;
         const newTotalSent = json.total_sent ?? 0;
         const targetCount = json.target_count ?? activeCount ?? 0;
         const remainingCount = json.remaining_count ?? 0;
@@ -306,9 +307,11 @@ export default function NewsletterPage() {
         const isDone = remainingCount === 0;
         setSendResult({
           ok: true,
-          message: isDone
-            ? `✅ Vol.${json.vol_number} 발송 완료 (${newTotalSent}명)`
-            : `${round}회차 완료 (${newTotalSent}/${targetCount}명, 잔여 ${remainingCount}명). 버튼을 눌러 다음 회차를 발송하세요.`,
+          message: isDone && thisBatchSent === 0
+            ? `✅ Vol.${json.vol_number} 이미 전체 발송 완료된 호입니다.`
+            : isDone
+            ? `✅ Vol.${json.vol_number} 발송 완료 (${thisBatchSent}명)`
+            : `${round}회차 완료 (${thisBatchSent}명 발송, 잔여 ${remainingCount}명). 버튼을 눌러 다음 회차를 발송하세요.`,
         });
       } else {
         setSendResult({ ok: false, message: json.error ?? "발송 실패" });

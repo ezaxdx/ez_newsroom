@@ -86,11 +86,12 @@ export async function POST(req: NextRequest) {
 
     // newsletter_issues.total_sent 는 수동 수정될 수 있으므로 실제 로그 기준으로 초기화
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-    let total_sent = alreadySent.size, total_failed = 0;
+    const prevSent = alreadySent.size;
+    let total_sent = prevSent, total_failed = 0;
 
     if (remaining.length === 0) {
       await supabase.from("newsletter_issues").update({ status: "sent", total_sent }).eq("id", issueId);
-      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent, total_failed: 0, remaining_count: 0 });
+      return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent, this_batch_sent: 0, total_failed: 0, remaining_count: 0 });
     }
 
     try {
@@ -111,7 +112,7 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch (err) {
-      const partialSent = total_sent > alreadySent.size;
+      const partialSent = total_sent > prevSent;
       await supabase.from("newsletter_issues")
         .update({ status: partialSent ? "partial" : "failed", total_sent, total_failed })
         .eq("id", issueId);
@@ -119,12 +120,13 @@ export async function POST(req: NextRequest) {
     }
 
     const remainingAfter = remaining.length - recipients.length;
+    const thisBatchSent = total_sent - prevSent;
     const finalStatus = total_sent === 0 ? "failed" : (total_sent >= allRecipients.length && total_failed === 0) ? "sent" : "partial";
     await supabase.from("newsletter_issues")
       .update({ status: finalStatus, total_sent, total_failed })
       .eq("id", issueId);
 
-    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent, total_failed, remaining_count: remainingAfter });
+    return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent, this_batch_sent: thisBatchSent, total_failed, remaining_count: remainingAfter });
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────
@@ -406,10 +408,11 @@ export async function POST(req: NextRequest) {
   }
 
   const remainingAfter2 = remaining2.length - recipients2.length;
+  const thisBatchSent2 = total_sent2 - alreadySent2.size;
   const finalStatus2 = total_sent2 === 0 ? "failed" : (total_sent2 >= allRecipients2.length && total_failed2 === 0) ? "sent" : "partial";
   await supabase.from("newsletter_issues")
     .update({ status: finalStatus2, total_sent: total_sent2, total_failed: total_failed2 })
     .eq("id", issueId2);
 
-  return NextResponse.json({ ok: true, vol_number, status: finalStatus2, issue_id: issueId2, target_count: allRecipients2.length, total_sent: total_sent2, total_failed: total_failed2, remaining_count: remainingAfter2 });
+  return NextResponse.json({ ok: true, vol_number, status: finalStatus2, issue_id: issueId2, target_count: allRecipients2.length, total_sent: total_sent2, this_batch_sent: thisBatchSent2, total_failed: total_failed2, remaining_count: remainingAfter2 });
 }
