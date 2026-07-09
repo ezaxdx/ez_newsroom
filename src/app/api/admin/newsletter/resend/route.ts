@@ -1,31 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-
-async function triggerEdgeSend({
-  issueId, recipients, subject, html,
-}: {
-  issueId: string;
-  recipients: string[];
-  subject: string;
-  html: string;
-}): Promise<{ ok: boolean; error?: string }> {
-  const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/newsletter-send`;
-  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const resp = await fetch(edgeFnUrl, {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${serviceKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ issue_id: issueId, recipients, subject, html }),
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => resp.statusText);
-    return { ok: false, error: text };
-  }
-  return { ok: true };
-}
+import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 
 export const maxDuration = 60;
 
@@ -127,16 +103,33 @@ export async function POST(req: NextRequest) {
   const send_date = `${todayKST.getUTCFullYear()}.${String(todayKST.getUTCMonth() + 1).padStart(2, "0")}.${String(todayKST.getUTCDate()).padStart(2, "0")}`;
   const subject = `[EZ Letter] Vol.${issue.vol_number} · ${send_date}`;
 
-  // Edge Function에 재발송 위임 (즉시 200 반환, 백그라운드에서 최대 150초 실행)
-  const edgeResult = await triggerEdgeSend({
-    issueId: issue_id, recipients: emails, subject, html: issue.html_content!,
-  });
-  if (!edgeResult.ok) {
-    await supabase.from("newsletter_issues")
-      .update({ status: "partial" })
-      .eq("id", issue_id);
-    return NextResponse.json({ error: `Edge Function 오류: ${edgeResult.error}` }, { status: 500 });
-  }
+  const fromEmail = process.env.GMAIL_FROM_EMAIL ?? "ez.micedx1@gmail.com";
+  let total_sent = issue.total_sent ?? 0;
+  let total_failed = issue.total_failed ?? 0;
 
-  return NextResponse.json({ ok: true, status: "sending", target_count: emails.length });
+  await sendNewsletterViaGmail({
+    fromName: "EZ Letter",
+    fromEmail,
+    subject,
+    html: issue.html_content!,
+    recipients: emails,
+    onBatchComplete: async (batchResults) => {
+      const batchSent = batchResults.filter(r => r.status === "success").length;
+      const batchFailed = batchResults.filter(r => r.status === "failed").length;
+      total_sent += batchSent;
+      total_failed += batchFailed;
+      await Promise.all([
+        supabase.from("newsletter_send_logs").insert(
+          batchResults.map(r => ({ ...r, issue_id }))
+        ),
+        supabase.from("newsletter_issues").update({
+          total_sent,
+          total_failed,
+          status: "sent",
+        }).eq("id", issue_id),
+      ]);
+    },
+  });
+
+  return NextResponse.json({ ok: true, total_sent, total_failed, target_count: emails.length });
 }
