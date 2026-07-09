@@ -58,7 +58,8 @@ export function makeRawMessage(params: {
   unsubscribeUrl?: string;
 }): string {
   const boundary = `boundary_${Date.now()}`;
-  const unsubUrl = params.unsubscribeUrl ?? "https://ez-newsroom.vercel.app/unsubscribe";
+  const adminEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  const unsubMailto = `mailto:${adminEmail}?subject=%EC%88%98%EC%8B%A0%EA%B1%B0%EB%B6%80%20%EC%9A%94%EC%B2%AD`;
 
   // plain text: HTML 태그 제거 후 간단한 fallback
   const plainText = params.html
@@ -66,14 +67,13 @@ export function makeRawMessage(params: {
     .replace(/<[^>]+>/g, "")
     .replace(/\s{2,}/g, " ")
     .trim()
-    .slice(0, 500) + `\n\n수신거부: ${unsubUrl}`;
+    .slice(0, 500);
 
   const headers = [
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: =?UTF-8?B?${Buffer.from(params.subject).toString("base64")}?=`,
-    `List-Unsubscribe: <${unsubUrl}>`,
-    "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
+    `List-Unsubscribe: <${unsubMailto}>`,
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
