@@ -45,7 +45,7 @@ export default function NewsletterPage() {
   const [sendElapsed, setSendElapsed] = useState(0);
   const sendTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [sendProgress, setSendProgress] = useState<{ totalSent: number; targetCount: number; batchSize: number } | null>(null);
+  const [sendProgress, setSendProgress] = useState<{ totalSent: number; targetCount: number; remainingCount: number; round: number } | null>(null);
   const [activeCount, setActiveCount] = useState<number | null>(null);
 
   // ── Subscribers tab state ──
@@ -300,15 +300,15 @@ export default function NewsletterPage() {
       if (res.ok) {
         const newTotalSent = json.total_sent ?? 0;
         const targetCount = json.target_count ?? activeCount ?? 0;
-        setSendProgress({ totalSent: newTotalSent, targetCount, batchSize: BATCH_SIZE });
-        const isDone = json.remaining_count === 0 || newTotalSent >= targetCount;
-        const currentBatch = Math.ceil(newTotalSent / BATCH_SIZE);
-        const totalBatches = Math.ceil(targetCount / BATCH_SIZE);
+        const remainingCount = json.remaining_count ?? 0;
+        const round = (sendProgress?.round ?? 0) + 1;
+        setSendProgress({ totalSent: newTotalSent, targetCount, remainingCount, round });
+        const isDone = remainingCount === 0;
         setSendResult({
           ok: true,
           message: isDone
             ? `✅ Vol.${json.vol_number} 발송 완료 (${newTotalSent}명)`
-            : `${currentBatch}/${totalBatches}회차 완료 (${newTotalSent}/${targetCount}명). 버튼을 눌러 다음 회차를 발송하세요.`,
+            : `${round}회차 완료 (${newTotalSent}/${targetCount}명, 잔여 ${remainingCount}명). 버튼을 눌러 다음 회차를 발송하세요.`,
         });
       } else {
         setSendResult({ ok: false, message: json.error ?? "발송 실패" });
@@ -881,15 +881,13 @@ export default function NewsletterPage() {
               )}
 
               {(() => {
-                const isDone = sendProgress && sendProgress.totalSent >= sendProgress.targetCount;
-                const currentBatch = sendProgress ? Math.ceil(sendProgress.totalSent / BATCH_SIZE) : 0;
-                const totalBatches = sendProgress ? Math.ceil(sendProgress.targetCount / BATCH_SIZE) : (activeCount ? Math.ceil(activeCount / BATCH_SIZE) : 1);
-                const nextBatch = currentBatch + 1;
+                const isDone = sendProgress && sendProgress.remainingCount === 0;
+                const round = sendProgress?.round ?? 0;
                 const label = isDone
                   ? "발송 완료"
                   : sendProgress
-                    ? `발송 (${nextBatch}/${totalBatches})`
-                    : `발송 (1/${totalBatches})`;
+                    ? `발송 (${round + 1}회차)`
+                    : "발송 (1회차)";
                 return (
                   <button
                     onClick={handleSend}
