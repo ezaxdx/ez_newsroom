@@ -111,8 +111,9 @@ export async function POST(req: NextRequest) {
         },
       });
     } catch (err) {
+      const partialSent = total_sent > alreadySent.size;
       await supabase.from("newsletter_issues")
-        .update({ status: total_sent > prevSentCount ? "partial" : "failed", total_sent, total_failed })
+        .update({ status: partialSent ? "partial" : "failed", total_sent, total_failed })
         .eq("id", issueId);
       return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
