@@ -123,6 +123,7 @@ export default function NewsletterPage() {
     fetchCronSettings();
     fetchGmailStatus();
     prefetchEditorialContext();
+    fetchSendProgress();
   }, []);
 
   useEffect(() => {
@@ -191,6 +192,27 @@ export default function NewsletterPage() {
       }
     } catch {
       // ignore
+    }
+  }
+
+  // 오늘 진행 중인 발송 이어하기
+  async function fetchSendProgress() {
+    try {
+      const res = await fetch("/api/admin/newsletter/send-progress");
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.progress) {
+        const { vol_number, totalSent, targetCount, remainingCount, round } = json.progress;
+        setSendProgress({ totalSent, targetCount, remainingCount, round });
+        setSendResult({
+          ok: true,
+          message: remainingCount === 0
+            ? `✅ Vol.${vol_number} 발송 완료`
+            : `Vol.${vol_number} 발송 중 — ${totalSent}명 완료, 잔여 ${remainingCount}명. 버튼을 눌러 이어서 발송하세요.`,
+        });
+      }
+    } catch {
+      // 무시
     }
   }
 

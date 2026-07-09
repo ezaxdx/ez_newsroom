@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
 
     const remainingAfter = remaining.length - recipients.length;
     const thisBatchSent = total_sent - prevSent;
-    const finalStatus = total_sent === 0 ? "failed" : (total_sent >= allRecipients.length && total_failed === 0) ? "sent" : "partial";
+    const finalStatus = total_sent === 0 ? "failed" : remainingAfter === 0 ? "sent" : "partial";
     await supabase.from("newsletter_issues")
       .update({ status: finalStatus, total_sent, total_failed })
       .eq("id", issueId);
@@ -338,16 +338,19 @@ export async function POST(req: NextRequest) {
   // 같은 vol_number 이슈 재사용 (캐시 경로와 동일한 중복방지 로직)
   const { data: existingIssue2 } = await supabase
     .from("newsletter_issues")
-    .select("id")
+    .select("id, html_content")
     .eq("vol_number", vol_number)
     .order("sent_at", { ascending: false })
     .limit(1)
     .maybeSingle();
 
+  // 기존 이슈의 html_content 우선 사용 (새로고침 후 재발송 시 동일 내용 유지)
+  const htmlToSend2 = existingIssue2?.html_content ?? html;
+
   let issueId2: string;
   if (existingIssue2) {
     issueId2 = existingIssue2.id;
-    await supabase.from("newsletter_issues").update({ status: "sending", html_content: html }).eq("id", issueId2);
+    await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId2);
   } else {
     const { data: newIssue2, error: issueErr2 } = await supabase
       .from("newsletter_issues")
@@ -385,7 +388,7 @@ export async function POST(req: NextRequest) {
 
   try {
     await sendNewsletterViaGmail({
-      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html, recipients: recipients2,
+      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2,
       onBatchComplete: async (batchResults) => {
         const batchSent = batchResults.filter(r => r.status === "success").length;
         const batchFailed = batchResults.filter(r => r.status === "failed").length;
@@ -409,7 +412,7 @@ export async function POST(req: NextRequest) {
 
   const remainingAfter2 = remaining2.length - recipients2.length;
   const thisBatchSent2 = total_sent2 - alreadySent2.size;
-  const finalStatus2 = total_sent2 === 0 ? "failed" : (total_sent2 >= allRecipients2.length && total_failed2 === 0) ? "sent" : "partial";
+  const finalStatus2 = total_sent2 === 0 ? "failed" : remainingAfter2 === 0 ? "sent" : "partial";
   await supabase.from("newsletter_issues")
     .update({ status: finalStatus2, total_sent: total_sent2, total_failed: total_failed2 })
     .eq("id", issueId2);
