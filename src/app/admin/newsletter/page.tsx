@@ -327,12 +327,13 @@ export default function NewsletterPage() {
         const round = (sendProgress?.round ?? 0) + 1;
         setSendProgress({ totalSent: newTotalSent, targetCount, remainingCount, round });
         const isDone = remainingCount === 0;
+        const failedNote = json.total_failed > 0 ? ` (실패 ${json.total_failed}명 — 이력 탭에서 재발송)` : "";
         setSendResult({
           ok: true,
           message: isDone && thisBatchSent === 0
             ? `✅ Vol.${json.vol_number} 이미 전체 발송 완료된 호입니다.`
             : isDone
-            ? `✅ Vol.${json.vol_number} 발송 완료 (${thisBatchSent}명)`
+            ? `✅ Vol.${json.vol_number} 발송 완료 (${thisBatchSent}명)${failedNote}`
             : `${round}회차 완료 (${thisBatchSent}명 발송, 잔여 ${remainingCount}명). 버튼을 눌러 다음 회차를 발송하세요.`,
         });
       } else {
