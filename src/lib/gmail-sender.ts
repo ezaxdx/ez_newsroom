@@ -55,14 +55,37 @@ export function makeRawMessage(params: {
   to: string;
   subject: string;
   html: string;
+  unsubscribeUrl?: string;
 }): string {
   const boundary = `boundary_${Date.now()}`;
-  const message = [
+  const unsubUrl = params.unsubscribeUrl ?? "https://ez-newsroom.vercel.app/unsubscribe";
+
+  // plain text: HTML 태그 제거 후 간단한 fallback
+  const plainText = params.html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 500) + `\n\n수신거부: ${unsubUrl}`;
+
+  const headers = [
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: =?UTF-8?B?${Buffer.from(params.subject).toString("base64")}?=`,
+    `List-Unsubscribe: <${unsubUrl}>`,
+    "List-Unsubscribe-Post: List-Unsubscribe=One-Click",
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
+  ];
+
+  const message = [
+    ...headers,
+    "",
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: base64",
+    "",
+    Buffer.from(plainText).toString("base64"),
     "",
     `--${boundary}`,
     "Content-Type: text/html; charset=UTF-8",
