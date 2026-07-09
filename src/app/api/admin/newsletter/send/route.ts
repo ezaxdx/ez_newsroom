@@ -307,7 +307,7 @@ export async function POST(req: NextRequest) {
     const nl = (e.event_name ?? "").toLowerCase();
     if (WEEKLY_EXCLUDE_KEYWORDS.some(kw => nl.includes(kw.toLowerCase()))) return false;
     return true;
-  }).slice(0, 7).map(e => ({
+  }).sort((a, b) => a.start_date.localeCompare(b.start_date)).slice(0, 7).map(e => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
     venue: e.venue ?? null, website: e.website ?? null,
   }));
