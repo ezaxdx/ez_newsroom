@@ -59,7 +59,7 @@ export function makeRawMessage(params: {
 }): string {
   const boundary = `boundary_${Date.now()}`;
   const adminEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
-  const unsubMailto = `mailto:${adminEmail}?subject=%EC%88%98%EC%8B%A0%EA%B1%B0%EB%B6%80%20%EC%9A%94%EC%B2%AD`;
+  const unsubMailto = `mailto:${adminEmail}?subject=%EB%AC%B8%EC%9D%98%ED%95%98%EA%B8%B0`;
 
   // plain text: HTML 태그 제거 후 간단한 fallback
   const plainText = params.html
