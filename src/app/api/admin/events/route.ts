@@ -13,7 +13,7 @@ export async function GET(req: NextRequest) {
   const supabase = createAdminClient();
   let query = supabase
     .from("convention_events")
-    .select("id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, image_url, is_published, created_at")
+    .select("id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, image_url, is_published, is_ezpmp_pick, source, created_at")
     .order("start_date", { ascending: true })
     .limit(2000);
 
@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   // 허용 필드만 업데이트
-  const ALLOWED = ["is_published", "image_url", "description", "event_name", "organizer", "start_date", "end_date", "venue"];
+  const ALLOWED = ["is_published", "is_ezpmp_pick", "image_url", "description", "event_name", "organizer", "start_date", "end_date", "venue"];
   const updates: Record<string, unknown> = {};
   for (const key of ALLOWED) {
     if (key in fields) updates[key] = fields[key];

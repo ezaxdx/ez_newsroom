@@ -16,6 +16,8 @@ type EventRow = {
   end_date: string | null;
   website: string | null;
   is_published: boolean;
+  is_ezpmp_pick: boolean;
+  source: string | null;
   created_at: string;
 };
 
@@ -1055,7 +1057,7 @@ function ManualOpsPanel() {
 function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [events, setEvents] = useState(initialEvents);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "hidden">("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "published" | "hidden" | "picks">("all");
   const [venueFilter, setVenueFilter] = useState("전체");
   const [toggling, setToggling] = useState<string | null>(null);
   // 키워드 필터 관리
@@ -1083,6 +1085,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     return events.filter((e) => {
       if (statusFilter === "published" && !e.is_published) return false;
       if (statusFilter === "hidden" && e.is_published) return false;
+      if (statusFilter === "picks" && !e.is_ezpmp_pick) return false;
       if (venueFilter !== "전체" && e.venue !== venueFilter) return false;
       if (search && !e.event_name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -1093,9 +1096,28 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     total: events.length,
     published: events.filter((e) => e.is_published).length,
     hidden: events.filter((e) => !e.is_published).length,
+    picks: events.filter((e) => e.is_ezpmp_pick).length,
     noOrg: events.filter((e) => !e.organizer).length,
     shortName: events.filter((e) => e.event_name.length <= 4).length,
   }), [events]);
+
+  async function togglePick(id: string, current: boolean) {
+    setToggling(id);
+    try {
+      const res = await fetch("/api/admin/events", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, is_ezpmp_pick: !current }),
+      });
+      if (res.ok) {
+        setEvents((prev) =>
+          prev.map((e) => e.id === id ? { ...e, is_ezpmp_pick: !current } : e)
+        );
+      }
+    } finally {
+      setToggling(null);
+    }
+  }
 
   async function togglePublish(id: string, current: boolean, eventName?: string) {
     setToggling(id);
@@ -1342,11 +1364,12 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       </div>
 
       {/* 통계 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 20 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
         {[
           { label: "전체", value: stats.total, color: "var(--on-surface)" },
           { label: "공개", value: stats.published, color: "#2563eb" },
           { label: "비공개", value: stats.hidden, color: "#64748b" },
+          { label: "EZPMP픽", value: stats.picks, color: "#f59e0b" },
           { label: "주최기관 없음", value: stats.noOrg, color: "#ef4444" },
           { label: "이름 짧음", value: stats.shortName, color: "#d97706" },
         ].map(({ label, value, color }) => (
@@ -1374,15 +1397,26 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
             color: "var(--on-surface)", outline: "none", width: 200,
           }}
         />
-        {(["all", "published", "hidden"] as const).map((f) => (
-          <button key={f} onClick={() => setStatusFilter(f)} style={{
+        {([
+          { key: "all", label: "전체" },
+          { key: "published", label: "공개" },
+          { key: "hidden", label: "비공개" },
+          { key: "picks", label: "⭐ EZPMP픽" },
+        ] as const).map(({ key, label }) => (
+          <button key={key} onClick={() => setStatusFilter(key)} style={{
             padding: "5px 12px", borderRadius: 20, fontSize: "0.75rem",
             fontWeight: 600, cursor: "pointer", border: "1px solid",
-            borderColor: statusFilter === f ? "var(--on-surface)" : "var(--surface-container-high)",
-            background: statusFilter === f ? "var(--on-surface)" : "transparent",
-            color: statusFilter === f ? "var(--surface)" : "var(--on-surface-variant)",
+            borderColor: statusFilter === key
+              ? (key === "picks" ? "#f59e0b" : "var(--on-surface)")
+              : "var(--surface-container-high)",
+            background: statusFilter === key
+              ? (key === "picks" ? "#f59e0b18" : "var(--on-surface)")
+              : "transparent",
+            color: statusFilter === key
+              ? (key === "picks" ? "#f59e0b" : "var(--surface)")
+              : "var(--on-surface-variant)",
           }}>
-            { f === "all" ? "전체" : f === "published" ? "공개" : "비공개" }
+            {label}
           </button>
         ))}
         <select
@@ -1408,7 +1442,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "40px 1fr 100px 140px 100px 80px 70px",
+          gridTemplateColumns: "40px 1fr 100px 140px 100px 44px 50px 70px",
           padding: "8px 14px", gap: 8,
           background: "var(--surface-container)",
           fontSize: "0.68rem", fontWeight: 700,
@@ -1420,7 +1454,8 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
           <span>센터</span>
           <span>주최기관</span>
           <span>기간</span>
-          <span>카테고리</span>
+          <span style={{ textAlign: "center" }}>소스</span>
+          <span style={{ textAlign: "center" }}>픽</span>
           <span>공개여부</span>
         </div>
 
@@ -1429,7 +1464,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
           {filtered.map((e, idx) => (
             <div key={e.id} style={{
               display: "grid",
-              gridTemplateColumns: "40px 1fr 100px 140px 100px 80px 70px",
+              gridTemplateColumns: "40px 1fr 100px 140px 100px 44px 50px 70px",
               padding: "9px 14px", gap: 8, alignItems: "center",
               borderTop: idx > 0 ? "1px solid var(--surface-container-high)" : "none",
               background: hasIssue(e) ? "#ef444406" : "var(--surface-container-lowest)",
@@ -1470,12 +1505,29 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 <EditableCell id={e.id} field="end_date" value={e.end_date} type="date" />
               </div>
 
-              {/* 카테고리 */}
+              {/* 소스 배지 */}
               <span style={{
-                fontSize: "0.68rem", color: e.category ? "var(--on-surface-variant)" : "#ef4444",
+                fontSize: "0.6rem", fontWeight: 700, textAlign: "center",
+                color: e.source === "merged" ? "#10b981" : e.source === "showala" ? "#2563eb" : e.source === "keoa" ? "#7c3aed" : "#94a3b8",
               }}>
-                {e.category ?? "없음"}
+                {e.source === "merged" ? "통합" : e.source === "showala" ? "쇼알라" : e.source === "keoa" ? "KEOA" : "수동"}
               </span>
+
+              {/* EZPMP픽 토글 */}
+              <button
+                onClick={() => togglePick(e.id, e.is_ezpmp_pick)}
+                disabled={toggling === e.id}
+                title={e.is_ezpmp_pick ? "EZPMP픽 해제" : "EZPMP픽 설정"}
+                style={{
+                  fontSize: "1rem", lineHeight: 1, padding: "2px 4px",
+                  borderRadius: 6, border: "none", cursor: toggling === e.id ? "wait" : "pointer",
+                  background: e.is_ezpmp_pick ? "#f59e0b18" : "transparent",
+                  opacity: toggling === e.id ? 0.5 : 1,
+                  transition: "all 0.15s",
+                }}
+              >
+                {e.is_ezpmp_pick ? "⭐" : "☆"}
+              </button>
 
               {/* 공개 여부 토글 */}
               <button

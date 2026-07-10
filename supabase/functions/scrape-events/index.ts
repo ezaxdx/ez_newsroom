@@ -1,20 +1,63 @@
 /**
  * Supabase Edge Function: scrape-events
- * 쇼알라 + 한국전시주최자협회 행사 데이터 수집 → convention_events 저장
+ * 쇼알라 + 한국전시주최자협회 행사 수집 → convention_events 저장
  *
- * Deno runtime (Wall-clock: 150s, CPU: 2s per invocation burst)
+ * Deno runtime (Wall-clock: 150s)
  * Authorization: Bearer {CRON_SECRET}
  */
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const SUPABASE_URL      = Deno.env.get("SUPABASE_URL")!;
-const SERVICE_ROLE_KEY  = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const CRON_SECRET       = Deno.env.get("CRON_SECRET") ?? "";
+const SUPABASE_URL     = Deno.env.get("SUPABASE_URL")!;
+const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+const CRON_SECRET      = Deno.env.get("CRON_SECRET") ?? "";
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-// ── 유틸 ─────────────────────────────────────────────────────────
+// ── 타입 ──────────────────────────────────────────────────────────
+
+type ScrapedEvent = {
+  venue: string;
+  venue_region: string | null;
+  event_name: string;
+  event_name_en: string | null;
+  start_date: string;
+  end_date: string;
+  location: string | null;
+  category: string;
+  industry: string | null;
+  organizer: string | null;
+  image_url: string | null;
+  website: string | null;
+  is_published: boolean;
+  source: string;
+};
+
+// ── 노이즈 필터 ────────────────────────────────────────────────────
+// 스크래핑 단계에서 아예 저장 안 함 (전시분야·행사명 기준)
+
+const NOISE_INDUSTRIES = [
+  "패션", "뷰티", "웨딩", "육아", "반려동물",
+  "가정용품", "식품", "농업", "귀농", "주얼리", "성인", "종교",
+];
+
+const NOISE_NAME_EXACT = new Set(["대관 행사", "대관행사", "대관", "행사 대관"]);
+
+const NOISE_NAME_KEYWORDS = [
+  "정기총회", "임시총회", "이사회", "간담회",
+  "육아", "웨딩", "wedding", "설명회", "공청회",
+  "채용", "졸업식", "입학식",
+];
+
+function isNoise(name: string, industry: string | null): boolean {
+  const lname = name.toLowerCase();
+  if (NOISE_NAME_EXACT.has(name)) return true;
+  if (NOISE_NAME_KEYWORDS.some((kw) => lname.includes(kw.toLowerCase()))) return true;
+  if (industry && NOISE_INDUSTRIES.some((n) => industry.includes(n))) return true;
+  return false;
+}
+
+// ── 유틸 ──────────────────────────────────────────────────────────
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -60,18 +103,82 @@ function parseVenueInfo(location: string | null): { venue: string; venue_region:
   const REGIONS = ["서울","부산","대구","인천","광주","대전","울산","세종",
                    "경기","강원","충북","충남","전북","전남","경북","경남","제주"];
   const regionMatch = REGIONS.find((r) => loc.startsWith(r) || loc.includes(r + " ")) ?? null;
-
   return { venue: loc.split(/\s+/).at(-1) || "기타", venue_region: regionMatch };
 }
 
 function cleanOrganizer(org: string | null): string | null {
   if (!org) return null;
-  return org.replace(/\([^)]*\)/g, "").replace(/（[^）]*）/g, "").replace(/㈜/g, "").trim() || null;
+  return org
+    .replace(/\([^)]*\)/g, "")
+    .replace(/（[^）]*）/g, "")
+    .replace(/㈜/g, "")
+    .replace(/\s+/g, " ")
+    .trim() || null;
+}
+
+// KEOA 주최/주관 필드 → 주최기관만 추출 (주관사 PCO 제거)
+function parseKeoaOrganizer(raw: string | null): string | null {
+  if (!raw) return null;
+
+  // "주최: X 주관: Y" 패턴
+  const juchoiM = raw.match(/주최\s*[:：]\s*([^주관]+)/);
+  if (juchoiM) return cleanOrganizer(juchoiM[1].trim());
+
+  // "X / Y" 패턴 — 슬래시 앞이 주최, 뒤가 주관사(PCO)
+  if (raw.includes("/")) return cleanOrganizer(raw.split("/")[0].trim());
+
+  return cleanOrganizer(raw);
+}
+
+// ── 쇼알라 상세페이지 ────────────────────────────────────────────
+
+async function fetchShowalaDetail(idx: string): Promise<{
+  organizer: string | null;
+  website: string | null;
+  display_industry: string | null;
+}> {
+  await sleep(150);
+  try {
+    const res = await fetch(`https://www.showala.com/ex/ex_detail.php?idx=${idx}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; EZNewsroom/1.0)" },
+    });
+    if (!res.ok) return { organizer: null, website: null, display_industry: null };
+    const html = await res.text();
+
+    // th/td 쌍 파싱
+    const fields: Record<string, string> = {};
+    const fieldRaw: Record<string, string> = {};
+    for (const [, rowHtml] of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
+      const thM = rowHtml.match(/<th[^>]*>([\s\S]*?)<\/th>/);
+      const tdM = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/);
+      if (thM && tdM) {
+        const k = thM[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+        const v = tdM[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
+        if (k) {
+          fields[k] = v;
+          fieldRaw[k] = tdM[1];
+        }
+      }
+    }
+
+    const organizer = cleanOrganizer(fields["주최"] ?? fields["주최기관"] ?? null);
+
+    // 홈페이지 URL: td 원본 HTML에서 href 추출
+    const homeRaw = fieldRaw["홈페이지"] ?? fieldRaw["웹사이트"] ?? "";
+    const hrefM   = homeRaw.match(/href="([^"]+)"/);
+    const website = hrefM?.[1]?.startsWith("http") ? hrefM[1] : null;
+
+    const display_industry = fields["전시분야"] ?? fields["산업분야"] ?? null;
+
+    return { organizer, website, display_industry };
+  } catch {
+    return { organizer: null, website: null, display_industry: null };
+  }
 }
 
 // ── 쇼알라 ──────────────────────────────────────────────────────
 
-async function scrapeShowala(): Promise<object[]> {
+async function scrapeShowala(): Promise<ScrapedEvent[]> {
   console.log("쇼알라 스크래핑...");
   const res = await fetch("https://www.showala.com/ex/ex_list.php", {
     headers: { "User-Agent": "Mozilla/5.0 (compatible; EZNewsroom/1.0)" },
@@ -81,17 +188,18 @@ async function scrapeShowala(): Promise<object[]> {
   const html  = await res.text();
   const today = new Date().toISOString().split("T")[0];
   const items = html.split('<li class="ex_item clearfix">').slice(1);
-  const events: object[] = [];
+  const events: ScrapedEvent[] = [];
+  let noiseCount = 0;
 
   for (const item of items) {
     const nameM = item.match(/class="ex_tit_a[^"]*"[^>]*>([\s\S]*?)<\/a>/);
-    const hrefM = item.match(/href="(\/ex\/ex_detail\.php\?idx=\d+)"/);
+    const hrefM = item.match(/href="(\/ex\/ex_detail\.php\?idx=(\d+))"/);
     if (!nameM || !hrefM) continue;
 
     const event_name = nameM[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
     if (!event_name) continue;
 
-    const enM         = item.match(/class="only_line ex_e_tit">([\s\S]*?)<\/p>/);
+    const enM           = item.match(/class="only_line ex_e_tit">([\s\S]*?)<\/p>/);
     const event_name_en = enM ? enM[1].replace(/<[^>]+>/g, "").trim() || null : null;
 
     const dateM    = item.match(/class="ex_date">([\s\S]*?)<\/div>/);
@@ -104,37 +212,56 @@ async function scrapeShowala(): Promise<object[]> {
     const { venue, venue_region } = parseVenueInfo(location);
 
     const indM     = item.match(/class="only_line ex_buss_cate">([\s\S]*?)<\/div>/);
-    const industry = indM ? indM[1].replace(/<[^>]+>/g, "").replace(/산업분야/g, "").replace(/\s+/g, " ").trim() || null : null;
+    const listIndustry = indM
+      ? indM[1].replace(/<[^>]+>/g, "").replace(/산업분야/g, "").replace(/\s+/g, " ").trim() || null
+      : null;
 
-    // 대표 이미지
-    const imgM = item.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
-    const image_url = imgM ? (imgM[1].startsWith("http") ? imgM[1] : `https://www.showala.com${imgM[1]}`) : null;
+    const imgM      = item.match(/<img[^>]+src="([^"]+)"[^>]*>/i);
+    const image_url = imgM
+      ? (imgM[1].startsWith("http") ? imgM[1] : `https://www.showala.com${imgM[1]}`)
+      : null;
+
+    const idx = hrefM[2];
+
+    // 상세페이지 fetch — 주최기관 + 홈페이지 + 전시분야 확보
+    const detail = await fetchShowalaDetail(idx);
+
+    const resolvedIndustry = detail.display_industry ?? listIndustry;
+
+    // 노이즈 필터: 스크래핑 단계에서 제거
+    if (isNoise(event_name, resolvedIndustry)) {
+      noiseCount++;
+      continue;
+    }
 
     events.push({
       venue, venue_region, event_name, event_name_en,
       start_date: dates.start, end_date: dates.end,
-      location, category: "전시", industry,
-      organizer: null,
+      location, category: "전시",
+      industry: resolvedIndustry,
+      organizer: detail.organizer,
       image_url,
-      website: `https://www.showala.com${hrefM[1]}`,
+      // 홈페이지 URL 있으면 우선, 없으면 쇼알라 상세 URL 유지
+      website: detail.website ?? `https://www.showala.com${hrefM[1]}`,
       is_published: true,
+      source: "showala",
     });
   }
 
-  console.log(`쇼알라: ${events.length}건`);
+  console.log(`쇼알라: ${events.length}건 수집, ${noiseCount}건 노이즈 제거`);
   return events;
 }
 
 // ── 한국전시주최자협회 ────────────────────────────────────────────
 
-async function scrapeKeoa(): Promise<object[]> {
+async function scrapeKeoa(): Promise<ScrapedEvent[]> {
   console.log("KEOA 스크래핑...");
   const today    = new Date();
   const todayStr = today.toISOString().split("T")[0];
   const seenIds  = new Set<string>();
-  const events: object[] = [];
+  const events: ScrapedEvent[] = [];
+  let noiseCount = 0;
 
-  // 현재월 포함 7개월치
   for (let i = 0; i < 7; i++) {
     const d     = new Date(today.getFullYear(), today.getMonth() + i, 1);
     const year  = d.getFullYear();
@@ -188,11 +315,19 @@ async function scrapeKeoa(): Promise<object[]> {
         const event_name_en = enM ? enM[1].trim() : null;
         const { venue, venue_region } = parseVenueInfo(venueRaw);
 
-        // KEOA 상세 페이지 이미지
-        const keImgM = detailHtml.match(/<img[^>]+src="([^"]+)"[^>]*class="[^"]*poster[^"]*"|<img[^>]+class="[^"]*poster[^"]*"[^>]+src="([^"]+)"/i)
-          ?? detailHtml.match(/<img[^>]+src="(\/uploads\/[^"]+\.(jpg|jpeg|png|webp))"[^>]*>/i);
+        // 주최/주관에서 주최기관만 추출 (주관사 PCO 분리)
+        const organizer = parseKeoaOrganizer(fields["주최/주관"] ?? null);
+
+        if (isNoise(event_name, null)) {
+          noiseCount++;
+          continue;
+        }
+
+        const keImgM = detailHtml.match(
+          /<img[^>]+src="([^"]+)"[^>]*class="[^"]*poster[^"]*"|<img[^>]+class="[^"]*poster[^"]*"[^>]+src="([^"]+)"/i
+        ) ?? detailHtml.match(/<img[^>]+src="(\/uploads\/[^"]+\.(jpg|jpeg|png|webp))"[^>]*>/i);
         const keImageRaw = keImgM ? (keImgM[1] || keImgM[2]) : null;
-        const keImageUrl = keImageRaw
+        const image_url  = keImageRaw
           ? (keImageRaw.startsWith("http") ? keImageRaw : `https://www.keoa.org${keImageRaw}`)
           : null;
 
@@ -201,10 +336,11 @@ async function scrapeKeoa(): Promise<object[]> {
           start_date: dates.start, end_date: dates.end,
           location: venueRaw || null, category: "전시",
           industry: fields["출품품목"] || null,
-          organizer: cleanOrganizer(fields["주최/주관"] ?? null),
-          image_url: keImageUrl,
-          website: `https://www.google.com/search?q=${encodeURIComponent(event_name)}`,
+          organizer,
+          image_url,
+          website: null, // KEOA에는 실제 홈페이지 URL 없음
           is_published: true,
+          source: "keoa",
         });
       } catch (e) {
         console.warn(`  ID ${id} 실패:`, (e as Error).message);
@@ -214,121 +350,158 @@ async function scrapeKeoa(): Promise<object[]> {
     await sleep(400);
   }
 
-  console.log(`KEOA: ${events.length}건`);
+  console.log(`KEOA: ${events.length}건 수집, ${noiseCount}건 노이즈 제거`);
   return events;
 }
 
-// ── Supabase 저장 ─────────────────────────────────────────────────
+// ── 크로스소스 병합 ────────────────────────────────────────────────
+// 쇼알라(이미지·홈페이지·전시분야) + KEOA(주최기관) 같은 행사면 합침
 
-async function upsertEvents(events: object[], source: string) {
-  if (!events.length) { console.log(`${source}: 수집 없음`); return 0; }
+function crossSourceMerge(showala: ScrapedEvent[], keoa: ScrapedEvent[]): ScrapedEvent[] {
+  const merged = new Map<string, ScrapedEvent>();
 
-  const names = (events as Array<{ event_name: string; start_date: string }>).map((e) => e.event_name);
-  const { data: existing } = await supabase
-    .from("convention_events")
-    .select("event_name, start_date")
-    .in("event_name", names);
-
-  const existingKeys = new Set((existing ?? []).map((e) => `${e.event_name}|${e.start_date}`));
-  const newEvents = (events as Array<{ event_name: string; start_date: string }>)
-    .filter((e) => !existingKeys.has(`${e.event_name}|${e.start_date}`));
-
-  console.log(`${source}: ${newEvents.length}건 신규 (${events.length - newEvents.length}건 중복 스킵)`);
-  if (!newEvents.length) return 0;
-
-  const BATCH = 50;
-  for (let i = 0; i < newEvents.length; i += BATCH) {
-    const { error } = await supabase.from("convention_events").insert(newEvents.slice(i, i + BATCH));
-    if (error) console.error("삽입 오류:", error.message);
+  for (const e of showala) {
+    merged.set(`${e.event_name}|${e.start_date}`, { ...e });
   }
-  return newEvents.length;
+
+  for (const e of keoa) {
+    const key = `${e.event_name}|${e.start_date}`;
+    if (merged.has(key)) {
+      const s = merged.get(key)!;
+      merged.set(key, {
+        ...s,
+        source:        "merged",
+        organizer:     s.organizer     ?? e.organizer,
+        industry:      s.industry      ?? e.industry,
+        image_url:     s.image_url     ?? e.image_url,
+        event_name_en: s.event_name_en ?? e.event_name_en,
+      });
+    } else {
+      merged.set(key, { ...e });
+    }
+  }
+
+  return [...merged.values()];
 }
 
-// ── 기존 KEOA 레코드 website 일괄 수정 ────────────────────────────
-// 구 URL(keoa.org/directory/schedule) 또는 null → 행사명 구글 검색 링크로 교체
+// ── DB upsert (null 필드 채우기 방식) ─────────────────────────────
 
-async function fixKeoaWebsites() {
-  // 구 URL이거나 null인 레코드 조회 (쇼알라 URL 제외)
-  const { data, error } = await supabase
+const GOOGLE_SEARCH_PREFIX = "https://www.google.com/search";
+
+async function upsertMergeEvents(events: ScrapedEvent[]): Promise<{ inserted: number; updated: number }> {
+  if (!events.length) return { inserted: 0, updated: 0 };
+
+  const names = events.map((e) => e.event_name);
+  const { data: existing } = await supabase
     .from("convention_events")
-    .select("id, event_name")
-    .or("website.eq.https://www.keoa.org/directory/schedule,website.is.null");
+    .select("id, event_name, start_date, organizer, website, image_url, industry, event_name_en, source")
+    .in("event_name", names);
 
-  if (error) { console.warn("fixKeoaWebsites 조회 오류:", error.message); return 0; }
-  if (!data?.length) { console.log("fixKeoaWebsites: 수정 대상 없음"); return 0; }
+  type ExRow = { id: string; event_name: string; start_date: string; organizer: string | null; website: string | null; image_url: string | null; industry: string | null; event_name_en: string | null; source: string | null };
+  const existingMap = new Map<string, ExRow>(
+    (existing ?? []).map((e) => [`${e.event_name}|${e.start_date}`, e as ExRow])
+  );
 
-  console.log(`fixKeoaWebsites: ${data.length}건 수정 중...`);
-  let fixed = 0;
-  for (const row of data) {
-    const { error: ue } = await supabase
-      .from("convention_events")
-      .update({ website: `https://www.google.com/search?q=${encodeURIComponent(row.event_name)}` })
-      .eq("id", row.id);
-    if (!ue) fixed++;
+  const toInsert: ScrapedEvent[] = [];
+  const toUpdate: { id: string; fields: Record<string, unknown> }[] = [];
+
+  for (const event of events) {
+    const key = `${event.event_name}|${event.start_date}`;
+    const ex  = existingMap.get(key);
+
+    if (!ex) {
+      toInsert.push(event);
+    } else {
+      const updates: Record<string, unknown> = {};
+      if (!ex.organizer && event.organizer) updates.organizer = event.organizer;
+      if (!ex.image_url && event.image_url) updates.image_url = event.image_url;
+      if (!ex.industry && event.industry) updates.industry = event.industry;
+      if (!ex.event_name_en && event.event_name_en) updates.event_name_en = event.event_name_en;
+      // 구글 검색 URL이거나 null이면 실제 URL로 교체
+      if (event.website && (!ex.website || ex.website.startsWith(GOOGLE_SEARCH_PREFIX))) {
+        updates.website = event.website;
+      }
+      if (event.source === "merged" && ex.source !== "merged") updates.source = "merged";
+
+      if (Object.keys(updates).length > 0) toUpdate.push({ id: ex.id, fields: updates });
+    }
   }
-  console.log(`fixKeoaWebsites: ${fixed}건 완료`);
-  return fixed;
+
+  if (toInsert.length > 0) {
+    const BATCH = 50;
+    for (let i = 0; i < toInsert.length; i += BATCH) {
+      const { error } = await supabase.from("convention_events").insert(toInsert.slice(i, i + BATCH));
+      if (error) console.error("삽입 오류:", error.message);
+    }
+  }
+
+  for (const { id, fields } of toUpdate) {
+    const { error } = await supabase.from("convention_events").update(fields).eq("id", id);
+    if (error) console.error(`update ${id} 오류:`, error.message);
+  }
+
+  console.log(`신규 ${toInsert.length}건, 기존 보강 ${toUpdate.length}건`);
+  return { inserted: toInsert.length, updated: toUpdate.length };
+}
+
+// ── 키워드 필터 자동 비공개 ──────────────────────────────────────────
+
+async function applyKeywordFilters(): Promise<number> {
+  const { data: filters } = await supabase.from("event_keyword_filters").select("keyword");
+  if (!filters?.length) return 0;
+
+  let autoHidden = 0;
+  for (const { keyword } of filters) {
+    const { count } = await supabase
+      .from("convention_events")
+      .update({ is_published: false })
+      .ilike("event_name", `%${keyword}%`)
+      .eq("is_published", true)
+      .select("*", { count: "exact", head: true });
+    autoHidden += count ?? 0;
+  }
+  console.log(`키워드 필터: ${autoHidden}건 자동 비공개`);
+  return autoHidden;
 }
 
 // ── 메인 핸들러 ───────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
-  // POST 전용
-  if (req.method !== "POST") {
-    return new Response("Method Not Allowed", { status: 405 });
-  }
+  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
 
-  // 인증: Authorization Bearer CRON_SECRET 또는 X-Cron-Secret 헤더 허용
-  const auth = req.headers.get("authorization") ?? "";
+  const auth       = req.headers.get("authorization") ?? "";
   const cronHeader = req.headers.get("x-cron-secret") ?? "";
-  const validAuth = !CRON_SECRET
+  const validAuth  = !CRON_SECRET
     || auth === `Bearer ${CRON_SECRET}`
     || cronHeader === CRON_SECRET
     || auth === `Bearer ${SERVICE_ROLE_KEY}`;
-  if (!validAuth) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  if (!validAuth) return new Response("Unauthorized", { status: 401 });
 
   const started = Date.now();
   console.log("scrape-events 시작");
 
   try {
-    // 기존 KEOA 레코드 website 먼저 정리
-    const fixed = await fixKeoaWebsites();
-
+    // 쇼알라 + KEOA 병렬 수집
     const [showalaEvents, keoaEvents] = await Promise.all([
       scrapeShowala(),
       scrapeKeoa(),
     ]);
 
-    const [showalaNew, keoaNew] = await Promise.all([
-      upsertEvents(showalaEvents, "쇼알라"),
-      upsertEvents(keoaEvents, "KEOA"),
-    ]);
+    // 크로스소스 병합 (같은 행사명+날짜면 best fields 합침)
+    const mergedEvents = crossSourceMerge(showalaEvents, keoaEvents);
+    console.log(`병합 후 총: ${mergedEvents.length}건`);
 
-    // ── 키워드 필터 자동 비공개 처리 ──
-    const { data: filters } = await supabase
-      .from("event_keyword_filters")
-      .select("keyword");
-    let autoHidden = 0;
-    if (filters && filters.length > 0) {
-      for (const { keyword } of filters) {
-        const { count } = await supabase
-          .from("convention_events")
-          .update({ is_published: false })
-          .ilike("event_name", `%${keyword}%`)
-          .eq("is_published", true)
-          .select("*", { count: "exact", head: true });
-        autoHidden += count ?? 0;
-      }
-      console.log(`키워드 필터: ${autoHidden}건 자동 비공개`);
-    }
+    // DB upsert — 신규 insert + 기존 null 필드 보강
+    const { inserted, updated } = await upsertMergeEvents(mergedEvents);
+
+    // 키워드 필터 자동 비공개 (DB에 저장된 키워드 기준)
+    const autoHidden = await applyKeywordFilters();
 
     const elapsed = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(`완료: 쇼알라 ${showalaNew}건, KEOA ${keoaNew}건 신규, 자동비공개 ${autoHidden}건, 기존 ${fixed}건 URL 수정 (${elapsed}s)`);
+    console.log(`완료 (${elapsed}s): 신규 ${inserted}건, 보강 ${updated}건, 비공개 ${autoHidden}건`);
 
     return new Response(
-      JSON.stringify({ ok: true, showala: showalaNew, keoa: keoaNew, fixed, elapsed }),
+      JSON.stringify({ ok: true, inserted, updated, autoHidden, elapsed }),
       { headers: { "Content-Type": "application/json" } }
     );
   } catch (e) {

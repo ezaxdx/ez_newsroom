@@ -15,6 +15,8 @@ type EventRow = {
   end_date: string | null;
   website: string | null;
   is_published: boolean;
+  is_ezpmp_pick: boolean;
+  source: string | null;
   created_at: string;
 };
 
@@ -45,7 +47,7 @@ async function fetchEvents(): Promise<EventRow[]> {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("convention_events")
-      .select("id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, is_published, created_at")
+      .select("id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, is_published, is_ezpmp_pick, source, created_at")
       .order("start_date", { ascending: true })
       .limit(2000);
     return (data ?? []) as EventRow[];
