@@ -145,29 +145,25 @@ async function fetchShowalaDetail(idx: string): Promise<{
     if (!res.ok) return { organizer: null, website: null, display_industry: null };
     const html = await res.text();
 
-    // th/td 쌍 파싱
+    // 쇼알라 상세: <p class="tit">KEY</p or </dt><p class="des ...">VALUE</p> 패턴
+    // 주의: tit 태그가 </dt>로 잘못 닫히는 경우 있음 → 양쪽 처리
     const fields: Record<string, string> = {};
-    const fieldRaw: Record<string, string> = {};
-    for (const [, rowHtml] of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)) {
-      const thM = rowHtml.match(/<th[^>]*>([\s\S]*?)<\/th>/);
-      const tdM = rowHtml.match(/<td[^>]*>([\s\S]*?)<\/td>/);
-      if (thM && tdM) {
-        const k = thM[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-        const v = tdM[1].replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim();
-        if (k) {
-          fields[k] = v;
-          fieldRaw[k] = tdM[1];
-        }
-      }
+    for (const m of html.matchAll(/<p[^>]*class="tit"[^>]*>([\s\S]*?)<\/(?:p|dt)>\s*<p[^>]*class="des[^"]*"[^>]*>([\s\S]*?)<\/p>/g)) {
+      const k = m[1].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+      const v = m[2].replace(/<[^>]+>/g, "").replace(/&nbsp;/g, " ").replace(/\s+/g, " ").trim();
+      if (k) fields[k] = v;
     }
 
-    const organizer = cleanOrganizer(fields["주최"] ?? fields["주최기관"] ?? null);
+    // 주최: 키에 &nbsp; 공백이 섞여있어 "주 최" 형태로 파싱됨 → 공백 제거 후 매칭
+    const orgEntry = Object.entries(fields).find(([k]) => k.replace(/\s+/g, "").includes("주최"));
+    const organizer = cleanOrganizer(orgEntry?.[1] ?? null);
 
-    // 홈페이지 URL: td 원본 HTML에서 href 추출
-    const homeRaw = fieldRaw["홈페이지"] ?? fieldRaw["웹사이트"] ?? "";
-    const hrefM   = homeRaw.match(/href="([^"]+)"/);
-    const website = hrefM?.[1]?.startsWith("http") ? hrefM[1] : null;
+    // 홈페이지: icn_home class href가 가장 안정적
+    const homeM = html.match(/href="([^"]+)"[^>]*class="icn_home"|class="icn_home"[^>]*href="([^"]+)"/);
+    const rawUrl = homeM?.[1] ?? homeM?.[2] ?? null;
+    const website = rawUrl?.startsWith("http") ? rawUrl : null;
 
+    // 전시분야·산업분야 모두 체크
     const display_industry = fields["전시분야"] ?? fields["산업분야"] ?? null;
 
     return { organizer, website, display_industry };
