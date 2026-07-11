@@ -100,15 +100,62 @@ function decodeGoogleNewsArticleUrl(googleUrl: string): string | null {
   }
 }
 
+/**
+ * 신형(AU_yqL) 구글뉴스 URL 복원 — 내부 batchexecute API 호출
+ * 기사 페이지에서 서명(data-n-a-sg)·타임스탬프(data-n-a-ts) 추출 후 garturlreq 요청
+ */
+async function resolveViaBatchExecute(articleId: string): Promise<string | null> {
+  try {
+    const pageRes = await fetch(`https://news.google.com/articles/${articleId}`, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!pageRes.ok) return null;
+    const html = await pageRes.text();
+    const sig = html.match(/data-n-a-sg="([^"]+)"/)?.[1];
+    const ts  = html.match(/data-n-a-ts="([^"]+)"/)?.[1];
+    if (!sig || !ts) return null;
+
+    const inner = JSON.stringify([
+      "garturlreq",
+      [["X","X",["ko","KR"],null,null,1,1,"KR:ko",null,null,null,null,null,null,null,0,5],
+       "ko","KR",1,[2,4,8],1,1,null,0,0,null,0],
+      articleId, Number(ts), sig,
+    ]);
+    const freq = JSON.stringify([[["Fbv4je", inner, null, "generic"]]]);
+
+    const res = await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      body: `f.req=${encodeURIComponent(freq)}`,
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const text = await res.text();
+    const m = text.match(/garturlres\\",\\"(https?:[^\\"]+)/);
+    return m?.[1] ?? null;
+  } catch {
+    return null;
+  }
+}
+
 /** Google News 리다이렉트 → 실제 원문 URL 추출 */
 async function resolveGoogleNewsUrl(url: string): Promise<string> {
   if (!url.includes("news.google.com")) return url;
 
-  // 1단계: base64 디코딩으로 즉시 추출 (HTTP 요청 없이)
+  const articleId = url.match(/articles\/([A-Za-z0-9_=-]+)/)?.[1];
+
+  // 1단계: 구형 포맷 base64 디코딩 (HTTP 요청 없이)
   const decoded = decodeGoogleNewsArticleUrl(url);
   if (decoded) return decoded;
 
-  // 2단계: HTTP 리다이렉트 폴백
+  // 2단계: 신형(AU_yqL) 포맷 — batchexecute API (2025~ 구글 인코딩 변경 대응)
+  if (articleId) {
+    const resolved = await resolveViaBatchExecute(articleId);
+    if (resolved) return resolved;
+  }
+
+  // 3단계: HTTP 리다이렉트 폴백
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
