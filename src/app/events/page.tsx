@@ -26,7 +26,7 @@ async function fetchEvents(): Promise<ConventionEvent[]> {
     const kstDateStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
     const { data, error } = await supabase
       .from("convention_events")
-      .select("id, venue, venue_region, event_name, event_name_en, start_date, end_date, location, category, industry, organizer, website")
+      .select("id, venue, venue_region, event_name, event_name_en, start_date, end_date, location, category, industry, organizer, website, is_ezpmp_pick")
       .eq("is_published", true)
       .or(`start_date.gte.${kstDateStr},end_date.gte.${kstDateStr}`)
       .order("start_date", { ascending: true });

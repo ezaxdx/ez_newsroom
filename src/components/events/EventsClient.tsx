@@ -17,6 +17,7 @@ export type ConventionEvent = {
   industry: string | null;
   organizer: string | null;
   website: string | null;
+  is_ezpmp_pick?: boolean;
 };
 
 type Props = { events: ConventionEvent[] };
@@ -194,16 +195,25 @@ export default function EventsClient({ events }: Props) {
   const today = new Date();
   const todayDateStr = today.toISOString().split("T")[0];
 
-  // ── 이즈피엠피 맞춤 추천 (상위 4건) ─────────────────────────────
+  // ── 이즈픽 추천 (4건) — 어드민 ⭐ 픽 최우선, 남는 자리는 자동 점수 ──
   const recommendations = useMemo(() => {
-    return [...events]
-      .filter((e) => e.start_date >= todayDateStr) // 지난 행사 제외 (날짜 문자열 비교 → KST 기준 오늘 포함)
+    const upcoming = events.filter((e) => e.start_date >= todayDateStr); // 지난 행사 제외 (KST 기준 오늘 포함)
+
+    const picks = upcoming
+      .filter((e) => e.is_ezpmp_pick)
+      .sort((a, b) => a.start_date.localeCompare(b.start_date))
+      .slice(0, 4);
+
+    const pickIds = new Set(picks.map((e) => e.id));
+    const auto = upcoming
+      .filter((e) => !pickIds.has(e.id))
       .map((e) => ({ event: e, score: scoreEvent(e, today) }))
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 4)
-      .sort((a, b) => a.event.start_date.localeCompare(b.event.start_date))
+      .slice(0, Math.max(0, 4 - picks.length))
       .map(({ event }) => event);
+
+    return [...picks, ...auto].sort((a, b) => a.start_date.localeCompare(b.start_date));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events]);
   const [year,  setYear]  = useState(today.getFullYear());
@@ -611,13 +621,15 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
   fmtRange: (s: string, end: string | null) => string;
   catColor: (cat: string | null) => string;
 }) {
+  // 어드민 수동 픽 = 앰버 강조, 자동 추천 = 블루
+  const accent = e.is_ezpmp_pick ? "#f59e0b" : "#2563eb";
   const content = (
     <div style={{
       padding: "12px 16px",
       borderRadius: 10,
       border: "1px solid",
-      borderColor: "#2563eb30",
-      background: "#2563eb08",
+      borderColor: `${accent}30`,
+      background: `${accent}08`,
       display: "flex",
       alignItems: "center",
       gap: 12,
@@ -626,21 +638,23 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
     }}
       onMouseEnter={(el) => {
         if (!e.website) return;
-        el.currentTarget.style.borderColor = "#2563eb80";
-        el.currentTarget.style.background = "#2563eb12";
+        el.currentTarget.style.borderColor = `${accent}80`;
+        el.currentTarget.style.background = `${accent}12`;
       }}
       onMouseLeave={(el) => {
-        el.currentTarget.style.borderColor = "#2563eb30";
-        el.currentTarget.style.background = "#2563eb08";
+        el.currentTarget.style.borderColor = `${accent}30`;
+        el.currentTarget.style.background = `${accent}08`;
       }}
     >
       {/* 추천 배지 */}
       <span style={{
         minWidth: 28, height: 28, borderRadius: 8,
-        background: "#2563eb", color: "#fff",
+        background: accent, color: "#fff",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: "0.75rem", fontWeight: 700, flexShrink: 0,
-      }}>
+      }}
+        title={e.is_ezpmp_pick ? "EZPMP 픽" : "자동 추천"}
+      >
         ★
       </span>
 
@@ -672,7 +686,7 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
       </div>
 
       {e.website && (
-        <ExternalLink size={14} style={{ flexShrink: 0, color: "#2563eb", opacity: 0.7 }} />
+        <ExternalLink size={14} style={{ flexShrink: 0, color: accent, opacity: 0.7 }} />
       )}
     </div>
   );
