@@ -8,7 +8,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("event_keyword_filters")
-    .select("id, keyword, memo, created_at")
+    .select("id, keyword, memo, filter_type, created_at")
     .order("created_at", { ascending: false });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
@@ -17,12 +17,16 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
-  const { keyword, memo } = await req.json();
+  const { keyword, memo, filter_type } = await req.json();
   if (!keyword?.trim()) return NextResponse.json({ error: "keyword required" }, { status: 400 });
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("event_keyword_filters")
-    .insert({ keyword: keyword.trim(), memo: memo?.trim() || null })
+    .insert({
+      keyword: keyword.trim(),
+      memo: memo?.trim() || null,
+      filter_type: filter_type === "industry" ? "industry" : "name",
+    })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
