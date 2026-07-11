@@ -2,7 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
 import { calcLastScheduledRun } from "@/lib/schedule";
-import { scoreEvent, EZPMP_PICK_MIN_SCORE } from "@/lib/event-score";
+import { selectEzpmpPickIds } from "@/lib/event-score";
 import TopBar from "@/components/newsroom/TopBar";
 import NewsroomClient from "@/components/newsroom/NewsroomClient";
 import Footer from "@/components/newsroom/Footer";
@@ -134,7 +134,8 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
 
     if (!data?.length) return [];
 
-    // 전체 행사를 캘린더에 전달, 픽(어드민 ⭐ + 자동 점수 top 8)만 is_pick 플래그
+    // 전체 행사를 캘린더에 전달, 픽(어드민 ⭐ + 자동 점수)만 is_pick 플래그
+    // 선정 로직은 행사 캘린더(/events)와 공유 — selectEzpmpPickIds
     const today = new Date();
     type RawEvent = CalendarEvent & {
       event_name_en?: string | null;
@@ -144,33 +145,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       is_ezpmp_pick?: boolean;
     };
     const rawEvents = data as RawEvent[];
-
-    // 어드민 수동 픽 최우선
-    const pickIds = new Set(rawEvents.filter((e) => e.is_ezpmp_pick).map((e) => e.id));
-
-    // 남는 자리는 자동 점수로 채움
-    const autoSlots = Math.max(0, 8 - pickIds.size);
-    rawEvents
-      .filter((e) => !pickIds.has(e.id))
-      .map((e) => ({
-        event: e,
-        score: scoreEvent(
-          {
-            event_name:    e.event_name,
-            event_name_en: e.event_name_en,
-            venue:         e.venue,
-            start_date:    e.start_date,
-            organizer:     e.organizer,
-            category:      e.category,
-            industry:      e.industry,
-          },
-          today
-        ),
-      }))
-      .filter(({ score }) => score >= EZPMP_PICK_MIN_SCORE)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, autoSlots)
-      .forEach(({ event }) => pickIds.add(event.id));
+    const pickIds = selectEzpmpPickIds(rawEvents, today);
 
     return rawEvents.map((e) => ({
       id:         e.id,

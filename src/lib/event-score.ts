@@ -174,6 +174,32 @@ export function scoreEvent(event: EventForScore, today: Date): number {
 /** EZPMP 픽 기준: 최소 스코어 이상 + 스코어 내림차순 top N */
 export const EZPMP_PICK_MIN_SCORE = 15;
 
+/** 픽 슬롯 수 — 홈 캘린더·행사 캘린더 공통 */
+export const EZPMP_PICK_SLOTS = 8;
+
+export type PickableEvent = EventForScore & { id: string; is_ezpmp_pick?: boolean };
+
+/**
+ * 이즈픽 선정 (홈·행사 캘린더 공통 로직)
+ * 어드민 ⭐ 픽 최우선, 남는 자리는 자동 점수(EZPMP_PICK_MIN_SCORE 이상) 상위로 채움
+ */
+export function selectEzpmpPickIds(
+  events: PickableEvent[],
+  today: Date,
+  slots: number = EZPMP_PICK_SLOTS
+): Set<string> {
+  const pickIds = new Set(events.filter((e) => e.is_ezpmp_pick).map((e) => e.id));
+  const autoSlots = Math.max(0, slots - pickIds.size);
+  events
+    .filter((e) => !pickIds.has(e.id))
+    .map((e) => ({ id: e.id, score: scoreEvent(e, today) }))
+    .filter(({ score }) => score >= EZPMP_PICK_MIN_SCORE)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, autoSlots)
+    .forEach(({ id }) => pickIds.add(id));
+  return pickIds;
+}
+
 /** Weekly Event List 최소 스코어 - 총회·이사회 등 무관 행사 제거 */
 export const WEEKLY_LIST_MIN_SCORE = 13;
 

@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, Calendar } from "lucide-react";
 import { logEvent } from "@/lib/analytics";
+import { selectEzpmpPickIds, isEzpmpPartner } from "@/lib/event-score";
 
 export type ConventionEvent = {
   id: string;
@@ -22,147 +23,7 @@ export type ConventionEvent = {
 
 type Props = { events: ConventionEvent[] };
 
-// ── 이즈피엠피 행사 진행 내역 기반 관심 키워드 ───────────────────
-// 실제 수행 이력: 월드스마트시티엑스포(매년), NextRise(매년), 콘텐츠IP마켓(매년),
-//               BCWW(매년), P4G/APEC/환경장관회의, 정부박람회, AI정상회의,
-//               BIXPO, 기후산업박람회, 관광박람회, 스마트국토 등
-const EZPMP_HIGH_MATCH: string[] = [
-  // 기술/AI/스마트 (가장 많음)
-  "스마트", "AI", "인공지능", "디지털", "ICT", "정보통신", "tech", "데이터",
-  "사이버", "클라우드", "소프트웨어", "플랫폼", "DX",
-  // 에너지/환경/기후
-  "환경", "기후", "에너지", "탄소", "녹색", "순환경제", "그린", "태양광",
-  "신재생", "수소", "전력",
-  // 스타트업/비즈니스 (NextRise 매년)
-  "스타트업", "startup", "벤처", "비즈니스", "투자", "IR",
-  // 관광/MICE
-  "관광", "MICE", "마이스", "여행", "travel", "tourism", "컨벤션",
-  // 문화/콘텐츠 (콘텐츠IP, BCWW, 방송 매년)
-  "콘텐츠", "content", "방송", "미디어", "K-콘텐츠", "웹툰", "영상",
-  // 의료/헬스케어 (MEeT 준비 중)
-  "의료", "헬스케어", "healthcare", "medical", "바이오", "제약", "헬스",
-  // 국제회의/포럼
-  "국제", "summit", "forum", "포럼", "컨퍼런스", "conference",
-  // 정부/공공
-  "정부", "공공", "행정", "혁신",
-];
-
-const EZPMP_MEDIUM_MATCH: string[] = [
-  "전시", "박람회", "엑스포", "expo", "산업", "무역", "무역박람회",
-  "우주", "항공", "모빌리티", "자동차", "부동산", "도시", "건설",
-  "농업", "식품", "농축산", "수산", "해양",
-  "교육", "학술", "연구", "과학",
-  "안보", "방산", "국방",
-  "금융", "핀테크", "경제",
-];
-
-const PREFERRED_VENUES = ["코엑스", "킨텍스"];
-
-// ── EZPMP 실제 수행 이력 기반 파트너 기관 ─────────────────────────
-// (발주처·주최기관·주관기관 전체 추출, 4자 이상만 매칭에 사용)
-const EZPMP_PARTNERS: string[] = [
-  "행정안전부", "환경부", "문화체육관광부", "산업통상자원부", "과학기술정보통신부",
-  "해양수산부", "외교부", "국토교통부", "중소벤처기업부", "농림축산식품부", "국방부",
-  "한국콘텐츠진흥원", "KOCCA",
-  "한국관광공사", "KTO",
-  "한국무역협회", "KITA",
-  "대한무역투자진흥공사", "KOTRA",
-  "한국국제협력단", "KOICA",
-  "한국에너지공단",
-  "한국환경산업기술원", "KEITI",
-  "한국환경연구원", "KEI",
-  "한국농수산식품유통공사", "aT",
-  "한국수자원공사", "K-water",
-  "한국전력공사", "KEPCO",
-  "한국국토정보공사", "LX",
-  "한국도로공사", "KEC",
-  "한국토지주택공사", "LH",
-  "한국주택협회",
-  "한국개발연구원", "KDI",
-  "한국산업기술진흥협회", "KOITA",
-  "한국지능정보사회진흥원", "NIA",
-  "한국생산기술연구원", "KITECH",
-  "한국과학기술연구원", "KIST",
-  "한국해양과학기술원", "KIOST",
-  "한국공예디자인문화진흥원", "KCDF",
-  "한국농촌경제연구원", "KREI",
-  "한국벤처캐피탈협회", "KVCA",
-  "벤처기업협회",
-  "중소벤처기업진흥공단", "KOSME",
-  "국토교통과학기술진흥원",
-  "공간정보산업진흥원", "SpaceN",
-  "한국산업연합포럼",
-  "대한상공회의소", "KCCI",
-  "국가과학기술연구회", "NST",
-  // 광역지자체·지역 (광역시·도 이름은 다른 기관명 안에서 false-positive 발생하므로 제외)
-  "광주비엔날레",
-  "서울경제진흥원", "인천관광공사",
-  "디지털플랫폼정부위원회",
-  "탄소중립녹색성장위원회",
-  "한국자동차모빌리티산업협회", "KAMA",
-  "한국장학재단", "KOSAF",
-  "한국수산회",
-  "농촌진흥청", "RDA",
-  "금융위원회",
-  "국무조정실",
-  "한화에어로스페이스", "한화넥스트",
-  "제일기획",
-];
-
-function isEzpmpPartner(organizer: string | null): boolean {
-  if (!organizer) return false;
-  // 쉼표·슬래시로 구분된 복수 기관을 각각 개별 매칭
-  const orgs = organizer
-    .replace(/（[^）]*）/g, "")
-    .split(/[,\/]/)
-    .map((o) => o.replace(/\([^)]*\)/g, "").trim().toLowerCase())
-    .filter(Boolean);
-  return orgs.some((orgBase) =>
-    EZPMP_PARTNERS.some((p) => {
-      if (p.length < 4) return false;
-      const pl = p.toLowerCase();
-      return orgBase === pl || orgBase.includes(pl) || pl.includes(orgBase);
-    })
-  );
-}
-
-function scoreEvent(event: ConventionEvent, today: Date): number {
-  const searchText = [
-    event.event_name,
-    event.event_name_en ?? "",
-    event.industry ?? "",
-    event.category ?? "",
-  ].join(" ").toLowerCase();
-
-  let score = 0;
-
-  // 키워드 매칭
-  for (const kw of EZPMP_HIGH_MATCH) {
-    if (searchText.includes(kw.toLowerCase())) score += 15;
-  }
-  for (const kw of EZPMP_MEDIUM_MATCH) {
-    if (searchText.includes(kw.toLowerCase())) score += 5;
-  }
-
-  // 카테고리 보너스
-  if (event.category === "전시") score += 10;
-  if (event.category === "회의") score += 8;
-
-  // 주요 컨벤션센터 보너스
-  if (PREFERRED_VENUES.some((v) => event.venue?.includes(v))) score += 8;
-
-  // EZPMP 파트너 기관 보너스
-  if (isEzpmpPartner(event.organizer)) score += 30;
-
-  // 시기 점수: 향후 7~90일이 가장 actionable
-  const startMs = new Date(event.start_date).getTime();
-  const daysUntil = (startMs - today.getTime()) / (1000 * 60 * 60 * 24);
-  if (daysUntil >= 7 && daysUntil <= 30)  score += 20; // 임박 = 가장 높은 우선순위
-  else if (daysUntil > 30 && daysUntil <= 90) score += 10;
-  else if (daysUntil > 0 && daysUntil < 7)    score += 5;
-
-  return score;
-}
+// 이즈픽 선정·파트너 판별은 홈 캘린더와 공유 — @/lib/event-score
 
 const CATEGORY_COLOR: Record<string, string> = {
   전시:    "#2563eb",
@@ -195,25 +56,13 @@ export default function EventsClient({ events }: Props) {
   const today = new Date();
   const todayDateStr = today.toISOString().split("T")[0];
 
-  // ── 이즈픽 추천 (4건) — 어드민 ⭐ 픽 최우선, 남는 자리는 자동 점수 ──
+  // ── 이즈픽 추천 — 홈 캘린더와 동일 로직 (어드민 ⭐ 최우선 + 자동 점수, 공통 슬롯 수)
   const recommendations = useMemo(() => {
     const upcoming = events.filter((e) => e.start_date >= todayDateStr); // 지난 행사 제외 (KST 기준 오늘 포함)
-
-    const picks = upcoming
-      .filter((e) => e.is_ezpmp_pick)
-      .sort((a, b) => a.start_date.localeCompare(b.start_date))
-      .slice(0, 4);
-
-    const pickIds = new Set(picks.map((e) => e.id));
-    const auto = upcoming
-      .filter((e) => !pickIds.has(e.id))
-      .map((e) => ({ event: e, score: scoreEvent(e, today) }))
-      .filter(({ score }) => score > 0)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, Math.max(0, 4 - picks.length))
-      .map(({ event }) => event);
-
-    return [...picks, ...auto].sort((a, b) => a.start_date.localeCompare(b.start_date));
+    const pickIds = selectEzpmpPickIds(upcoming, today);
+    return upcoming
+      .filter((e) => pickIds.has(e.id))
+      .sort((a, b) => a.start_date.localeCompare(b.start_date));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [events]);
   const [year,  setYear]  = useState(today.getFullYear());
