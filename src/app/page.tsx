@@ -126,7 +126,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       .split("T")[0];
     const { data } = await supabase
       .from("convention_events")
-      .select("id, event_name, event_name_en, venue, start_date, end_date, organizer, category, industry, website")
+      .select("id, event_name, event_name_en, venue, start_date, end_date, organizer, category, industry, website, is_ezpmp_pick")
       .eq("is_published", true)
       .gte("start_date", from)
       .order("start_date", { ascending: true })
@@ -134,15 +134,24 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
 
     if (!data?.length) return [];
 
-    // EZPMP 픽 스코어링: 최소 점수 이상만, 스코어 내림차순 top 8
+    // 전체 행사를 캘린더에 전달, 픽(어드민 ⭐ + 자동 점수 top 8)만 is_pick 플래그
     const today = new Date();
     type RawEvent = CalendarEvent & {
       event_name_en?: string | null;
       organizer?: string | null;
       category?: string | null;
       industry?: string | null;
+      is_ezpmp_pick?: boolean;
     };
-    const scored = (data as RawEvent[])
+    const rawEvents = data as RawEvent[];
+
+    // 어드민 수동 픽 최우선
+    const pickIds = new Set(rawEvents.filter((e) => e.is_ezpmp_pick).map((e) => e.id));
+
+    // 남는 자리는 자동 점수로 채움
+    const autoSlots = Math.max(0, 8 - pickIds.size);
+    rawEvents
+      .filter((e) => !pickIds.has(e.id))
       .map((e) => ({
         event: e,
         score: scoreEvent(
@@ -160,18 +169,18 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       }))
       .filter(({ score }) => score >= EZPMP_PICK_MIN_SCORE)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 8)
-      .sort((a, b) => a.event.start_date.localeCompare(b.event.start_date))
-      .map(({ event }) => ({
-        id:         event.id,
-        event_name: event.event_name,
-        venue:      event.venue,
-        start_date: event.start_date,
-        end_date:   event.end_date,
-        website:    event.website ?? null,
-      }));
+      .slice(0, autoSlots)
+      .forEach(({ event }) => pickIds.add(event.id));
 
-    return scored;
+    return rawEvents.map((e) => ({
+      id:         e.id,
+      event_name: e.event_name,
+      venue:      e.venue,
+      start_date: e.start_date,
+      end_date:   e.end_date,
+      website:    e.website ?? null,
+      is_pick:    pickIds.has(e.id),
+    }));
   } catch {
     return [];
   }

@@ -10,6 +10,7 @@ export type CalendarEvent = {
   start_date: string;
   end_date: string | null;
   website?: string | null;
+  is_pick?: boolean;
 };
 
 const DAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -75,6 +76,15 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
   // Dates that have at least one event (for dot markers)
   const eventDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
 
+  // 픽 행사가 있는 날짜 (앰버 점 표시)
+  const pickDates = useMemo(() => {
+    const set = new Set<string>();
+    for (const [date, evs] of eventsByDate) {
+      if (evs.some((e) => e.is_pick)) set.add(date);
+    }
+    return set;
+  }, [eventsByDate]);
+
   // Calendar grid cells
   const calCells = useMemo(() => {
     if (viewYear === null || viewMonth === null) return [];
@@ -120,16 +130,22 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
     return cells;
   }, [viewYear, viewMonth]);
 
-  // Upcoming events from today, limit 20
+  // 보고 있는 월의 행사 — 픽 우선, 날짜순 (월 이동하면 리스트도 따라감)
   const upcoming = useMemo(() => {
-    if (!todayStr) return events.slice(0, 20);
+    if (viewYear === null || viewMonth === null) return events.slice(0, 12);
+    const monthStart = `${viewYear}-${pad2(viewMonth + 1)}-01`;
+    const monthEnd   = `${viewYear}-${pad2(viewMonth + 1)}-${pad2(new Date(viewYear, viewMonth + 1, 0).getDate())}`;
     return events
       .filter((e) => {
-        const endOrStart = e.end_date ?? e.start_date;
-        return endOrStart >= todayStr;
+        const end = e.end_date ?? e.start_date;
+        return e.start_date <= monthEnd && end >= monthStart; // 월과 겹치는 행사
       })
-      .slice(0, 20);
-  }, [events, todayStr]);
+      .sort((a, b) => {
+        if (!!a.is_pick !== !!b.is_pick) return a.is_pick ? -1 : 1; // 픽 먼저
+        return a.start_date.localeCompare(b.start_date);
+      })
+      .slice(0, 12);
+  }, [events, viewYear, viewMonth]);
 
   const handleEventClick = useCallback((e: CalendarEvent) => {
     logEvent({ event_type: "event_click", event_id: e.id });
@@ -302,7 +318,9 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                       width: 3,
                       height: 3,
                       borderRadius: "50%",
-                      background: isToday ? "rgba(255,255,255,0.7)" : "#7c6ef5",
+                      background: isToday
+                        ? "rgba(255,255,255,0.7)"
+                        : pickDates.has(cell.dateStr) ? "#f59e0b" : "#7c6ef5",
                     }}
                   />
                 )}
@@ -404,6 +422,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                     overflow: "hidden",
                   }}
                 >
+                  {e.is_pick && <span style={{ color: "#f59e0b", marginRight: 3 }}>★</span>}
                   {e.event_name}
                 </p>
                 <p
