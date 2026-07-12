@@ -101,15 +101,30 @@ export function makeRawMessage(params: {
 
 export type SendResult = { email: string; status: "success" | "failed"; error_message: string | null };
 
+/** 개별 발송 타임아웃 — 한 건이 멈춰도 전체가 안 끌려가게 */
+const PER_SEND_TIMEOUT_MS = 15_000;
+
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([
+    p,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(`발송 타임아웃 (${ms / 1000}초)`)), ms)
+    ),
+  ]);
+}
+
 export async function sendNewsletterViaGmail(params: {
   fromName: string;
   fromEmail: string;
   subject: string;
   html: string;
   recipients: string[];
+  /** 전체 시간 예산(ms) — 초과 시 남은 수신자는 처리하지 않고 반환 (Vercel 강제종료 방지) */
+  timeBudgetMs?: number;
   onBatchComplete?: (results: SendResult[]) => Promise<void>;
-}): Promise<{ results: SendResult[]; total_sent: number; total_failed: number }> {
+}): Promise<{ results: SendResult[]; total_sent: number; total_failed: number; processed: number }> {
   const gmail = await getGmailClient();
+  const started = Date.now();
 
   const results: SendResult[] = [];
   let total_sent = 0;
@@ -118,6 +133,9 @@ export async function sendNewsletterViaGmail(params: {
   // 5명씩 병렬 발송 + 배치 간 200ms 대기 (Gmail API 레이트 리밋 대응)
   const BATCH_SIZE = 5;
   for (let i = 0; i < params.recipients.length; i += BATCH_SIZE) {
+    // 시간 예산 초과 → 즉시 중단, 미처리분은 다음 회차에서 발송 (로그 기반 중복 방지)
+    if (params.timeBudgetMs && Date.now() - started > params.timeBudgetMs) break;
+
     const batch = params.recipients.slice(i, i + BATCH_SIZE);
     if (i > 0) await new Promise(r => setTimeout(r, 200));
     const batchResults = await Promise.all(
@@ -129,10 +147,10 @@ export async function sendNewsletterViaGmail(params: {
             subject: params.subject,
             html: params.html,
           });
-          await gmail.users.messages.send({
-            userId: "me",
-            requestBody: { raw },
-          });
+          await withTimeout(
+            gmail.users.messages.send({ userId: "me", requestBody: { raw } }),
+            PER_SEND_TIMEOUT_MS
+          );
           total_sent++;
           return { email: to, status: "success" as const, error_message: null };
         } catch (err) {
@@ -149,5 +167,5 @@ export async function sendNewsletterViaGmail(params: {
     if (params.onBatchComplete) await params.onBatchComplete(batchResults);
   }
 
-  return { results, total_sent, total_failed };
+  return { results, total_sent, total_failed, processed: results.length };
 }

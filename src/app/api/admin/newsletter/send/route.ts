@@ -11,7 +11,8 @@ export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const BATCH_LIMIT = 50;
+  const BATCH_LIMIT = 25;           // 회차당 수신자 수 (60초 제한 대비 여유)
+  const TIME_BUDGET_MS = 40_000;    // 발송 시간 예산 — 초과 시 정상 응답으로 중단 (Vercel 강제종료 방지)
 
   let body: {
     editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean; reuse_prev_pick?: boolean;
@@ -94,9 +95,11 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId, target_count: allRecipients.length, total_sent, this_batch_sent: 0, total_failed: 0, remaining_count: 0 });
     }
 
+    let processed = recipients.length;
     try {
-      await sendNewsletterViaGmail({
+      const sendRes = await sendNewsletterViaGmail({
         fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients,
+        timeBudgetMs: TIME_BUDGET_MS,
         onBatchComplete: async (batchResults) => {
           const batchSent = batchResults.filter(r => r.status === "success").length;
           const batchFailed = batchResults.filter(r => r.status === "failed").length;
@@ -111,6 +114,7 @@ export async function POST(req: NextRequest) {
           ]);
         },
       });
+      processed = sendRes.processed;
     } catch (err) {
       const partialSent = total_sent > prevSent;
       await supabase.from("newsletter_issues")
@@ -119,7 +123,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 
-    const remainingAfter = remaining.length - recipients.length;
+    const remainingAfter = remaining.length - processed; // 시간 예산으로 중단된 미처리분 포함
     const thisBatchSent = total_sent - prevSent;
     const finalStatus = total_sent === 0 ? "failed" : remainingAfter === 0 ? "sent" : "partial";
     await supabase.from("newsletter_issues")
@@ -386,9 +390,11 @@ export async function POST(req: NextRequest) {
   const fromEmail2 = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
   let total_sent2 = alreadySent2.size, total_failed2 = 0;
 
+  let processed2 = recipients2.length;
   try {
-    await sendNewsletterViaGmail({
+    const sendRes2 = await sendNewsletterViaGmail({
       fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2,
+      timeBudgetMs: TIME_BUDGET_MS,
       onBatchComplete: async (batchResults) => {
         const batchSent = batchResults.filter(r => r.status === "success").length;
         const batchFailed = batchResults.filter(r => r.status === "failed").length;
@@ -403,6 +409,7 @@ export async function POST(req: NextRequest) {
         ]);
       },
     });
+    processed2 = sendRes2.processed;
   } catch (err) {
     await supabase.from("newsletter_issues")
       .update({ status: total_sent2 > alreadySent2.size ? "partial" : "failed", total_sent: total_sent2, total_failed: total_failed2 })
@@ -410,7 +417,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
   }
 
-  const remainingAfter2 = remaining2.length - recipients2.length;
+  const remainingAfter2 = remaining2.length - processed2; // 시간 예산으로 중단된 미처리분 포함
   const thisBatchSent2 = total_sent2 - alreadySent2.size;
   const finalStatus2 = total_sent2 === 0 ? "failed" : remainingAfter2 === 0 ? "sent" : "partial";
   await supabase.from("newsletter_issues")

@@ -116,6 +116,8 @@ export async function POST(req: NextRequest) {
     subject,
     html: issue.html_content!,
     recipients: emails,
+    timeBudgetMs: 40_000, // Vercel 60초 강제종료 방지
+
     onBatchComplete: async (batchResults) => {
       const batchSent = batchResults.filter(r => r.status === "success").length;
       const batchFailed = batchResults.filter(r => r.status === "failed").length;

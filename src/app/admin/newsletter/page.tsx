@@ -282,7 +282,7 @@ export default function NewsletterPage() {
     }
   }
 
-  const BATCH_SIZE = 50;
+  const BATCH_SIZE = 25; // 서버 BATCH_LIMIT과 동일하게 유지
 
   async function handleSend() {
     if (!activeCount) {
@@ -340,7 +340,9 @@ export default function NewsletterPage() {
         setSendResult({ ok: false, message: json.error ?? "발송 실패" });
       }
     } catch {
-      setSendResult({ ok: false, message: "네트워크 오류" });
+      // 연결이 끊겨도 서버는 발송을 계속했을 수 있음 → 실제 진행상황 조회로 복구
+      setSendResult({ ok: false, message: "연결이 끊겼습니다. 실제 발송 상황을 확인하는 중..." });
+      await fetchSendProgress();
     } finally {
       if (sendTimerRef.current) { clearInterval(sendTimerRef.current); sendTimerRef.current = null; }
       setSending(false);
