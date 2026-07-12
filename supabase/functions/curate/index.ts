@@ -26,8 +26,11 @@ interface GmailConfig {
 
 /* ── RSS XML 인코딩 감지 후 텍스트 변환 ── */
 async function fetchRssText(url: string): Promise<string> {
+  // 실제 브라우저 UA + 언어/consent 헤더 — 봇 차단·consent 페이지 우회
   const headers: Record<string, string> = {
-    "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)",
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
   };
   // naver-rss-proxy 호출 시 Authorization 헤더 추가 (URL에 secret 노출 방지)
   if (url.includes("naver-rss-proxy")) {
@@ -38,16 +41,27 @@ async function fetchRssText(url: string): Promise<string> {
     parsed.searchParams.delete("secret");
     url = parsed.toString();
   }
-  const res = await fetch(url, {
-    headers,
-    signal: AbortSignal.timeout(8000),
-  });
-  const buffer = await res.arrayBuffer();
+  // 구글뉴스는 데이터센터 IP에 consent 페이지를 주므로 쿠키로 우회
+  if (url.includes("news.google.com")) {
+    headers["Cookie"] = "CONSENT=YES+cb.20210328-17-p0.en+FX+000";
+  }
+  // 타임아웃·간헐 차단 대비 1회 재시도 (구글뉴스는 특히 불안정)
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      res = await fetch(url, { headers, signal: AbortSignal.timeout(12000) });
+      break;
+    } catch (e) {
+      if (attempt === 1) throw e;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+  }
+  const buffer = await res!.arrayBuffer();
   const bytes = new Uint8Array(buffer);
   const sniff = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(0, 200));
   const encMatch =
     sniff.match(/encoding=["']([^"']+)["']/i) ??
-    res.headers.get("content-type")?.match(/charset=([^\s;]+)/i);
+    res!.headers.get("content-type")?.match(/charset=([^\s;]+)/i);
   const encoding = (encMatch?.[1] ?? "utf-8").toLowerCase().replace("-", "");
   const decoder = new TextDecoder(
     encoding.includes("euckr") || encoding.includes("949") ? "euc-kr" : "utf-8",
