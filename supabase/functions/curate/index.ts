@@ -200,7 +200,7 @@ async function resolveGoogleNewsUrl(url: string): Promise<string> {
   return url;
 }
 
-function parseRSS(xml: string) {
+function parseRSS(xml: string, limit = 40) {
   const items: { title: string; link: string; pubDate: string }[] = [];
   const matches = xml.matchAll(/<item>([\s\S]*?)<\/item>/gi);
   for (const m of matches) {
@@ -213,7 +213,7 @@ function parseRSS(xml: string) {
     const pubDate = c.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim() ?? "";
     if (title && link) items.push({ title, link, pubDate });
   }
-  return items.slice(0, 3);
+  return items.slice(0, limit);
 }
 
 /* ── 원문 텍스트 추출 ── */
@@ -629,12 +629,27 @@ Deno.serve(async (req) => {
   if (!sources?.length) return new Response(JSON.stringify({ error: "활성 소스 없음" }), { status: 400 });
 
   const { data: settings } = await supabase
-    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context")
+    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords")
     .limit(1).single();
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> = settings?.category_settings ?? {};
   const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const qualityThresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
   const companyContext: string = settings?.company_context ?? "";
+
+  // 관심 키워드: 언론사 전체피드(keyword_filter=true)에서 관련 기사만 통과시킴
+  // curation_settings.focus_keywords 우선, 없으면 기본값(회사 검색어)
+  const DEFAULT_FOCUS = [
+    "MICE", "마이스", "전시회", "박람회", "엑스포", "국제회의", "컨벤션",
+    "관광", "스마트관광", "글로컬관광", "관광공사", "여행",
+    "AI", "인공지능", "AX", "디지털전환", "스마트",
+  ];
+  const focusKeywords: string[] = (settings?.focus_keywords?.length ? settings.focus_keywords : DEFAULT_FOCUS)
+    .map((k: string) => k.toLowerCase());
+  const matchesFocus = (title: string) => {
+    const t = title.toLowerCase();
+    return focusKeywords.some((kw) => t.includes(kw));
+  };
+  const PER_SOURCE_LIMIT = 10; // 소스당 처리 상한 (필터 후)
 
   const { data: existingNews } = await supabase.from("news").select("original_url");
   const existingUrls = new Set((existingNews ?? []).map((n: { original_url: string }) => n.original_url));
@@ -655,7 +670,16 @@ Deno.serve(async (req) => {
     return `${venue}:${dateMatch[0].replace(/[-./]/g, "")}`;
   }
 
+  const TIME_BUDGET_MS = 130_000; // Edge Function 150초 한계 대비 — 초과 시 남은 소스 스킵
+  let budgetExceeded = false;
+
   for (const source of sources) {
+    // 시간 예산 초과 시 남은 소스는 다음 실행으로 미룸 (강제 종료 방지)
+    if (Date.now() - runStart > TIME_BUDGET_MS) {
+      budgetExceeded = true;
+      console.log(`[시간예산 초과] ${source.source_name} 이후 소스 스킵`);
+      break;
+    }
     const category = source.default_category.toUpperCase();
     const setting = catSettings[category] ?? {
       audience: "MICE·관광 업계 종사자",
@@ -753,8 +777,18 @@ Deno.serve(async (req) => {
     // RSS
     try {
       const xml = await fetchRssText(source.url);
-      const rssItems = parseRSS(xml);
-      console.log(`[RSS] ${source.source_name}: ${rssItems.length}개`);
+      let rssItems = parseRSS(xml);
+
+      // 언론사 전체피드는 관심 키워드 매칭 기사만 통과 (제목 기준)
+      if (source.keyword_filter) {
+        const before = rssItems.length;
+        rssItems = rssItems.filter((it) => matchesFocus(it.title));
+        console.log(`[RSS] ${source.source_name}: ${before}개 → 키워드 매칭 ${rssItems.length}개`);
+      } else {
+        console.log(`[RSS] ${source.source_name}: ${rssItems.length}개`);
+      }
+      // 소스당 처리 상한
+      rssItems = rssItems.slice(0, PER_SOURCE_LIMIT);
 
       // URL 해석 병렬처리 후 기사 생성은 순차처리 (Claude 병렬 호출 방지)
       const resolved = await Promise.all(
@@ -787,9 +821,9 @@ Deno.serve(async (req) => {
     failed: results.failed,
     score_dist: scoreDist,
     source_stats: sourceStats,
-    errors: runErrors,
+    errors: budgetExceeded ? [...runErrors, { source: "(시스템)", error: "시간예산 초과로 일부 소스 스킵" }] : runErrors,
   });
-  return new Response(JSON.stringify({ ok: true, ...results, duration_ms: durationMs }), {
+  return new Response(JSON.stringify({ ok: true, ...results, budget_exceeded: budgetExceeded, duration_ms: durationMs }), {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
   });
 });
