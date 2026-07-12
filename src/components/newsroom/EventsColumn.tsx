@@ -138,14 +138,16 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
     return events
       .filter((e) => {
         const end = e.end_date ?? e.start_date;
-        return e.start_date <= monthEnd && end >= monthStart; // 월과 겹치는 행사
+        if (e.start_date > monthEnd || end < monthStart) return false; // 월과 겹치는 행사만
+        if (todayStr && end < todayStr) return false;                  // 이미 종료된 행사 제외
+        return true;
       })
       .sort((a, b) => {
         if (!!a.is_pick !== !!b.is_pick) return a.is_pick ? -1 : 1; // 픽 먼저
         return a.start_date.localeCompare(b.start_date);
       })
       .slice(0, 12);
-  }, [events, viewYear, viewMonth]);
+  }, [events, viewYear, viewMonth, todayStr]);
 
   const handleEventClick = useCallback((e: CalendarEvent) => {
     logEvent({ event_type: "event_click", event_id: e.id });
