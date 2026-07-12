@@ -45,6 +45,7 @@ export type RssSource = {
   is_active: boolean;
   source_type: "rss" | "url" | "api" | "gmail";
   api_config?: ApiConfig | GmailConfig | null;
+  keyword_filter?: boolean; // true면 관심 키워드(focus_keywords) 매칭 기사만 수집
 };
 
 export type CurationSettings = {

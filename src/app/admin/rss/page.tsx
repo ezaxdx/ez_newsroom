@@ -26,6 +26,7 @@ const EMPTY_FORM = {
   default_category: "AI",
   source_type: "rss" as "rss" | "url" | "api" | "gmail",
   api_config: EMPTY_API_CONFIG as ApiConfig | GmailConfig,
+  keyword_filter: false,
 };
 
 const TYPE_META = {
@@ -35,7 +36,7 @@ const TYPE_META = {
     bg: "var(--surface-container-highest)",
     color: "var(--on-surface-variant)",
     placeholder: "https://example.com/feed.xml",
-    hint: "RSS/Atom 피드 URL. 소스당 최대 3개 기사를 자동 수집합니다.",
+    hint: "RSS/Atom 피드 URL. 소스당 최대 10개 기사를 자동 수집합니다. 언론사 전체 피드는 '키워드 필터'를 켜면 관심 기사만 수집됩니다.",
   },
   url: {
     label: "직접 URL",
@@ -253,6 +254,22 @@ export default function RssPage() {
               />
             </div>
           </div>
+
+          {/* 키워드 필터 (RSS 전용) */}
+          {form.source_type === "rss" && (
+            <label className="flex items-start gap-2 mt-3 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={form.keyword_filter}
+                onChange={(e) => setForm((f) => ({ ...f, keyword_filter: e.target.checked }))}
+                className="mt-0.5"
+              />
+              <span className="text-xs" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
+                <b style={{ color: "var(--on-surface)" }}>키워드 필터 적용</b> — 언론사 전체 뉴스 피드처럼 주제가 섞인 소스에 켜세요.
+                제목에 관심 키워드(큐레이션 설정)가 있는 기사만 수집합니다. 구글뉴스·블로그처럼 이미 주제가 좁은 소스는 끄세요.
+              </span>
+            </label>
+          )}
 
           {/* Gmail 전용 설정 */}
           {form.source_type === "gmail" && (
@@ -580,6 +597,7 @@ function SourceCard({
     url: source.url,
     default_category: source.default_category,
     weight: source.weight,
+    keyword_filter: source.keyword_filter ?? false,
   });
 
   // 가중치 단독 편집 제거 (전체 편집으로 통합)
@@ -666,6 +684,18 @@ function SourceCard({
               />
             </div>
           </div>
+          {type === "rss" && (
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={editForm.keyword_filter}
+                onChange={(e) => setEditForm((f) => ({ ...f, keyword_filter: e.target.checked }))}
+              />
+              <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>
+                <b style={{ color: "var(--on-surface)" }}>키워드 필터</b> — 관심 키워드 매칭 기사만 수집 (언론사 전체 피드용)
+              </span>
+            </label>
+          )}
           <div className="flex gap-2">
             <button
               onClick={saveEdit}
@@ -677,7 +707,7 @@ function SourceCard({
               저장
             </button>
             <button
-              onClick={() => { setEditing(false); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight }); }}
+              onClick={() => { setEditing(false); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight, keyword_filter: source.keyword_filter ?? false }); }}
               className="h-8 px-4 rounded-md text-sm font-medium"
               style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}
             >
@@ -704,6 +734,13 @@ function SourceCard({
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
             {editForm.default_category}
           </span>
+          {source.keyword_filter && (
+            <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide"
+              style={{ background: "#2563eb18", color: "#2563eb" }}
+              title="관심 키워드 매칭 기사만 수집">
+              🔍 키워드필터
+            </span>
+          )}
         </div>
         <a
           href={editForm.url}
@@ -771,7 +808,7 @@ function SourceCard({
 
       <div className="flex items-center gap-1">
         <button
-          onClick={() => { setEditing(!editing); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight }); }}
+          onClick={() => { setEditing(!editing); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight, keyword_filter: source.keyword_filter ?? false }); }}
           className="p-1.5 rounded transition-colors"
           title="수정"
           style={{ background: editing ? "var(--surface-container-highest)" : "transparent", border: "none", cursor: "pointer" }}
