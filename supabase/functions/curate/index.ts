@@ -216,23 +216,53 @@ function parseRSS(xml: string, limit = 40) {
   return items.slice(0, limit);
 }
 
-/* ── 원문 텍스트 추출 ── */
-async function fetchArticleText(url: string): Promise<string> {
+/* ── HTML에서 본문 텍스트 추출 (순수 함수) ── */
+function extractText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 6000);
+}
+
+/* ── HTML에서 OG 이미지 추출 (순수 함수) ── */
+function extractOgImage(html: string): string | null {
+  // 1단계: OG / Twitter 메타 태그
+  const meta =
+    html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ??
+    html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i) ??
+    html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
+  if (meta?.[1]?.startsWith("http")) return meta[1];
+
+  // 2단계: 본문 첫 번째 의미 있는 <img> 태그
+  const imgMatches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*/gi)];
+  for (const match of imgMatches) {
+    const src = match[1];
+    if (!src.startsWith("http")) continue;
+    const lower = src.toLowerCase();
+    if (["icon", "logo", "avatar", "sprite", "banner", "pixel", "tracking", ".svg", ".gif"]
+      .some((x) => lower.includes(x))) continue;
+    const w = match[0].match(/width=["']?(\d+)/)?.[1];
+    if (w && parseInt(w) < 200) continue;
+    return src;
+  }
+  return null;
+}
+
+/* ── 원문 1회 fetch로 본문+이미지 동시 추출 (기사당 요청 2회→1회) ── */
+async function fetchArticleData(url: string): Promise<{ text: string; image_url: string | null }> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
       signal: AbortSignal.timeout(7000),
     });
     const html = await res.text();
-    return html
-      .replace(/<script[\s\S]*?<\/script>/gi, "")
-      .replace(/<style[\s\S]*?<\/style>/gi, "")
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 6000);
+    return { text: extractText(html), image_url: extractOgImage(html) };
   } catch {
-    return "";
+    return { text: "", image_url: null };
   }
 }
 
@@ -245,43 +275,6 @@ const CATEGORY_DEFAULT_IMAGES: Record<string, string> = {
 function getCategoryDefaultImage(category: string): string {
   return CATEGORY_DEFAULT_IMAGES[category.toUpperCase()] ??
     "https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800&fit=crop&q=80";
-}
-
-/* ── OG 이미지 추출 — 3단계 시도 ── */
-async function fetchOgImage(url: string): Promise<string | null> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
-      signal: AbortSignal.timeout(5000),
-    });
-    const html = await res.text();
-
-    // 1단계: OG / Twitter 메타 태그
-    const meta =
-      html.match(/<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i) ??
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i) ??
-      html.match(/<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i) ??
-      html.match(/<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image["']/i);
-    if (meta?.[1]?.startsWith("http")) return meta[1];
-
-    // 2단계: 본문 첫 번째 의미 있는 <img> 태그
-    const imgMatches = [...html.matchAll(/<img[^>]+src=["']([^"']+)["'][^>]*/gi)];
-    for (const match of imgMatches) {
-      const src = match[1];
-      if (!src.startsWith("http")) continue;
-      const lower = src.toLowerCase();
-      if (["icon", "logo", "avatar", "sprite", "banner", "pixel", "tracking", ".svg", ".gif"]
-        .some((x) => lower.includes(x))) continue;
-      const tagStr = match[0];
-      const w = tagStr.match(/width=["']?(\d+)/)?.[1];
-      if (w && parseInt(w) < 200) continue;
-      return src;
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
 }
 
 /* ── 날짜 안전 파싱 ── */
@@ -625,8 +618,10 @@ Deno.serve(async (req) => {
   const apiKey = Deno.env.get("GOOGLE_AI_API_KEY");
   if (!apiKey) return new Response(JSON.stringify({ error: "GOOGLE_AI_API_KEY 없음" }), { status: 500 });
 
-  const { data: sources } = await supabase.from("rss_sources").select("*").eq("is_active", true);
-  if (!sources?.length) return new Response(JSON.stringify({ error: "활성 소스 없음" }), { status: 400 });
+  const { data: sourcesRaw } = await supabase.from("rss_sources").select("*").eq("is_active", true);
+  if (!sourcesRaw?.length) return new Response(JSON.stringify({ error: "활성 소스 없음" }), { status: 400 });
+  // weight 높은 순으로 처리 — 시간예산 초과 시 중요 소스가 먼저 돌고 낮은 것만 밀림
+  const sources = [...sourcesRaw].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
 
   const { data: settings } = await supabase
     .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords")
@@ -739,7 +734,7 @@ Deno.serve(async (req) => {
 
     if (source.source_type === "url") {
       if (existingUrls.has(source.url)) { results.skipped++; continue; }
-      const [articleText, image_url] = await Promise.all([fetchArticleText(source.url), fetchOgImage(source.url)]);
+      const { text: articleText, image_url } = await fetchArticleData(source.url);
       await insertArticle(articleText, source.url, image_url);
       continue;
     }
@@ -764,7 +759,7 @@ Deno.serve(async (req) => {
           // gmail:msgId → 원문 링크 없음, 스킵
           if (item.link.startsWith("gmail:")) { results.skipped++; continue; }
           if (existingUrls.has(item.link)) { results.skipped++; continue; }
-          const [articleText, image_url] = await Promise.all([fetchArticleText(item.link), fetchOgImage(item.link)]);
+          const { text: articleText, image_url } = await fetchArticleData(item.link);
           await insertArticle(articleText, item.link, image_url, item.pubDate);
         }
       } catch (e) {
@@ -800,7 +795,7 @@ Deno.serve(async (req) => {
       );
       for (const item of resolved) {
         if (existingUrls.has(item.link)) { results.skipped++; continue; }
-        const [articleText, image_url] = await Promise.all([fetchArticleText(item.link), fetchOgImage(item.link)]);
+        const { text: articleText, image_url } = await fetchArticleData(item.link);
         await insertArticle(articleText, item.link, image_url, item.pubDate);
       }
     } catch (e) {
