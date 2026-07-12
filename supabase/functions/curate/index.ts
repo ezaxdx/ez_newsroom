@@ -105,16 +105,25 @@ function decodeGoogleNewsArticleUrl(googleUrl: string): string | null {
  * 기사 페이지에서 서명(data-n-a-sg)·타임스탬프(data-n-a-ts) 추출 후 garturlreq 요청
  */
 async function resolveViaBatchExecute(articleId: string): Promise<string | null> {
+  // 데이터센터 IP는 동의(consent) 페이지를 받으므로 CONSENT 쿠키로 우회
+  const commonHeaders = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36",
+    "Cookie": "CONSENT=YES+cb.20210328-17-p0.en+FX+000",
+    "Accept-Language": "ko-KR,ko;q=0.9,en;q=0.8",
+  };
   try {
     const pageRes = await fetch(`https://news.google.com/articles/${articleId}`, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" },
+      headers: commonHeaders,
       signal: AbortSignal.timeout(8000),
     });
-    if (!pageRes.ok) return null;
+    if (!pageRes.ok) { console.log(`[GNews] 페이지 ${pageRes.status} — ${articleId.slice(0, 12)}`); return null; }
     const html = await pageRes.text();
     const sig = html.match(/data-n-a-sg="([^"]+)"/)?.[1];
     const ts  = html.match(/data-n-a-ts="([^"]+)"/)?.[1];
-    if (!sig || !ts) return null;
+    if (!sig || !ts) {
+      console.log(`[GNews] 서명값 없음 (consent 페이지 의심) — ${articleId.slice(0, 12)} · html ${html.length}자`);
+      return null;
+    }
 
     const inner = JSON.stringify([
       "garturlreq",
@@ -126,15 +135,18 @@ async function resolveViaBatchExecute(articleId: string): Promise<string | null>
 
     const res = await fetch("https://news.google.com/_/DotsSplashUi/data/batchexecute", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
+      headers: { ...commonHeaders, "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8" },
       body: `f.req=${encodeURIComponent(freq)}`,
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) { console.log(`[GNews] batchexecute ${res.status}`); return null; }
     const text = await res.text();
     const m = text.match(/garturlres\\",\\"(https?:[^\\"]+)/);
-    return m?.[1] ?? null;
-  } catch {
+    if (!m) { console.log(`[GNews] garturlres 파싱 실패`); return null; }
+    console.log(`[GNews] 복원 성공 → ${m[1].slice(0, 50)}`);
+    return m[1];
+  } catch (e) {
+    console.log(`[GNews] 예외: ${(e as Error).message}`);
     return null;
   }
 }
