@@ -83,6 +83,12 @@ export default function RssPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
+  // ── 관심 키워드 (키워드 필터 소스가 통과시킬 기준어) ──
+  const [focusKeywords, setFocusKeywords] = useState<string[]>([]);
+  const [keywordsOpen, setKeywordsOpen] = useState(false);
+  const [newKeyword, setNewKeyword] = useState("");
+  const [savingKeywords, setSavingKeywords] = useState(false);
+
   // ── 초기 로드 ──
   useEffect(() => {
     Promise.all([
@@ -91,8 +97,31 @@ export default function RssPage() {
     ]).then(([rssData, catData]) => {
       setSources(rssData.data ?? []);
       setCategories(catData.categories ?? ["AI", "MICE", "TOURISM"]);
+      setFocusKeywords(catData.focusKeywords ?? []);
     }).finally(() => setLoading(false));
   }, []);
+
+  const saveFocusKeywords = async (next: string[]) => {
+    setSavingKeywords(true);
+    setFocusKeywords(next);
+    await fetch("/api/admin/categories", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ focusKeywords: next }),
+    });
+    setSavingKeywords(false);
+  };
+
+  const addFocusKeyword = () => {
+    const kw = newKeyword.trim();
+    if (!kw || focusKeywords.includes(kw)) return;
+    saveFocusKeywords([...focusKeywords, kw]);
+    setNewKeyword("");
+  };
+
+  const removeFocusKeyword = (kw: string) => {
+    saveFocusKeywords(focusKeywords.filter((k) => k !== kw));
+  };
 
   // ── 토글 ──
   const toggleActive = async (source: RssSource) => {
@@ -164,6 +193,63 @@ export default function RssPage() {
         >
           <Plus size={14} /> 소스 추가
         </button>
+      </div>
+
+      {/* ── 관심 키워드 관리 ── */}
+      <div className="mb-6 rounded-lg overflow-hidden" style={{ border: "1px solid var(--surface-container-highest)" }}>
+        <button
+          onClick={() => setKeywordsOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-4 py-3"
+          style={{ background: "var(--surface-container)", border: "none", cursor: "pointer" }}
+        >
+          <span className="text-sm font-semibold">🔍 관심 키워드 ({focusKeywords.length})</span>
+          <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>{keywordsOpen ? "▲" : "▼"}</span>
+        </button>
+        {keywordsOpen && (
+          <div className="p-4">
+            <p className="text-xs mb-3" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+              &quot;키워드 필터&quot;가 켜진 RSS 소스(언론사 전체 피드 등)는 제목에 아래 키워드가 하나라도 포함된 기사만 수집합니다.
+              배포 없이 바로 반영됩니다.
+            </p>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={newKeyword}
+                onChange={(e) => setNewKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addFocusKeyword()}
+                placeholder="예: MICE, 스마트관광, AX"
+                className="flex-1 h-8 px-3 rounded-md text-sm outline-none"
+                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+              />
+              <button
+                onClick={addFocusKeyword}
+                disabled={!newKeyword.trim() || savingKeywords}
+                className="h-8 px-4 rounded-md text-sm font-semibold"
+                style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+              >
+                추가
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {focusKeywords.length === 0 && (
+                <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>등록된 키워드가 없습니다.</span>
+              )}
+              {focusKeywords.map((kw) => (
+                <span key={kw}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}>
+                  {kw}
+                  <button
+                    onClick={() => removeFocusKeyword(kw)}
+                    className="flex items-center justify-center"
+                    style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--on-surface-variant)" }}
+                  >
+                    <XIcon size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── 추가 폼 ── */}

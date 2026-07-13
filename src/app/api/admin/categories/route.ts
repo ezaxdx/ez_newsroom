@@ -11,7 +11,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data } = await supabase
     .from("curation_settings")
-    .select("nav_categories, carousel_interval_sec, category_settings, level_prompts, auto_schedule, quality_thresholds, company_context")
+    .select("nav_categories, carousel_interval_sec, category_settings, level_prompts, auto_schedule, quality_thresholds, company_context, focus_keywords")
     .limit(1)
     .single();
 
@@ -23,6 +23,7 @@ export async function GET() {
     autoSchedule: data?.auto_schedule ?? { enabled: false, days: [], hour: 9 },
     qualityThresholds: data?.quality_thresholds ?? { auto_publish: 8, staging: 5 },
     companyContext: data?.company_context ?? "",
+    focusKeywords: data?.focus_keywords ?? [],
   });
 }
 
@@ -30,7 +31,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
-  const { categories, carouselSec, categorySettings, levelPrompts, autoSchedule, qualityThresholds, companyContext } = await req.json();
+  const { categories, carouselSec, categorySettings, levelPrompts, autoSchedule, qualityThresholds, companyContext, focusKeywords } = await req.json();
   const supabase = createAdminClient();
 
   const { data: existing } = await supabase
@@ -47,6 +48,7 @@ export async function POST(req: NextRequest) {
     ...(autoSchedule !== undefined && { auto_schedule: autoSchedule }),
     ...(qualityThresholds !== undefined && { quality_thresholds: qualityThresholds }),
     ...(companyContext !== undefined && { company_context: companyContext }),
+    ...(focusKeywords !== undefined && { focus_keywords: focusKeywords }),
   };
 
   if (existing?.id) {
