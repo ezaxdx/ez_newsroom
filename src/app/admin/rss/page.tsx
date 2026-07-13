@@ -64,11 +64,22 @@ const TYPE_META = {
   },
 };
 
+// 가중치 3단계 (내부값: 큐레이션 품질점수 가산에 사용)
+const WEIGHT_TIERS = [
+  { label: "중요", value: 8 },
+  { label: "보통", value: 5 },
+  { label: "낮음", value: 2 },
+] as const;
+function weightLabel(w: number): string {
+  return w >= 7 ? "중요" : w >= 4 ? "보통" : "낮음";
+}
+
 export default function RssPage() {
   const [sources, setSources] = useState<RssSource[]>([]);
   const [categories, setCategories] = useState<string[]>(["AI", "MICE", "TOURISM"]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showAdvancedTypes, setShowAdvancedTypes] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
@@ -129,14 +140,11 @@ export default function RssPage() {
   // 카테고리 필터
   const [filterCat, setFilterCat] = useState("ALL");
   const allCats = ["ALL", ...Array.from(new Set(sources.map((s) => s.default_category))).sort()];
-  const filteredSources = filterCat === "ALL" ? sources : sources.filter((s) => s.default_category === filterCat);
-
-  // 유형별 소스 분리 (필터 적용) — active 소스 우선 정렬
-  const activeFirst = (a: { is_active: boolean }, b: { is_active: boolean }) => Number(b.is_active) - Number(a.is_active);
-  const rssSources = filteredSources.filter((s) => (s.source_type ?? "rss") === "rss").sort(activeFirst);
-  const urlSources = filteredSources.filter((s) => s.source_type === "url").sort(activeFirst);
-  const apiSources = filteredSources.filter((s) => s.source_type === "api").sort(activeFirst);
-  const gmailSources = filteredSources.filter((s) => s.source_type === "gmail").sort(activeFirst);
+  // 카테고리 필터 + 활성 우선 + weight 높은 순
+  const activeFirst = (a: { is_active: boolean; weight: number }, b: { is_active: boolean; weight: number }) =>
+    Number(b.is_active) - Number(a.is_active) || (b.weight ?? 0) - (a.weight ?? 0);
+  const filteredSources = (filterCat === "ALL" ? sources : sources.filter((s) => s.default_category === filterCat))
+    .slice().sort(activeFirst);
 
   const meta = TYPE_META[form.source_type];
 
@@ -171,8 +179,12 @@ export default function RssPage() {
             <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
               소스 유형
             </label>
-            <div className="flex gap-2 flex-wrap">
-              {(["rss", "url", "api", "gmail"] as const).map((type) => {
+            <div className="flex gap-2 flex-wrap items-center">
+              {/* 기본 유형(rss/url) + 고급 시 api/gmail 노출 */}
+              {(showAdvancedTypes
+                ? (["rss", "url", "api", "gmail"] as const)
+                : (["rss", "url"] as const)
+              ).map((type) => {
                 const m = TYPE_META[type];
                 const Icon = m.icon;
                 const isSelected = form.source_type === type;
@@ -198,6 +210,15 @@ export default function RssPage() {
                   </button>
                 );
               })}
+              {!showAdvancedTypes && (
+                <button
+                  onClick={() => setShowAdvancedTypes(true)}
+                  className="text-xs px-2 py-2"
+                  style={{ background: "transparent", border: "none", color: "var(--on-surface-variant)", cursor: "pointer", textDecoration: "underline" }}
+                >
+                  + 고급 (API·Gmail)
+                </button>
+              )}
             </div>
             <p className="text-[0.7rem] m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
               {meta.hint}
@@ -245,13 +266,25 @@ export default function RssPage() {
             </div>
             <div className="flex flex-col gap-1">
               <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
-                신뢰도 가중치 ({form.weight})
+                중요도
               </label>
-              <input
-                type="range" min={1} max={10} value={form.weight}
-                onChange={(e) => setForm((f) => ({ ...f, weight: Number(e.target.value) }))}
-                className="w-full mt-2"
-              />
+              <div className="flex gap-1.5 mt-1">
+                {WEIGHT_TIERS.map((t) => {
+                  const on = weightLabel(form.weight) === t.label;
+                  return (
+                    <button key={t.label}
+                      onClick={() => setForm((f) => ({ ...f, weight: t.value }))}
+                      className="flex-1 h-8 rounded-md text-xs font-semibold transition-colors"
+                      style={{
+                        background: on ? "var(--primary)" : "var(--surface-container-low)",
+                        color: on ? "#fff" : "var(--on-surface-variant)",
+                        border: "none", cursor: "pointer",
+                      }}>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -473,78 +506,10 @@ export default function RssPage() {
           등록된 소스가 없습니다.
         </div>
       ) : (
-        <div className="flex flex-col gap-8">
-          {/* RSS 피드 섹션 */}
-          {rssSources.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Rss size={13} style={{ color: "var(--on-surface-variant)" }} />
-                <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
-                  style={{ color: "var(--on-surface-variant)" }}>
-                  RSS 피드 <span className="ml-1 opacity-60">({rssSources.length})</span>
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {rssSources.map((source) => (
-                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 직접 URL 섹션 */}
-          {urlSources.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Link size={13} style={{ color: "var(--on-surface-variant)" }} />
-                <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
-                  style={{ color: "var(--on-surface-variant)" }}>
-                  직접 URL <span className="ml-1 opacity-60">({urlSources.length})</span>
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {urlSources.map((source) => (
-                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 공공 API 섹션 */}
-          {apiSources.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Database size={13} style={{ color: "#0891b2" }} />
-                <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
-                  style={{ color: "#0891b2" }}>
-                  공공 API <span className="ml-1 opacity-60">({apiSources.length})</span>
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {apiSources.map((source) => (
-                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Gmail 뉴스레터 섹션 */}
-          {gmailSources.length > 0 && (
-            <section>
-              <div className="flex items-center gap-2 mb-3">
-                <Mail size={13} style={{ color: "#ea4335" }} />
-                <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
-                  style={{ color: "#ea4335" }}>
-                  Gmail 뉴스레터 <span className="ml-1 opacity-60">({gmailSources.length})</span>
-                </p>
-              </div>
-              <div className="flex flex-col gap-2">
-                {gmailSources.map((source) => (
-                  <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-                ))}
-              </div>
-            </section>
-          )}
+        <div className="flex flex-col gap-2">
+          {filteredSources.map((source) => (
+            <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
+          ))}
         </div>
       )}
 
@@ -554,15 +519,15 @@ export default function RssPage() {
         </p>
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>소스 타입</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>RSS 피드</strong> — URL 등록 시 최신 기사 최대 3개 자동 수집</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>RSS 피드</strong> — URL 등록 시 최신 기사 최대 10개 자동 수집 (언론사 전체 피드는 키워드 필터 권장)</li>
           <li><strong style={{ color: "var(--on-surface)" }}>직접 URL</strong> — 특정 기사 1건만 분석·등록</li>
           <li><strong style={{ color: "var(--on-surface)" }}>Gmail 뉴스레터</strong> — 발신자 이메일 기반 자동 파싱</li>
           <li><strong style={{ color: "var(--on-surface)" }}>공공 API</strong> — 한국관광공사 등 공공데이터 연동</li>
         </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>가중치</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>중요도</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>1~10 설정, 높을수록 품질 점수에 가산</li>
-          <li>공고·홍보성 소스는 낮게, 분석·인사이트 소스는 높게 설정 권장</li>
+          <li>중요/보통/낮음 — 높을수록 품질 점수에 가산</li>
+          <li>공고·홍보성 소스는 낮음, 분석·인사이트 소스는 중요로 설정 권장</li>
         </ul>
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>활성/비활성</p>
         <ul style={{ paddingLeft: 16 }}>
@@ -600,23 +565,8 @@ function SourceCard({
     keyword_filter: source.keyword_filter ?? false,
   });
 
-  // 가중치 단독 편집 제거 (전체 편집으로 통합)
-  const [editingWeight, setEditingWeight] = useState(false);
+  // 중요도(weight)는 편집 폼에서만 수정 — 인라인 표시용 값
   const [weight, setWeight] = useState(source.weight);
-  const [savingWeight, setSavingWeight] = useState(false);
-
-  const saveWeight = async () => {
-    if (weight === source.weight) { setEditingWeight(false); return; }
-    setSavingWeight(true);
-    await fetch("/api/admin/rss", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: source.id, weight }),
-    });
-    setSavingWeight(false);
-    setEditingWeight(false);
-    onUpdate({ ...source, weight });
-  };
 
   const saveEdit = async () => {
     setSaving(true);
@@ -674,14 +624,20 @@ function SourceCard({
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
-                가중치 ({editForm.weight})
-              </label>
-              <input
-                type="range" min={1} max={10} value={editForm.weight}
-                onChange={(e) => setEditForm((f) => ({ ...f, weight: Number(e.target.value) }))}
-                className="mt-2"
-              />
+              <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>중요도</label>
+              <div className="flex gap-1.5 mt-1">
+                {WEIGHT_TIERS.map((t) => {
+                  const on = weightLabel(editForm.weight) === t.label;
+                  return (
+                    <button key={t.label}
+                      onClick={() => setEditForm((f) => ({ ...f, weight: t.value }))}
+                      className="flex-1 h-8 rounded-md text-xs font-semibold transition-colors"
+                      style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "#fff" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
+                      {t.label}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
           {type === "rss" && (
@@ -759,51 +715,15 @@ function SourceCard({
         )}
       </div>
 
-      {/* 가중치 */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        {editingWeight ? (
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium" style={{ color: "var(--on-surface-variant)" }}>가중치</span>
-            <input
-              type="range" min={1} max={10} value={weight}
-              onChange={(e) => setWeight(Number(e.target.value))}
-              className="w-20"
-              autoFocus
-            />
-            <span className="text-xs font-bold w-4">{weight}</span>
-            <button
-              onClick={saveWeight}
-              disabled={savingWeight}
-              className="h-6 px-2 rounded text-[0.65rem] font-semibold"
-              style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
-            >
-              {savingWeight ? "..." : "저장"}
-            </button>
-            <button
-              onClick={() => { setEditingWeight(false); setWeight(source.weight); }}
-              className="h-6 px-2 rounded text-[0.65rem] font-semibold"
-              style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)", border: "none", cursor: "pointer" }}
-            >
-              취소
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setEditingWeight(true)}
-            className="flex items-center gap-2 transition-opacity hover:opacity-70"
-            style={{ background: "transparent", border: "none", cursor: "pointer" }}
-            title="클릭해서 가중치 변경"
-          >
-            <span className="text-xs font-medium" style={{ color: "var(--on-surface-variant)" }}>가중치</span>
-            <div className="flex gap-0.5">
-              {Array.from({ length: 10 }, (_, i) => (
-                <span key={i} className="w-1.5 h-4 rounded-sm"
-                  style={{ background: i < weight ? "var(--primary)" : "var(--surface-container-highest)" }} />
-              ))}
-            </div>
-            <span className="text-xs font-bold w-4">{weight}</span>
-          </button>
-        )}
+      {/* 중요도 배지 (수정은 편집 버튼에서) */}
+      <div className="flex-shrink-0">
+        <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide"
+          style={{
+            background: weight >= 7 ? "var(--primary)" : "var(--surface-container-highest)",
+            color: weight >= 7 ? "#fff" : "var(--on-surface-variant)",
+          }}>
+          {weightLabel(weight)}
+        </span>
       </div>
 
       <div className="flex items-center gap-1">
