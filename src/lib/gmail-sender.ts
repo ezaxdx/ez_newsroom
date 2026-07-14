@@ -57,9 +57,10 @@ export function makeRawMessage(params: {
   html: string;
   unsubscribeUrl?: string;
 }): string {
-  const boundary = `boundary_${Date.now()}`;
+  const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const adminEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
   const unsubMailto = `mailto:${adminEmail}?subject=%EB%AC%B8%EC%9D%98%ED%95%98%EA%B8%B0`;
+  const domain = adminEmail.split("@")[1] ?? "gmail.com";
 
   // plain text: HTML 태그 제거 후 간단한 fallback
   const plainText = params.html
@@ -69,11 +70,19 @@ export function makeRawMessage(params: {
     .trim()
     .slice(0, 500);
 
+  // Date/Message-ID 누락, 전형적 1:1 개인메일 헤더 형태는 대량발송 스팸필터에 취약함.
+  // 정상적인 뉴스레터/사내공지 메일임을 밝히는 표준 헤더를 명시적으로 채움
+  // (수신거부 자동화 기능과는 무관 — mailto는 기존 그대로 유지)
+  const messageId = `<${Date.now()}.${Math.random().toString(36).slice(2)}@${domain}>`;
   const headers = [
     `From: ${params.from}`,
     `To: ${params.to}`,
     `Subject: =?UTF-8?B?${Buffer.from(params.subject).toString("base64")}?=`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: ${messageId}`,
     `List-Unsubscribe: <${unsubMailto}>`,
+    `List-ID: EZ Letter <ez-letter.${domain}>`,
+    "Precedence: bulk",
     "MIME-Version: 1.0",
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
