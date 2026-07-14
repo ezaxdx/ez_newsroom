@@ -32,12 +32,20 @@ export async function POST(req: NextRequest) {
     published_at: new Date().toISOString(),
   };
 
-  // original_url이 있으면 upsert — 같은 URL로 이미 저장된 기사가 있으면
-  // (삭제 반영 지연·재수집 등으로) 새로 만들지 않고 내용을 덮어써 재발행 가능하게 함
-  const { data, error } = payload.original_url
-    ? await supabase.from("news").upsert(payload, { onConflict: "original_url" }).select().single()
-    : await supabase.from("news").insert(payload).select().single();
+  // 항상 신규 insert — 같은 URL의 살아있는 기사를 실수로 덮어쓰지 않기 위함.
+  // 큐레이션 보드에서 실제로 삭제(+저장)된 URL은 행이 사라진 상태라 그대로 재작성 가능하고,
+  // 아직 삭제되지 않은(=살아있는) URL이면 유니크 제약으로 막혀 안전하게 실패함.
+  const { data, error } = await supabase.from("news").insert(payload).select().single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    // 유니크 제약 위반(23505) = 같은 URL 기사가 아직 존재함 → 친절한 안내로 교체
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "이미 등록된 URL입니다. 큐레이션 보드에서 해당 기사를 삭제하고 '변경사항 저장'까지 완료한 뒤 다시 시도하세요." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ data });
 }
