@@ -210,7 +210,7 @@ export async function POST(req: NextRequest) {
   const ninetyDaysLater = new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   const { data: eventsPool } = await supabase.from("convention_events")
-    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description")
+    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description, is_ezpmp_pick")
     .eq("is_published", true).neq("is_concurrent", true)
     .gte("start_date", todayStr).lte("start_date", ninetyDaysLater)
     .order("start_date", { ascending: true }).limit(200);
@@ -266,7 +266,12 @@ export async function POST(req: NextRequest) {
       }))
       .sort((a, b) => a.start_date.localeCompare(b.start_date));
   } else {
-    // ── 스코어링 알고리즘으로 새 Pick 선정 ──
+    // ── 어드민 ⭐ 픽 최우선 + 남는 자리는 기존 스코어링 알고리즘으로 채움 ──
+    // (홈 캘린더·행사 캘린더와 동일한 우선순위 원칙: is_ezpmp_pick > 자동 점수)
+    const manualPicks = scored.filter(e => e.is_ezpmp_pick).slice(0, 4);
+    const pickedIds = new Set(manualPicks.map(e => e.id));
+    const autoSlots = Math.max(0, 4 - manualPicks.length);
+
     const { data: recentIssues } = await supabase.from("newsletter_issues")
       .select("featured_event_ids").in("status", ["sent", "partial"])
       .order("sent_at", { ascending: false }).limit(2);
@@ -275,18 +280,19 @@ export async function POST(req: NextRequest) {
     );
     const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
-    const seenIds = new Set<string>(); const pickPool: typeof fresh = [];
+    const candidatePool = scored.filter(e => !pickedIds.has(e.id));
+    const fresh = candidatePool.filter(e => !recentlyFeatured.has(e.id));
+    const seenIds = new Set<string>(pickedIds); const pickPool: typeof fresh = [];
     for (const e of [
       ...fresh.filter(e => e.start_date <= d14),
       ...fresh.filter(e => e.start_date > d14 && e.start_date <= d30),
       ...fresh.filter(e => e.start_date > d30),
-      ...scored,
+      ...candidatePool,
     ]) {
-      if (pickPool.length >= 4) break;
+      if (pickPool.length >= autoSlots) break;
       if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
     }
-    featuredRaw = pickPool.slice(0, 4)
+    featuredRaw = [...manualPicks, ...pickPool.slice(0, autoSlots)]
       .sort((a, b) => a.start_date.localeCompare(b.start_date))
       .map(e => ({
         id: e.id,
