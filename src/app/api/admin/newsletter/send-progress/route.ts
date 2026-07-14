@@ -37,7 +37,8 @@ export async function GET() {
   const totalSent = sentSet.size;
   const targetCount = allEmails.length;
   const remainingCount = allEmails.filter(e => !sentSet.has(e)).length;
-  const round = Math.ceil(totalSent / 50) || 1;
+  const BATCH_LIMIT = 25; // /api/admin/newsletter/send route.ts의 BATCH_LIMIT과 동일하게 유지
+  const round = Math.ceil(totalSent / BATCH_LIMIT) || 1;
 
   return NextResponse.json({
     ok: true,
