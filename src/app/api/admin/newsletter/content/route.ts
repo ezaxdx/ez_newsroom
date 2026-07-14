@@ -59,7 +59,7 @@ export async function GET() {
 
   const { data: eventsPool } = await supabase
     .from("convention_events")
-    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description")
+    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description, is_ezpmp_pick")
     .eq("is_published", true)
     .neq("is_concurrent", true)   // 동시개최 행사 제외 (메인 행사만)
     .gte("start_date", todayStr)
@@ -107,22 +107,34 @@ export async function GET() {
     (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
   );
 
-  // Pick 선정: 14일 이내 우선 → 부족하면 30일 이내로 보충 → 그래도 부족하면 90일 전체로 보충
+  // 실제 발송(send/route.ts)과 동일한 원칙: 어드민 ⭐ 픽 최우선 + 근거리(45일 이내)
+  // 제한 + 남는 자리는 자동 점수로 보충. 이 엔드포인트는 발송 전 인트로 문구 작성을
+  // 돕기 위한 미리보기용이라, 실제 발송 결과와 어긋나면 안 됨.
+  const NEAR_TERM_DAYS = 45;
+  const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const scoredNearTerm = scored.filter(e => e.start_date <= nearTermEnd);
+
+  const manualPicks = scoredNearTerm.filter(e => e.is_ezpmp_pick).slice(0, 4);
+  const pickedIds = new Set(manualPicks.map(e => e.id));
+  const autoSlots = Math.max(0, 4 - manualPicks.length);
+
+  // Pick 선정: 14일 이내 우선 → 부족하면 30일 이내로 보충 → 그래도 부족하면 45일 전체로 보충
   // ※ 전체 교체가 아닌 보충 방식 — 가까운 날짜 행사가 항상 우선 포함됨
   const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const fresh = scored.filter(e => !recentlyFeatured.has(e.id));
+  const candidatePool = scoredNearTerm.filter(e => !pickedIds.has(e.id));
+  const fresh = candidatePool.filter(e => !recentlyFeatured.has(e.id));
   const near = fresh.filter(e => e.start_date <= d14);
   const mid  = fresh.filter(e => e.start_date > d14 && e.start_date <= d30);
   const far  = fresh.filter(e => e.start_date > d30);
-  const seenIds = new Set<string>();
+  const seenIds = new Set<string>(pickedIds);
   const pickPool: typeof fresh = [];
-  for (const e of [...near, ...mid, ...far, ...scored]) {
-    if (pickPool.length >= 4) break;
+  for (const e of [...near, ...mid, ...far, ...candidatePool]) {
+    if (pickPool.length >= autoSlots) break;
     if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
   }
-  const _debug = { d14, d30, near: near.length, mid: mid.length, far: far.length, near_top5: near.slice(0,5).map(e => `${e.event_name}(${e.start_date},${e._score})`), pick: pickPool.map(e => `${e.event_name}(${e.start_date})`) };
-  const featuredRaw = pickPool.slice(0, 4).sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const _debug = { d14, d30, near: near.length, mid: mid.length, far: far.length, manual_picks: manualPicks.map(e => e.event_name), near_top5: near.slice(0,5).map(e => `${e.event_name}(${e.start_date},${e._score})`), pick: pickPool.map(e => `${e.event_name}(${e.start_date})`) };
+  const featuredRaw = [...manualPicks, ...pickPool.slice(0, autoSlots)].sort((a, b) => a.start_date.localeCompare(b.start_date));
 
   // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시
   const descMap = await fillEventDescriptions(
