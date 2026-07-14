@@ -223,7 +223,8 @@ export default function CurationBoard({
       if (json.message) {
         setRunResult(`⏳ ${json.message}`);
       } else {
-        setRunResult(`✅ 생성 ${json.created}건 / 중복 건너뜀 ${json.skipped}건 / 실패 ${json.failed}건`);
+        const budgetNote = json.budget_exceeded ? " · ⚠️ 시간예산 초과로 일부 소스 스킵됨" : "";
+        setRunResult(`✅ 발행 ${json.published}건 / 대기 ${json.staged}건 / 스킵 ${json.skipped}건 / 실패 ${json.failed}건${budgetNote}`);
       }
       router.refresh();
     } catch (e) {

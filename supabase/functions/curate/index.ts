@@ -644,6 +644,25 @@ Deno.serve(async (req) => {
     const t = title.toLowerCase();
     return focusKeywords.some((kw) => t.includes(kw));
   };
+
+  // 키워드 → 카테고리 매핑 (언론사 전체피드는 소스 고정 카테고리가 아니라
+  // 실제 매칭된 키워드 기준으로 카테고리를 재배정해야 함 — 안 그러면
+  // "AI" 매칭 기사가 MICE로 등록된 연합뉴스에서 그대로 MICE로 들어가는 등 카테고리가 섞임)
+  const KEYWORD_CATEGORY_MAP: Record<string, string> = {
+    "mice": "MICE", "마이스": "MICE", "전시회": "MICE", "박람회": "MICE",
+    "엑스포": "MICE", "국제회의": "MICE", "컨벤션": "MICE",
+    "관광": "TOURISM", "스마트관광": "TOURISM", "글로컬관광": "TOURISM",
+    "ai관광": "TOURISM", "관광공사": "TOURISM", "여행": "TOURISM",
+    "ai": "AI", "인공지능": "AI", "ax": "AI", "dx": "AI", "디지털전환": "AI", "스마트": "AI",
+  };
+  // 제목에 매칭된 키워드 중 카테고리 매핑이 있는 첫 키워드로 재배정, 없으면 폴백(소스 기본 카테고리)
+  function resolveArticleCategory(title: string, fallback: string): string {
+    const t = title.toLowerCase();
+    for (const kw of focusKeywords) {
+      if (t.includes(kw) && KEYWORD_CATEGORY_MAP[kw]) return KEYWORD_CATEGORY_MAP[kw];
+    }
+    return fallback;
+  }
   const PER_SOURCE_LIMIT = 10; // 소스당 처리 상한 (필터 후)
 
   const { data: existingNews } = await supabase.from("news").select("original_url");
@@ -676,17 +695,19 @@ Deno.serve(async (req) => {
       break;
     }
     const category = source.default_category.toUpperCase();
-    const setting = catSettings[category] ?? {
-      audience: "MICE·관광 업계 종사자",
-      persona: `당신은 ${category} 전문 에디터입니다. 업계 종사자 관점에서 핵심 시사점을 분석합니다.`,
-      keywords: [],
-    };
-    const catLevelPrompts = allLevelPrompts[category] ?? {};
     const stat = { name: source.source_name, type: source.source_type, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0 };
     sourceStats.push(stat);
 
-    const insertArticle = async (articleText: string, url: string, image_url: string | null, pubDate?: string) => {
+    const insertArticle = async (articleText: string, url: string, image_url: string | null, pubDate?: string, categoryOverride?: string) => {
       stat.fetched++;
+      // 키워드 필터 소스는 실제 매칭된 키워드 기준 카테고리로 재배정 (일반 소스는 고정 카테고리 그대로)
+      const cat = categoryOverride ?? category;
+      const setting = catSettings[cat] ?? {
+        audience: "MICE·관광 업계 종사자",
+        persona: `당신은 ${cat} 전문 에디터입니다. 업계 종사자 관점에서 핵심 시사점을 분석합니다.`,
+        keywords: [],
+      };
+      const catLevelPrompts = allLevelPrompts[cat] ?? {};
       // 원문이 너무 짧으면 (봇 차단·접근 불가) 스킵 — 환각 기사 방지
       if (articleText.length < 200) {
         console.log(`[SKIP] 원문 너무 짧음 (${articleText.length}자): ${url}`);
@@ -713,9 +734,9 @@ Deno.serve(async (req) => {
         title: generated.title, summary_short: generated.summary_short,
         content_long: generated.content_long, implications: generated.implications,
         level: generated.level ?? "Intermediate",
-        image_url: image_url ?? getCategoryDefaultImage(category),
+        image_url: image_url ?? getCategoryDefaultImage(cat),
         original_url: url,
-        category, quality_score: score,
+        category: cat, quality_score: score,
         quality_criteria: generated.quality_criteria ?? null,
         is_published: shouldAutoPublish,
         priority_score: source.weight * 10, display_order: 1000 - score * 10,
@@ -796,7 +817,9 @@ Deno.serve(async (req) => {
       for (const item of resolved) {
         if (existingUrls.has(item.link)) { results.skipped++; continue; }
         const { text: articleText, image_url } = await fetchArticleData(item.link);
-        await insertArticle(articleText, item.link, image_url, item.pubDate);
+        // 키워드 필터 소스는 매칭된 키워드 기준으로 카테고리 재배정 (소스 고정 카테고리 무시)
+        const categoryOverride = source.keyword_filter ? resolveArticleCategory(item.title, category) : undefined;
+        await insertArticle(articleText, item.link, image_url, item.pubDate, categoryOverride);
       }
     } catch (e) {
       console.error(`[RSS 실패] ${source.source_name}:`, e);
@@ -807,7 +830,7 @@ Deno.serve(async (req) => {
   const durationMs = Date.now() - runStart;
   const fetched = sourceStats.reduce((s, r) => s + r.fetched, 0);
   console.log(`[완료] published:${results.published} staged:${results.staged} skipped:${results.skipped} failed:${results.failed} (${durationMs}ms)`);
-  await supabase.from("curation_logs").insert({
+  const { error: logError } = await supabase.from("curation_logs").insert({
     duration_ms: durationMs,
     fetched,
     published: results.published,
@@ -818,6 +841,7 @@ Deno.serve(async (req) => {
     source_stats: sourceStats,
     errors: budgetExceeded ? [...runErrors, { source: "(시스템)", error: "시간예산 초과로 일부 소스 스킵" }] : runErrors,
   });
+  if (logError) console.error("[curation_logs insert 실패]", logError.message);
   return new Response(JSON.stringify({ ok: true, ...results, budget_exceeded: budgetExceeded, duration_ms: durationMs }), {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
   });
