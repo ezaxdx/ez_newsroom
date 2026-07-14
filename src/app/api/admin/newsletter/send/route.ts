@@ -236,6 +236,12 @@ export async function POST(req: NextRequest) {
   const scored = Array.from(venueDateMap.values())
     .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
 
+  // 추천행사(Pick)는 "이번 달~다음 달 초" 근거리 행사만 소개 — 발송 시점 기준 45일 이내
+  // (전체 스코어 풀 90일 중 먼 미래 행사가 뽑히지 않도록 별도 제한)
+  const NEAR_TERM_DAYS = 45;
+  const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const scoredNearTerm = scored.filter(e => e.start_date <= nearTermEnd);
+
   // 같은 날(KST) 이미 발송된 호가 있으면 그 Pick 행사를 그대로 재사용 → 같은 호는 항상 같은 Pick
   const existingFeaturedIds = (todayIssues?.[0]?.featured_event_ids as string[] | null) ?? [];
 
@@ -268,7 +274,7 @@ export async function POST(req: NextRequest) {
   } else {
     // ── 어드민 ⭐ 픽 최우선 + 남는 자리는 기존 스코어링 알고리즘으로 채움 ──
     // (홈 캘린더·행사 캘린더와 동일한 우선순위 원칙: is_ezpmp_pick > 자동 점수)
-    const manualPicks = scored.filter(e => e.is_ezpmp_pick).slice(0, 4);
+    const manualPicks = scoredNearTerm.filter(e => e.is_ezpmp_pick).slice(0, 4);
     const pickedIds = new Set(manualPicks.map(e => e.id));
     const autoSlots = Math.max(0, 4 - manualPicks.length);
 
@@ -280,7 +286,7 @@ export async function POST(req: NextRequest) {
     );
     const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const candidatePool = scored.filter(e => !pickedIds.has(e.id));
+    const candidatePool = scoredNearTerm.filter(e => !pickedIds.has(e.id));
     const fresh = candidatePool.filter(e => !recentlyFeatured.has(e.id));
     const seenIds = new Set<string>(pickedIds); const pickPool: typeof fresh = [];
     for (const e of [
