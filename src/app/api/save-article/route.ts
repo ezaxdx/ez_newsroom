@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   const supabase = createClient(supabaseUrl, serviceKey);
-  const { data, error } = await supabase.from("news").insert({
+  const payload = {
     title: body.title,
     summary_short: body.summary_short,
     content_long: body.content_long,
@@ -30,7 +30,13 @@ export async function POST(req: NextRequest) {
     priority_score: 100,
     display_order: 0,
     published_at: new Date().toISOString(),
-  }).select().single();
+  };
+
+  // original_url이 있으면 upsert — 같은 URL로 이미 저장된 기사가 있으면
+  // (삭제 반영 지연·재수집 등으로) 새로 만들지 않고 내용을 덮어써 재발행 가능하게 함
+  const { data, error } = payload.original_url
+    ? await supabase.from("news").upsert(payload, { onConflict: "original_url" }).select().single()
+    : await supabase.from("news").insert(payload).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ data });
