@@ -655,11 +655,17 @@ Deno.serve(async (req) => {
     "ai관광": "TOURISM", "관광공사": "TOURISM", "여행": "TOURISM",
     "ai": "AI", "인공지능": "AI", "ax": "AI", "dx": "AI", "디지털전환": "AI", "스마트": "AI",
   };
-  // 제목에 매칭된 키워드 중 카테고리 매핑이 있는 첫 키워드로 재배정, 없으면 폴백(소스 기본 카테고리)
+  // 긴 키워드부터 검사 (짧은 범용어가 복합어보다 먼저 걸려 오분류되는 것 방지 —
+  // 예: "AI 관광" 기사가 "AI관광" 매칭 실패 후 짧은 "AI"에 먼저 걸려 관광 기사가 AI로 잘못 분류되는 문제)
+  const categoryMappedKeywords = focusKeywords
+    .filter((kw) => KEYWORD_CATEGORY_MAP[kw])
+    .sort((a, b) => b.length - a.length);
+  // 제목에 매칭된 키워드 중 카테고리 매핑이 있는 것으로 재배정, 없으면 폴백(소스 기본 카테고리)
+  // 소스 유형(keyword_filter 여부)과 무관하게 항상 "실제 내용"을 기준으로 카테고리를 정함
   function resolveArticleCategory(title: string, fallback: string): string {
     const t = title.toLowerCase();
-    for (const kw of focusKeywords) {
-      if (t.includes(kw) && KEYWORD_CATEGORY_MAP[kw]) return KEYWORD_CATEGORY_MAP[kw];
+    for (const kw of categoryMappedKeywords) {
+      if (t.includes(kw)) return KEYWORD_CATEGORY_MAP[kw];
     }
     return fallback;
   }
@@ -817,8 +823,10 @@ Deno.serve(async (req) => {
       for (const item of resolved) {
         if (existingUrls.has(item.link)) { results.skipped++; continue; }
         const { text: articleText, image_url } = await fetchArticleData(item.link);
-        // 키워드 필터 소스는 매칭된 키워드 기준으로 카테고리 재배정 (소스 고정 카테고리 무시)
-        const categoryOverride = source.keyword_filter ? resolveArticleCategory(item.title, category) : undefined;
+        // 소스 고정 카테고리가 아니라 실제 제목 내용으로 재배정
+        // (예: "Google News_MICE Tech"처럼 키워드 필터 없는 소스도 AI 기사를 물어올 수 있음 —
+        //  소스 유형과 무관하게 항상 내용 기준으로 분류해야 MICE/AI가 섞이지 않음)
+        const categoryOverride = resolveArticleCategory(item.title, category);
         await insertArticle(articleText, item.link, image_url, item.pubDate, categoryOverride);
       }
     } catch (e) {
