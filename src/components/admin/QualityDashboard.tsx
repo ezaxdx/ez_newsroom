@@ -185,7 +185,7 @@ function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color
 
 // ── 뉴스 정합성 탭 ─────────────────────────────────────────────────
 function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) {
-  const [issueFilter, setIssueFilter] = useState<"all" | "missing" | "dup" | "mismatch">("all");
+  const [issueFilter, setIssueFilter] = useState<"all" | "missing" | "mismatch">("all");
   const [showUnclassified, setShowUnclassified] = useState(false);
   const [togglingSource, setTogglingSource] = useState<string | null>(null);
   const [sourceList, setSourceList] = useState<RssSource[]>(sources);
@@ -193,19 +193,20 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
   const stats = useMemo(() => {
     const published = news.filter((n) => n.is_published);
     const pending = news.filter((n) => !n.is_published);
+    // 이번 주 신규 대기 — 대기열은 검토 안 된 채 무기한 누적되므로(대부분 사업영역 미부합으로
+    // 정상 필터링된 것) 전체 누적치 대신 "최근에 들어온 것"만 의미 있는 지표로 봄
+    const weekAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const pendingRecent = pending.filter((n) => new Date(n.published_at).getTime() >= weekAgo);
     // 이미지 없음은 제외 — ArticleImg 컴포넌트가 로고로 자동 대체하므로 이슈 아님
     const missingField = news.filter(
       (n) => !n.category || !n.summary_short
     );
-    const urlMap = new Map<string, number>();
-    news.forEach((n) => urlMap.set(n.original_url, (urlMap.get(n.original_url) ?? 0) + 1));
-    const duplicates = news.filter((n) => (urlMap.get(n.original_url) ?? 0) > 1);
-    const mismatch = news.filter(
-      (n) =>
-        (n.is_published && (n.quality_score ?? 10) < 4) ||
-        (!n.is_published && (n.quality_score ?? 0) >= 8)
-    );
-    return { total: news.length, published: published.length, pending: pending.length, missingField: missingField.length, duplicates: duplicates.length, mismatch: mismatch.length };
+    // URL 중복은 news.original_url UNIQUE 제약으로 DB 레벨에서 원천 차단됨 — 별도 집계 불필요
+    // "고품질이나 미발행"은 이슈가 아님 — 편집 판단(사업영역 미부합 등)으로 의도적으로
+    // 미발행한 경우가 대부분이라 이상치 탐지에서 제외. 자동발행 기준(8점) 미만인데
+    // 발행된 것만 진짜 이상 신호로 봄
+    const mismatch = news.filter((n) => n.is_published && (n.quality_score ?? 10) < 4);
+    return { total: news.length, published: published.length, pending: pending.length, pendingRecent: pendingRecent.length, missingField: missingField.length, mismatch: mismatch.length };
   }, [news]);
 
   // 사업영역 커버리지
@@ -231,22 +232,13 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
 
   // 이슈 목록
   const issueItems = useMemo(() => {
-    const urlMap = new Map<string, string[]>();
-    news.forEach((n) => {
-      const arr = urlMap.get(n.original_url) ?? [];
-      arr.push(n.id);
-      urlMap.set(n.original_url, arr);
-    });
-
     return news
       .map((n) => {
         const issues: string[] = [];
         // 이미지 없음은 제외 — ArticleImg 가 로고로 자동 대체
         if (!n.category) issues.push("카테고리 없음");
         if (!n.summary_short) issues.push("요약 없음");
-        if ((urlMap.get(n.original_url)?.length ?? 0) > 1) issues.push("URL 중복");
-        if (n.is_published && (n.quality_score ?? 10) < 4) issues.push("발행됐으나 저품질");
-        if (!n.is_published && (n.quality_score ?? 0) >= 8) issues.push("고품질이나 미발행");
+        if (n.is_published && (n.quality_score ?? 10) < 4) issues.push("저품질 발행");
 
         const text = `${n.title} ${n.summary_short ?? ""} ${n.category ?? ""}`;
         const domains = getDomains(text);
@@ -255,8 +247,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
       })
       .filter((n) => {
         if (issueFilter === "missing") return n.issues.some((i) => i.includes("없음"));
-        if (issueFilter === "dup") return n.issues.includes("URL 중복");
-        if (issueFilter === "mismatch") return n.issues.some((i) => i.includes("품질") || i.includes("미발행"));
+        if (issueFilter === "mismatch") return n.issues.includes("저품질 발행");
         return n.issues.length > 0;
       });
   }, [news, issueFilter]);
@@ -264,17 +255,16 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
   const statCards = [
     { label: "전체 기사", value: stats.total, color: "var(--on-surface)" },
     { label: "발행됨", value: stats.published, color: "#2563eb" },
-    { label: "대기 중", value: stats.pending, color: "#d97706" },
+    { label: "이번 주 신규 대기", value: stats.pendingRecent, color: "#d97706", desc: `전체 대기 ${stats.pending}건` },
     { label: "빠진 필드", value: stats.missingField, color: "#ef4444" },
-    { label: "URL 중복", value: stats.duplicates, color: "#dc2626" },
-    { label: "점수 불일치", value: stats.mismatch, color: "#9333ea" },
+    { label: "저품질 발행", value: stats.mismatch, color: "#9333ea" },
   ];
 
   return (
     <div>
       {/* 통계 카드 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 28 }}>
-        {statCards.map(({ label, value, color }) => (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 28 }}>
+        {statCards.map(({ label, value, color, desc }) => (
           <div key={label} style={{ padding: "14px 16px", borderRadius: 10,
             background: "var(--surface-container-lowest)",
             border: "1px solid var(--surface-container-high)" }}>
@@ -282,6 +272,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
               letterSpacing: "0.06em", textTransform: "uppercase",
               color: "var(--on-surface-variant)" }}>{label}</p>
             <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800, color }}>{value}</p>
+            {desc && <p style={{ margin: "2px 0 0", fontSize: "0.65rem", color: "var(--on-surface-variant)" }}>{desc}</p>}
           </div>
         ))}
       </div>
@@ -411,8 +402,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
           {[
             { key: "all" as const, label: "전체 이슈", count: issueItems.length, color: "#64748b" },
             { key: "missing" as const, label: "빠진 필드", count: news.filter(n => !n.category || !n.summary_short).length, color: "#ef4444" },
-            { key: "dup" as const, label: "URL 중복", count: stats.duplicates, color: "#dc2626" },
-            { key: "mismatch" as const, label: "점수 불일치", count: stats.mismatch, color: "#9333ea" },
+            { key: "mismatch" as const, label: "저품질 발행", count: stats.mismatch, color: "#9333ea" },
           ].map(({ key, label, count, color }) => (
             <button
               key={key}

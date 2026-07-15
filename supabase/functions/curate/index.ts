@@ -835,6 +835,18 @@ Deno.serve(async (req) => {
     }
   }
 
+  // 오래된 대기열(30일 이상 미발행) 자동 정리 — 검토 없이 무기한 누적되는 것 방지.
+  // published_at은 미발행 기사의 경우 원문 발행일(pubDate)이라 삽입 시점과 정확히 일치하진
+  // 않지만, RSS 특성상 수집 직후 값이라 충분히 근사치로 사용 가능.
+  const cleanupCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const { count: cleanedUp, error: cleanupError } = await supabase
+    .from("news")
+    .delete({ count: "exact" })
+    .eq("is_published", false)
+    .lt("published_at", cleanupCutoff);
+  if (cleanupError) console.error("[대기열 정리 실패]", cleanupError.message);
+  else if (cleanedUp) console.log(`[대기열 정리] 30일 경과 미발행 기사 ${cleanedUp}건 삭제`);
+
   const durationMs = Date.now() - runStart;
   const fetched = sourceStats.reduce((s, r) => s + r.fetched, 0);
   console.log(`[완료] published:${results.published} staged:${results.staged} skipped:${results.skipped} failed:${results.failed} (${durationMs}ms)`);
