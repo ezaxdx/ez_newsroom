@@ -394,7 +394,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "접속 수", "기사 클릭", "전환율", "원문 클릭", "평균 체류(초)", "관심도"].map((h) => (
+                {["카테고리", "접속 수", "기사 클릭", "원문 클릭", "평균 체류(초)", "관심도"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -402,9 +402,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             </thead>
             <tbody>
               {categories.map((cat) => {
-                const convRate = cat.page_views
-                  ? ((cat.detail_views / cat.page_views) * 100).toFixed(1)
-                  : "-";
                 return (
                   <tr key={cat.category} style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
                     <td className="py-3 pr-4 font-semibold">
@@ -415,7 +412,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                     </td>
                     <td className="py-3 pr-4">{cat.page_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.detail_views.toLocaleString()}</td>
-                    <td className="py-3 pr-4">{convRate === "-" ? "-" : `${convRate}%`}</td>
                     <td className="py-3 pr-4">{cat.outbound.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.avg_read_sec ? cat.avg_read_sec.toLocaleString() : "-"}</td>
                     <td className="py-3 pr-4 w-28">
@@ -559,8 +555,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리별 성과</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>접속 수</strong> — 해당 카테고리 아카이브 페이지(/category/AI 등) 방문 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>전환율</strong> — 카테고리 접속 대비 기사 클릭 비율. 접속 데이터가 없으면 "-"</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
 <li><strong style={{ color: "var(--on-surface)" }}>관심도</strong> — 기사 클릭 수 기준 카테고리 간 상대 비율. 가장 높은 카테고리가 100%</li>
         </ul>
