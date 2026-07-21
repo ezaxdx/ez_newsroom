@@ -174,9 +174,15 @@ export default function RssPage() {
     }
   };
 
-  // 카테고리 필터
+  // 카테고리 필터 — MICE, TOURISM, EZPMP, AI 고정 순서 + 전체는 맨 뒤
   const [filterCat, setFilterCat] = useState("ALL");
-  const allCats = ["ALL", ...Array.from(new Set(sources.map((s) => s.default_category))).sort()];
+  const CATEGORY_ORDER = ["MICE", "TOURISM", "EZPMP", "AI"];
+  const presentCats = Array.from(new Set(sources.map((s) => s.default_category)));
+  const orderedCats = [
+    ...CATEGORY_ORDER.filter((c) => presentCats.includes(c)),
+    ...presentCats.filter((c) => !CATEGORY_ORDER.includes(c)).sort(),
+  ];
+  const allCats = [...orderedCats, "ALL"];
   // 카테고리 필터 + 활성 우선 + weight 높은 순
   const activeFirst = (a: { is_active: boolean; weight: number }, b: { is_active: boolean; weight: number }) =>
     Number(b.is_active) - Number(a.is_active) || (b.weight ?? 0) - (a.weight ?? 0);
