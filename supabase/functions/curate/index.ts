@@ -334,6 +334,52 @@ async function fetchApiData(
   }
 }
 
+/* ── 네이버 뉴스 검색 API ── */
+// 정식 인증 API라 구글뉴스처럼 IP 차단/타임아웃 위험이 없음.
+// source.url을 검색어로 사용 (예: "MICE", "스마트관광"). 인증은 HTTP 헤더로 전달.
+
+function stripNaverMarkup(s: string): string {
+  return s
+    .replace(/<\/?b>/g, "")
+    .replace(/&quot;/g, '"').replace(/&apos;/g, "'")
+    .replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&amp;/g, "&")
+    .trim();
+}
+
+async function fetchNaverNews(query: string): Promise<{ title: string; link: string; pubDate: string }[]> {
+  const clientId = Deno.env.get("NAVER_CLIENT_ID");
+  const clientSecret = Deno.env.get("NAVER_CLIENT_SECRET");
+  if (!clientId || !clientSecret) {
+    console.log("[네이버뉴스] NAVER_CLIENT_ID/SECRET 환경변수 없음 — 스킵");
+    return [];
+  }
+  try {
+    const params = new URLSearchParams({ query, display: "20", sort: "date" });
+    const res = await fetch(`https://openapi.naver.com/v1/search/news.json?${params.toString()}`, {
+      headers: {
+        "X-Naver-Client-Id": clientId,
+        "X-Naver-Client-Secret": clientSecret,
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) {
+      console.log(`[네이버뉴스] "${query}" API 오류 ${res.status}`);
+      return [];
+    }
+    const json = await res.json();
+    const items = Array.isArray(json.items) ? json.items : [];
+    return items.map((it: { title?: string; originallink?: string; link?: string; pubDate?: string }) => ({
+      title: stripNaverMarkup(it.title ?? ""),
+      // 원문 URL 우선, 없으면 네이버뉴스 링크
+      link: it.originallink || it.link || "",
+      pubDate: it.pubDate ?? "",
+    })).filter((it: { title: string; link: string }) => it.title && it.link);
+  } catch (e) {
+    console.log(`[네이버뉴스] "${query}" 요청 실패:`, (e as Error).message);
+    return [];
+  }
+}
+
 /* ── Gmail 토큰 복호화 (AES-GCM) ── */
 function hexToBytes(hex: string): Uint8Array {
   const bytes = new Uint8Array(hex.length / 2);
@@ -791,6 +837,25 @@ Deno.serve(async (req) => {
         }
       } catch (e) {
         console.error(`[Gmail 실패]`, e);
+        results.failed++;
+      }
+      continue;
+    }
+
+    if (source.source_type === "naver_news") {
+      // source.url = 검색어 (예: "MICE", "스마트관광"). 인증 API라 구글뉴스와 달리 IP 차단 없음.
+      try {
+        const naverItems = (await fetchNaverNews(source.url)).slice(0, PER_SOURCE_LIMIT);
+        console.log(`[네이버뉴스] "${source.url}": ${naverItems.length}개`);
+        for (const item of naverItems) {
+          if (existingUrls.has(item.link)) { results.skipped++; continue; }
+          const { text: articleText, image_url } = await fetchArticleData(item.link);
+          // 검색어 기반 소스라 실제 제목 내용으로 카테고리 재배정 (RSS와 동일 원칙)
+          const categoryOverride = resolveArticleCategory(item.title, category);
+          await insertArticle(articleText, item.link, image_url, item.pubDate, categoryOverride);
+        }
+      } catch (e) {
+        console.error(`[네이버뉴스 실패] ${source.source_name}:`, e);
         results.failed++;
       }
       continue;

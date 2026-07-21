@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Mail, Pencil, Check, X as XIcon } from "lucide-react";
+import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Mail, Search, Pencil, Check, X as XIcon } from "lucide-react";
 import HelpPanel from "@/components/admin/HelpPanel";
 import { RssSource, ApiConfig, GmailConfig } from "@/lib/types";
 
@@ -24,7 +24,7 @@ const EMPTY_FORM = {
   source_name: "",
   weight: 3,
   default_category: "AI",
-  source_type: "rss" as "rss" | "url" | "api" | "gmail",
+  source_type: "rss" as "rss" | "url" | "api" | "gmail" | "naver_news",
   api_config: EMPTY_API_CONFIG as ApiConfig | GmailConfig,
   keyword_filter: false,
 };
@@ -61,6 +61,14 @@ const TYPE_META = {
     color: "#fff",
     placeholder: "gmail://yozm-it",
     hint: "Gmail로 수신한 뉴스레터에서 기사를 자동 수집합니다. 먼저 관리자 > 뉴스레터 > Gmail 연동에서 인증을 완료하세요.",
+  },
+  naver_news: {
+    label: "네이버뉴스 검색",
+    icon: Search,
+    bg: "#03c75a",
+    color: "#fff",
+    placeholder: "MICE",
+    hint: "네이버 뉴스 검색 API로 검색어 매칭 기사를 수집합니다. 정식 인증 API라 구글뉴스와 달리 IP 차단이 없습니다. Supabase에 NAVER_CLIENT_ID/NAVER_CLIENT_SECRET 환경변수 등록이 필요합니다.",
   },
 };
 
@@ -266,10 +274,10 @@ export default function RssPage() {
               소스 유형
             </label>
             <div className="flex gap-2 flex-wrap items-center">
-              {/* 기본 유형(rss/url) + 고급 시 api/gmail 노출 */}
+              {/* 기본 유형(rss/url/네이버뉴스) + 고급 시 api/gmail 노출 */}
               {(showAdvancedTypes
-                ? (["rss", "url", "api", "gmail"] as const)
-                : (["rss", "url"] as const)
+                ? (["rss", "url", "naver_news", "api", "gmail"] as const)
+                : (["rss", "url", "naver_news"] as const)
               ).map((type) => {
                 const m = TYPE_META[type];
                 const Icon = m.icon;
@@ -315,7 +323,7 @@ export default function RssPage() {
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
               <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
-                {form.source_type === "rss" ? "RSS URL" : form.source_type === "api" ? "API Base URL" : form.source_type === "gmail" ? "식별자 (자동 입력됨)" : "기사 URL"}
+                {form.source_type === "rss" ? "RSS URL" : form.source_type === "api" ? "API Base URL" : form.source_type === "gmail" ? "식별자 (자동 입력됨)" : form.source_type === "naver_news" ? "검색어" : "기사 URL"}
               </label>
               <input
                 value={form.url}
@@ -639,7 +647,7 @@ function SourceCard({
   onRemove: (id: string) => void;
   onUpdate: (s: RssSource) => void;
 }) {
-  const type = (source.source_type ?? "rss") as "rss" | "url" | "api" | "gmail";
+  const type = (source.source_type ?? "rss") as "rss" | "url" | "api" | "gmail" | "naver_news";
   const Icon = TYPE_META[type].icon;
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
