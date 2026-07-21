@@ -35,13 +35,17 @@ const REFERRER_HOST_LABEL: { match: string; label: string }[] = [
   { match: "aigate.ezpmp.co.kr", label: "사내 AIGate" },
 ];
 
+// 사람이 아닌 자동화 트래픽(링크 미리보기 봇·모니터링·헤드리스 크롤러) 판별용 — 직접 접속과 구분 표시
+const BOT_UA_PATTERN = /bot|crawler|spider|headlesschrome|vercel-screenshot|google-app-companion/i;
+
 function getSiteHost(): string {
   try { return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app").hostname; }
   catch { return ""; }
 }
 
-/** utm_source 우선, 없으면 referrer 호스트로 유입경로 판별. 둘 다 없으면 직접 접속 */
-function detectSource(utmSource: string | null, referrer: string | null, siteHost: string): string {
+/** utm_source 우선, 없으면 referrer 호스트로 유입경로 판별. 봇 UA는 별도 라벨로 분리. 둘 다 없으면 직접 접속 */
+function detectSource(utmSource: string | null, referrer: string | null, siteHost: string, userAgent: string | null): string {
+  if (userAgent && BOT_UA_PATTERN.test(userAgent)) return "봇/크롤러(자동수집)";
   if (utmSource) {
     const raw = utmSource.toLowerCase();
     return SOURCE_LABEL[raw] ?? utmSource; // 매핑 없는 커스텀 utm 값은 원문 그대로 표시
@@ -93,7 +97,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("news_id, read_sec").eq("event_type", "read_time").not("news_id", "is", null).limit(5000), from, to),
       // 접속 수 = 카테고리 아카이브 방문(view+category) + 홈 피드 노출(category_view)
       applyDate(db.from("user_logs").select("category").in("event_type", ["view", "category_view"]).not("category", "is", null).limit(5000), from, to),
-      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer").eq("event_type", "view").limit(5000), from, to),
+      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
       applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
     ]);
@@ -108,7 +112,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     const siteHost = getSiteHost();
     const refMap: Record<string, number> = {};
     for (const log of sourceLogs ?? []) {
-      const label = detectSource(log.utm_source, log.referrer, siteHost);
+      const label = detectSource(log.utm_source, log.referrer, siteHost, log.user_agent);
       refMap[label] = (refMap[label] ?? 0) + 1;
     }
     const referrers = Object.entries(refMap)
@@ -388,7 +392,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          접속 수 = 카테고리 아카이브 페이지 방문 + 홈 피드에 노출된 횟수
+          접속 수 = 홈 피드에 노출된 횟수 + 카테고리 아카이브 페이지 방문
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -564,6 +568,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li>UTM 파라미터가 있으면 우선 사용 (카카오톡, 뉴스레터, SNS 등)</li>
           <li>UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘</li>
           <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
+          <li><strong style={{ color: "var(--on-surface)" }}>봇/크롤러(자동수집)</strong> — 링크 미리보기 봇(카카오톡 등)·모니터링·헤드리스 브라우저 접속을 사람 트래픽과 구분해 표시 (총 접속 수 집계에서 제외되진 않음)</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>행사 클릭 · 평균 체류시간</p>
