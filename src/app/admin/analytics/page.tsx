@@ -591,6 +591,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
           <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초). 탭이 백그라운드에 있는 동안은 카운트 제외</li>
           <li>카테고리별 성과 표의 "평균 체류(초)"는 이것과 다름 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계</li>
+          <li style={{ marginTop: 6 }}><strong style={{ color: "var(--on-surface)" }}>어떻게 측정하나</strong>
+            <ul style={{ paddingLeft: 16, marginTop: 4 }}>
+              <li>홈 화면 진입 시점에 타이머 시작, 탭이 백그라운드로 전환되면(Page Visibility API) 자동으로 일시정지 — 딴 짓하는 시간은 제외</li>
+              <li>탭을 닫거나 다른 사이트로 이동하면(pagehide) <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>navigator.sendBeacon()</code>으로 마지막 순간까지 반영해 전송 — 일반 요청과 달리 페이지가 사라져도 유실 없이 도착</li>
+              <li>사이트 내 다른 화면으로 이동(카테고리 페이지 등)해도 벗어나는 순간 지금까지 누적된 시간을 기록</li>
+              <li>자리비움 등으로 인한 이상치 방지를 위해 최대 30분까지만 인정</li>
+            </ul>
+          </li>
         </ul>
       </HelpPanel>
     </div>
