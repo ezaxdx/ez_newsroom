@@ -175,7 +175,7 @@ export default function RssPage() {
   };
 
   // 카테고리 필터 — MICE, TOURISM, EZPMP, AI 고정 순서 + 전체는 맨 뒤
-  const [filterCat, setFilterCat] = useState("ALL");
+  const [filterCat, setFilterCat] = useState("MICE");
   const CATEGORY_ORDER = ["MICE", "TOURISM", "EZPMP", "AI"];
   const presentCats = Array.from(new Set(sources.map((s) => s.default_category)));
   const orderedCats = [
