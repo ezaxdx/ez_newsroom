@@ -542,7 +542,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           뉴스룸 독자의 행동 데이터를 자동 수집·분석합니다. 별도 설정 없이 방문자 발생 시 즉시 기록됩니다.
         </p>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>KPI 카드</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>1. KPI 카드</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>총 접속 수</strong> — 메인 페이지(뉴스룸 홈) 방문 횟수. 새로고침·재방문 포함</li>
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수</li>
@@ -550,27 +550,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li><strong style={{ color: "var(--on-surface)" }}>전체 전환율</strong> — 메인 접속 대비 원문 클릭 비율 (접속 → 원문 클릭)</li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>인게이지먼트 퍼널</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>2. 인게이지먼트 퍼널</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 순으로 전환율 확인</li>
           <li>기사 클릭률이 높을수록 콘텐츠 제목·요약의 흡입력이 좋은 것</li>
           <li>원문 클릭률이 높을수록 인사이트 콘텐츠 품질이 높은 것</li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리별 성과</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>접속 수</strong> — 카테고리 아카이브 페이지(/category/AI 등) 방문 + 홈 화면에 해당 카테고리 콘텐츠가 노출된 페이지 로드 수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
-        </ul>
-
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>인기 검색어</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>뉴스룸 상단 검색창에서 실행된 검색어를 빈도순으로 집계</li>
-          <li>독자가 관심 갖는 키워드 파악 및 콘텐츠 기획에 활용</li>
-        </ul>
-
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>트래픽 소스</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>3. 트래픽 소스</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li>UTM 파라미터가 있으면 우선 사용 (카카오톡, 뉴스레터, SNS 등)</li>
           <li>UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘</li>
@@ -584,7 +571,20 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>행사 클릭 · 평균 체류시간</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 카테고리별 성과</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>접속 수</strong> — 카테고리 아카이브 페이지(/category/AI 등) 방문 + 홈 화면에 해당 카테고리 콘텐츠가 노출된 페이지 로드 수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>5. 인기 검색어</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>뉴스룸 상단 검색창에서 실행된 검색어를 빈도순으로 집계</li>
+          <li>독자가 관심 갖는 키워드 파악 및 콘텐츠 기획에 활용</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 행사 클릭 · 평균 체류시간</p>
         <ul style={{ paddingLeft: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
           <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 기사 인사이트 모달을 열어본 평균 시간(초). 카테고리별 성과 표에서도 개별 확인 가능</li>
