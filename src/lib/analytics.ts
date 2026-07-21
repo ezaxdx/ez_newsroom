@@ -21,6 +21,21 @@ function getUtmParams() {
   };
 }
 
+/**
+ * 페이지 이탈(탭 닫기·다른 사이트 이동) 순간에 호출 — 일반 fetch는 이탈 중 취소될 수 있어
+ * navigator.sendBeacon()으로 같은 출처 API 라우트(/api/log-beacon)에 안정적으로 전송.
+ */
+export function logReadTimeBeacon(news_id: string, read_sec: number) {
+  if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") return;
+  try {
+    const blob = new Blob([JSON.stringify({ news_id, read_sec })], { type: "application/json" });
+    navigator.sendBeacon("/api/log-beacon", blob);
+  } catch {
+    // beacon 실패는 무시
+  }
+}
+
 export async function logEvent(payload: LogPayload) {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return;
   // 로컬 개발 환경에서는 로그 기록 안 함

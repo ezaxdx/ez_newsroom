@@ -1,0 +1,31 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+
+// 공개 엔드포인트 — navigator.sendBeacon()으로 페이지 이탈(탭 닫기·다른 사이트 이동) 시에도
+// 안정적으로 체류시간 로그를 전송하기 위한 전용 경로. sendBeacon은 커스텀 헤더를 못 붙이므로
+// 같은 출처(same-origin) API 라우트로 받아서 서버가 대신 기록한다.
+// read_time 하나만 허용 — 임의 쓰기 방지 위해 payload를 엄격히 제한.
+
+const MAX_READ_SEC = 600; // 10분 — 이상치 방어
+
+export async function POST(req: NextRequest) {
+  try {
+    const body = await req.json();
+    const news_id = typeof body.news_id === "string" ? body.news_id : null;
+    const read_sec = typeof body.read_sec === "number" ? body.read_sec : null;
+    if (!news_id || !read_sec || read_sec < 1) {
+      return NextResponse.json({ ok: false }, { status: 400 });
+    }
+
+    const supabase = createAdminClient();
+    await supabase.from("user_logs").insert({
+      event_type: "read_time",
+      news_id,
+      read_sec: Math.min(Math.round(read_sec), MAX_READ_SEC),
+    });
+    return NextResponse.json({ ok: true });
+  } catch {
+    // 이탈 시 전송이라 실패해도 사용자에게 알릴 방법이 없음 — 조용히 무시
+    return NextResponse.json({ ok: false }, { status: 500 });
+  }
+}

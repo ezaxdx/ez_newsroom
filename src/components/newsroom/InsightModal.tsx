@@ -3,12 +3,14 @@
 import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import { NewsItem } from "@/lib/types";
-import { logEvent } from "@/lib/analytics";
+import { logEvent, logReadTimeBeacon } from "@/lib/analytics";
 
 type Props = {
   item: NewsItem | null;
   onClose: () => void;
 };
+
+const MAX_READ_SEC = 600; // 10분 — 이상치 방어 (자리비움 등으로 과도하게 긴 값 캡)
 
 export default function InsightModal({ item, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
@@ -17,21 +19,64 @@ export default function InsightModal({ item, onClose }: Props) {
   useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
 
   // ── 열람 시간 측정 ──
-  const openTimeRef  = useRef<number | null>(null);
-  const prevItemRef  = useRef<NewsItem | null>(null);
+  // 탭이 보이는 동안만 누적(백그라운드/자리비움 시간 제외) + 탭 닫기·이탈도 beacon으로 포착
+  const prevItemRef       = useRef<NewsItem | null>(null);
+  const accumulatedSecRef = useRef(0);
+  const visibleSinceRef   = useRef<number | null>(null);
+
+  const flushVisibleSegment = () => {
+    if (visibleSinceRef.current != null) {
+      accumulatedSecRef.current += (Date.now() - visibleSinceRef.current) / 1000;
+      visibleSinceRef.current = null;
+    }
+  };
+  const computeTotalSec = () => {
+    let sec = accumulatedSecRef.current;
+    if (visibleSinceRef.current != null) sec += (Date.now() - visibleSinceRef.current) / 1000;
+    return Math.min(Math.round(sec), MAX_READ_SEC);
+  };
+
   useEffect(() => {
     if (item) {
-      openTimeRef.current = Date.now();
-    } else if (openTimeRef.current && prevItemRef.current) {
-      const sec = Math.round((Date.now() - openTimeRef.current) / 1000);
+      // 모달 열림 — 누적 초기화, 탭이 지금 보이는 상태라면 그때부터 카운트 시작
+      accumulatedSecRef.current = 0;
+      visibleSinceRef.current = typeof document !== "undefined" && document.visibilityState === "visible"
+        ? Date.now() : null;
+    } else if (prevItemRef.current) {
+      // 명시적으로 닫힘(X·배경클릭·ESC) — 마지막 구간 반영 후 일반 로깅
+      flushVisibleSegment();
+      const sec = computeTotalSec();
       if (sec >= 1) {
         logEvent({ event_type: "read_time", news_id: prevItemRef.current.id, read_sec: sec });
       }
-      openTimeRef.current = null;
+      accumulatedSecRef.current = 0;
     }
     prevItemRef.current = item;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item]);
+
+  // 탭 포커스 전환 — 백그라운드 동안은 타이머 정지, 복귀 시 재개
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (!prevItemRef.current) return; // 모달 닫혀있으면 무관
+      if (document.hidden) flushVisibleSegment();
+      else if (visibleSinceRef.current == null) visibleSinceRef.current = Date.now();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, []);
+
+  // 탭 닫기·다른 사이트 이동 — React 클로즈 이펙트가 못 도는 케이스라 beacon으로 별도 포착
+  useEffect(() => {
+    const handlePageHide = () => {
+      if (!prevItemRef.current) return;
+      flushVisibleSegment();
+      const sec = computeTotalSec();
+      if (sec >= 1) logReadTimeBeacon(prevItemRef.current.id, sec);
+    };
+    window.addEventListener("pagehide", handlePageHide);
+    return () => window.removeEventListener("pagehide", handlePageHide);
+  }, []);
 
   useEffect(() => {
     const dialog = dialogRef.current;
