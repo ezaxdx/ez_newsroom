@@ -203,63 +203,6 @@ export default function RssPage() {
         </button>
       </div>
 
-      {/* ── 관심 키워드 관리 ── */}
-      <div className="mb-6 rounded-lg overflow-hidden" style={{ border: "1px solid var(--surface-container-highest)" }}>
-        <button
-          onClick={() => setKeywordsOpen((o) => !o)}
-          className="w-full flex items-center justify-between px-4 py-3"
-          style={{ background: "var(--surface-container)", border: "none", cursor: "pointer" }}
-        >
-          <span className="text-sm font-semibold">🔍 관심 키워드 ({focusKeywords.length})</span>
-          <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>{keywordsOpen ? "▲" : "▼"}</span>
-        </button>
-        {keywordsOpen && (
-          <div className="p-4">
-            <p className="text-xs mb-3" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-              &quot;키워드 필터&quot;가 켜진 RSS 소스(언론사 전체 피드 등)는 제목에 아래 키워드가 하나라도 포함된 기사만 수집합니다.
-              배포 없이 바로 반영됩니다.
-            </p>
-            <div className="flex gap-2 mb-3">
-              <input
-                value={newKeyword}
-                onChange={(e) => setNewKeyword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && addFocusKeyword()}
-                placeholder="예: MICE, 스마트관광, AX"
-                className="flex-1 h-8 px-3 rounded-md text-sm outline-none"
-                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
-              />
-              <button
-                onClick={addFocusKeyword}
-                disabled={!newKeyword.trim() || savingKeywords}
-                className="h-8 px-4 rounded-md text-sm font-semibold"
-                style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
-              >
-                추가
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {focusKeywords.length === 0 && (
-                <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>등록된 키워드가 없습니다.</span>
-              )}
-              {focusKeywords.map((kw) => (
-                <span key={kw}
-                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
-                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}>
-                  {kw}
-                  <button
-                    onClick={() => removeFocusKeyword(kw)}
-                    className="flex items-center justify-center"
-                    style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--on-surface-variant)" }}
-                  >
-                    <XIcon size={11} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* ── 추가 폼 ── */}
       {showForm && (
         <div
@@ -401,13 +344,13 @@ export default function RssPage() {
           {/* Gmail 전용 설정 */}
           {form.source_type === "gmail" && (
             <div className="flex flex-col gap-3 p-4 rounded-lg" style={{ background: "var(--surface-container-low)" }}>
-              <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "#ea4335" }}>
+              <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "var(--on-surface-variant)" }}>
                 Gmail 설정
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1 col-span-2">
                   <label className="text-[0.7rem] font-semibold uppercase tracking-wide" style={{ color: "var(--on-surface-variant)" }}>
-                    발신자 이메일 <span style={{ color: "#ea4335" }}>*</span>
+                    발신자 이메일 <span style={{ color: "var(--on-surface-variant)" }}>*</span>
                   </label>
                   <input
                     value={(form.api_config as GmailConfig).sender_filter}
@@ -415,7 +358,7 @@ export default function RssPage() {
                     placeholder="admin@wishket.com"
                     className="h-8 px-3 rounded-md text-sm outline-none"
                     style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#ea4335")}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                     onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                   />
                 </div>
@@ -429,7 +372,7 @@ export default function RssPage() {
                     placeholder="요즘IT"
                     className="h-8 px-3 rounded-md text-sm outline-none"
                     style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#ea4335")}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                     onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                   />
                 </div>
@@ -446,7 +389,7 @@ export default function RssPage() {
               </div>
               <p className="text-[0.65rem] m-0" style={{ color: "var(--on-surface-variant)" }}>
                 최근 7일 이내 수신된 이메일에서 기사 링크를 추출합니다.
-                <a href="/admin/gmail" style={{ color: "#ea4335", marginLeft: 6 }}>Gmail 연동 상태 확인 →</a>
+                <a href="/admin/gmail" style={{ color: "var(--primary)", marginLeft: 6 }}>Gmail 연동 상태 확인 →</a>
               </p>
             </div>
           )}
@@ -456,7 +399,7 @@ export default function RssPage() {
             const apiCfg = form.api_config as ApiConfig;
             return (
             <div className="flex flex-col gap-3 p-4 rounded-lg" style={{ background: "var(--surface-container-low)" }}>
-              <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "#0891b2" }}>
+              <p className="text-[0.7rem] font-semibold uppercase tracking-wide m-0" style={{ color: "var(--on-surface-variant)" }}>
                 API 설정
               </p>
               <div className="grid grid-cols-2 gap-3">
@@ -470,7 +413,7 @@ export default function RssPage() {
                     placeholder="/areaTouDivList"
                     className="h-8 px-3 rounded-md text-sm outline-none"
                     style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                     onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                   />
                 </div>
@@ -484,7 +427,7 @@ export default function RssPage() {
                     placeholder="TOURAPI_SERVICE_KEY"
                     className="h-8 px-3 rounded-md text-sm outline-none"
                     style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                     onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                   />
                 </div>
@@ -498,7 +441,7 @@ export default function RssPage() {
                     placeholder="response.body.items.item"
                     className="h-8 px-3 rounded-md text-sm outline-none"
                     style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                     onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                   />
                 </div>
@@ -512,7 +455,7 @@ export default function RssPage() {
                     placeholder="지역별 관광객 연령대 다양성 데이터"
                     className="h-8 px-3 rounded-md text-sm outline-none"
                     style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
-                    onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                    onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                     onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                   />
                 </div>
@@ -530,7 +473,7 @@ export default function RssPage() {
                   }}
                   className="px-3 py-2 rounded-md text-xs outline-none font-mono"
                   style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)", resize: "vertical" }}
-                  onFocus={(e) => (e.currentTarget.style.borderColor = "#0891b2")}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
                   onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
                 />
               </div>
@@ -600,12 +543,79 @@ export default function RssPage() {
           등록된 소스가 없습니다.
         </div>
       ) : (
-        <div className="flex flex-col gap-2">
-          {filteredSources.map((source) => (
-            <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-          ))}
+        <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--surface-container-highest)" }}>
+          {/* 테이블 헤더 */}
+          <div className="grid items-center gap-3 px-4 py-2"
+            style={{ gridTemplateColumns: "28px 1fr 90px 64px 40px 76px", background: "var(--surface-container)" }}>
+            {["", "소스", "카테고리", "중요도", "", ""].map((h, i) => (
+              <span key={i} className="text-[0.65rem] font-semibold uppercase tracking-wide"
+                style={{ color: "var(--on-surface-variant)" }}>{h}</span>
+            ))}
+          </div>
+          <div className="flex flex-col">
+            {filteredSources.map((source) => (
+              <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
+            ))}
+          </div>
         </div>
       )}
+
+      {/* ── 관심 키워드 관리 (자주 안 쓰는 설정 — 목록 아래로 이동) ── */}
+      <div className="mt-6 mb-6">
+        <button
+          onClick={() => setKeywordsOpen((o) => !o)}
+          className="flex items-center gap-1.5 text-xs"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--on-surface-variant)" }}
+        >
+          <span>🔍 관심 키워드 설정 ({focusKeywords.length})</span>
+          <span>{keywordsOpen ? "▲" : "▼"}</span>
+        </button>
+        {keywordsOpen && (
+          <div className="mt-2 p-4 rounded-lg" style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-highest)" }}>
+            <p className="text-xs mb-3" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+              &quot;키워드 필터&quot;가 켜진 RSS 소스(언론사 전체 피드 등)는 제목에 아래 키워드가 하나라도 포함된 기사만 수집합니다.
+              배포 없이 바로 반영됩니다.
+            </p>
+            <div className="flex gap-2 mb-3">
+              <input
+                value={newKeyword}
+                onChange={(e) => setNewKeyword(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && addFocusKeyword()}
+                placeholder="예: MICE, 스마트관광, AX"
+                className="flex-1 h-8 px-3 rounded-md text-sm outline-none"
+                style={{ background: "var(--surface-container-low)", border: "1px solid transparent", color: "var(--on-surface)" }}
+              />
+              <button
+                onClick={addFocusKeyword}
+                disabled={!newKeyword.trim() || savingKeywords}
+                className="h-8 px-4 rounded-md text-sm font-semibold"
+                style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+              >
+                추가
+              </button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {focusKeywords.length === 0 && (
+                <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>등록된 키워드가 없습니다.</span>
+              )}
+              {focusKeywords.map((kw) => (
+                <span key={kw}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium"
+                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)" }}>
+                  {kw}
+                  <button
+                    onClick={() => removeFocusKeyword(kw)}
+                    className="flex items-center justify-center"
+                    style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--on-surface-variant)" }}
+                  >
+                    <XIcon size={11} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
 
       <HelpPanel title="RSS 소스 매니저 가이드">
         <p style={{ marginBottom: 12 }}>
@@ -615,8 +625,9 @@ export default function RssPage() {
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>RSS 피드</strong> — URL 등록 시 최신 기사 최대 10개 자동 수집 (언론사 전체 피드는 키워드 필터 권장)</li>
           <li><strong style={{ color: "var(--on-surface)" }}>직접 URL</strong> — 특정 기사 1건만 분석·등록</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>Gmail 뉴스레터</strong> — 발신자 이메일 기반 자동 파싱</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>공공 API</strong> — 한국관광공사 등 공공데이터 연동</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>네이버뉴스 검색</strong> — 검색어(예: MICE) 매칭 기사 자동 수집, IP 차단 없는 정식 API</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>Gmail 뉴스레터</strong> — 발신자 이메일 기반 자동 파싱 (고급)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>공공 API</strong> — 한국관광공사 등 공공데이터 연동 (고급)</li>
         </ul>
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>중요도</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
@@ -767,79 +778,69 @@ function SourceCard({
         </div>
       )}
 
-      {/* ── 카드 기본 뷰 ── */}
-      <div className="flex items-center gap-4 p-4">
-      {/* 유형 아이콘 */}
-      <div
-        className="flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center"
-        style={{ background: TYPE_META[type].bg }}
-      >
-        <Icon size={13} style={{ color: TYPE_META[type].color }} />
-      </div>
-
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-0.5">
-          <p className="font-semibold text-sm m-0">{editForm.source_name}</p>
-          <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
-            style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>
-            {editForm.default_category}
-          </span>
-          {source.keyword_filter && (
-            <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide"
-              style={{ background: "#2563eb18", color: "#2563eb" }}
-              title="관심 키워드 매칭 기사만 수집">
-              🔍 키워드필터
-            </span>
-          )}
+      {/* ── 테이블 행 ── */}
+      <div className="grid items-center gap-3 px-4 py-2.5"
+        style={{
+          gridTemplateColumns: "28px 1fr 90px 64px 40px 76px",
+          borderTop: "1px solid var(--surface-container-highest)",
+        }}>
+        {/* 유형 아이콘 */}
+        <div className="w-7 h-7 rounded-md flex items-center justify-center"
+          style={{ background: TYPE_META[type].bg }} title={TYPE_META[type].label}>
+          <Icon size={13} style={{ color: TYPE_META[type].color }} />
         </div>
-        <a
-          href={editForm.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs truncate block transition-opacity hover:opacity-60"
-          style={{ color: "var(--on-surface-variant)", textDecoration: "none", maxWidth: "38ch" }}
-          title={editForm.url}
-        >
-          {editForm.url}{type === "api" && source.api_config && "endpoint" in source.api_config ? source.api_config.endpoint : ""}
-        </a>
-        {type === "api" && source.api_config && "context_hint" in source.api_config && source.api_config.context_hint && (
-          <p className="text-[0.65rem] m-0 mt-0.5 truncate" style={{ color: "#0891b2", maxWidth: "38ch" }}>
-            {source.api_config.context_hint}
-          </p>
-        )}
-      </div>
 
-      {/* 중요도 배지 (수정은 편집 버튼에서) */}
-      <div className="flex-shrink-0">
-        <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide"
-          style={{
-            background: weight >= 7 ? "var(--primary)" : "var(--surface-container-highest)",
-            color: weight >= 7 ? "#fff" : "var(--on-surface-variant)",
-          }}>
+        {/* 이름 + URL/검색어 */}
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5">
+            <p className="font-semibold text-sm m-0 truncate">{editForm.source_name}</p>
+            {source.keyword_filter && (
+              <span title="관심 키워드 매칭 기사만 수집" style={{ color: "#2563eb", fontSize: "0.7rem", flexShrink: 0 }}>🔍</span>
+            )}
+          </div>
+          <a
+            href={editForm.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs truncate block transition-opacity hover:opacity-60"
+            style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
+            title={editForm.url}
+          >
+            {editForm.url}{type === "api" && source.api_config && "endpoint" in source.api_config ? source.api_config.endpoint : ""}
+          </a>
+        </div>
+
+        {/* 카테고리 (플레인 텍스트 — 배지 남발 방지) */}
+        <span className="text-xs truncate" style={{ color: "var(--on-surface-variant)" }}>{editForm.default_category}</span>
+
+        {/* 중요도 */}
+        <span className="text-xs font-semibold" style={{ color: weight >= 7 ? "var(--primary)" : "var(--on-surface-variant)" }}>
           {weightLabel(weight)}
         </span>
-      </div>
 
-      <div className="flex items-center gap-1">
-        <button
-          onClick={() => { setEditing(!editing); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight, keyword_filter: source.keyword_filter ?? false }); }}
-          className="p-1.5 rounded transition-colors"
-          title="수정"
-          style={{ background: editing ? "var(--surface-container-highest)" : "transparent", border: "none", cursor: "pointer" }}
-        >
-          <Pencil size={14} style={{ color: editing ? "var(--primary)" : "var(--on-surface-variant)" }} />
-        </button>
+        {/* 상태 토글 */}
         <button onClick={() => onToggle(source)} style={{ background: "transparent", border: "none", cursor: "pointer" }}>
           {source.is_active
             ? <ToggleRight size={20} style={{ color: "var(--primary)" }} />
             : <ToggleLeft size={20} style={{ color: "var(--on-surface-variant)" }} />}
         </button>
-        <button onClick={() => onRemove(source.id)} className="p-1.5 rounded"
-          style={{ background: "transparent", border: "none", cursor: "pointer" }}>
-          <Trash2 size={14} style={{ color: "#dc2626" }} />
-        </button>
+
+        {/* 수정/삭제 */}
+        <div className="flex items-center gap-1 justify-end">
+          <button
+            onClick={() => { setEditing(!editing); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight, keyword_filter: source.keyword_filter ?? false }); }}
+            className="p-1.5 rounded transition-colors"
+            title="수정"
+            style={{ background: editing ? "var(--surface-container-highest)" : "transparent", border: "none", cursor: "pointer" }}
+          >
+            <Pencil size={14} style={{ color: editing ? "var(--primary)" : "var(--on-surface-variant)" }} />
+          </button>
+          <button onClick={() => onRemove(source.id)} className="p-1.5 rounded"
+            style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+            <Trash2 size={14} style={{ color: "#dc2626" }} />
+          </button>
+        </div>
       </div>
-    </div>
     </div>
   );
 }
