@@ -296,7 +296,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
-        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="인사이트 모달 열람" />
+        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="인사이트 모달 열람 · 데이터 수집 중" />
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
@@ -392,7 +392,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          접속 수 = 홈 피드에 노출된 횟수 + 카테고리 아카이브 페이지 방문
+          접속 수 = 홈 피드에 노출된 횟수 + 카테고리 아카이브 페이지 방문 · 평균 체류(초)는 데이터 수집 중
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
