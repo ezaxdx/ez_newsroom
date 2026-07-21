@@ -33,6 +33,14 @@ export default function NewsroomClient({
 
   useEffect(() => {
     logEvent({ event_type: "view" });
+    // 홈 피드에 노출된 카테고리별로도 기록 — 카테고리 아카이브 페이지를 안 거치고
+    // 메인에서 바로 소비되는 콘텐츠도 "카테고리별 성과"에 잡히게 함
+    const shownCats = new Set([
+      ...categoryGroups.map((g) => g.label),
+      ...heroSlides.map((s) => s.category),
+    ]);
+    shownCats.forEach((category) => logEvent({ event_type: "category_view", category }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleOpen = useCallback((item: NewsItem) => {

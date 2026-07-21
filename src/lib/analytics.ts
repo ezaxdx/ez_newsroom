@@ -1,6 +1,8 @@
 import { createClient } from "@/lib/supabase/client";
 
-export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search";
+// category_view: 홈 피드에 해당 카테고리 콘텐츠가 노출된 페이지 로드 1회당 카테고리 수만큼 기록.
+// "view"(총 접속 수 KPI 집계 대상)와 분리해 총 접속 수 지표가 부풀려지지 않게 함.
+export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search" | "category_view";
 
 type LogPayload = {
   event_type: EventType;
