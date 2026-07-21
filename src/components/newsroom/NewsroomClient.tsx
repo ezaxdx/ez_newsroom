@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { NewsItem } from "@/lib/types";
-import { logEvent } from "@/lib/analytics";
+import { logEvent, logSessionTimeBeacon } from "@/lib/analytics";
 import HeroCarousel from "./HeroCarousel";
 import FeedBlock from "./FeedBlock";
 import InsightModal from "./InsightModal";
@@ -22,6 +22,8 @@ type Props = {
 const LEVELS = ["Total", "Beginner", "Intermediate", "Advanced"] as const;
 type LevelFilter = typeof LEVELS[number];
 
+const MAX_SESSION_SEC = 1800; // 30분 — 자리비움 등 이상치 방어
+
 export default function NewsroomClient({
   heroSlides,
   categoryGroups,
@@ -30,6 +32,11 @@ export default function NewsroomClient({
 }: Props) {
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("Total");
+
+  // ── 홈 화면 전체 체류시간 측정 ── 진입 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지로 라우팅)까지
+  // 탭이 보이는 동안만 누적(백그라운드 제외). 인사이트 모달의 read_time과는 별개 지표.
+  const accumulatedSecRef = useRef(0);
+  const visibleSinceRef   = useRef<number | null>(null);
 
   useEffect(() => {
     logEvent({ event_type: "view" });
@@ -40,6 +47,42 @@ export default function NewsroomClient({
       ...heroSlides.map((s) => s.category),
     ]);
     shownCats.forEach((category) => logEvent({ event_type: "category_view", category }));
+
+    accumulatedSecRef.current = 0;
+    visibleSinceRef.current = document.visibilityState === "visible" ? Date.now() : null;
+
+    const flushVisibleSegment = () => {
+      if (visibleSinceRef.current != null) {
+        accumulatedSecRef.current += (Date.now() - visibleSinceRef.current) / 1000;
+        visibleSinceRef.current = null;
+      }
+    };
+    const computeTotalSec = () => {
+      let sec = accumulatedSecRef.current;
+      if (visibleSinceRef.current != null) sec += (Date.now() - visibleSinceRef.current) / 1000;
+      return Math.min(Math.round(sec), MAX_SESSION_SEC);
+    };
+    const handleVisibility = () => {
+      if (document.hidden) flushVisibleSegment();
+      else if (visibleSinceRef.current == null) visibleSinceRef.current = Date.now();
+    };
+    const handlePageHide = () => {
+      flushVisibleSegment();
+      const sec = computeTotalSec();
+      if (sec >= 1) logSessionTimeBeacon(sec);
+      accumulatedSecRef.current = 0;
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("pagehide", handlePageHide);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener("pagehide", handlePageHide);
+      // 탭 닫기가 아니라 클라이언트 라우팅으로 벗어나는 경우 pagehide가 안 뜨므로 언마운트 시에도 반영
+      flushVisibleSegment();
+      const sec = computeTotalSec();
+      if (sec >= 1) logEvent({ event_type: "session_time", read_sec: sec });
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

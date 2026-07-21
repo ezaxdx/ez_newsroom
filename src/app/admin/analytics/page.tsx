@@ -81,7 +81,8 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       { data: articles },
       { data: detailLogs },    // detail_view with news_id → 카테고리/기사 집계
       { data: outboundLogs },  // outbound_click with news_id
-      { data: readLogs },      // read_time with read_sec
+      { data: readLogs },      // read_time with read_sec (기사 모달 열람 — 카테고리별 성과용)
+      { data: sessionLogs },   // session_time with read_sec (홈 화면 전체 체류 — KPI 카드용)
       { data: catViewLogs },   // view with category (아카이브 페이지)
       { data: sourceLogs },    // 유입 경로 판별용 — utm 유무와 무관하게 전체 view
       { data: searchLogs },    // 검색어
@@ -95,6 +96,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "detail_view").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "outbound_click").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("news_id, read_sec").eq("event_type", "read_time").not("news_id", "is", null).limit(5000), from, to),
+      applyDate(db.from("user_logs").select("read_sec").eq("event_type", "session_time").not("read_sec", "is", null).limit(5000), from, to),
       // 접속 수 = 카테고리 아카이브 방문(view+category) + 홈 피드 노출(category_view)
       applyDate(db.from("user_logs").select("category").in("event_type", ["view", "category_view"]).not("category", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent").eq("event_type", "view").limit(5000), from, to),
@@ -169,11 +171,11 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
         : 0,
     })).sort((a, b) => b.detail_views - a.detail_views);
 
-    // ── 전체 평균 체류시간 ──
-    const allReadSecs: number[] = (readLogs ?? [])
+    // ── 전체 평균 체류시간 (홈 화면 진입~이탈 전체 세션 기준, session_time) ──
+    const allSessionSecs: number[] = (sessionLogs ?? [])
       .map((l: { read_sec: number | null }) => Number(l.read_sec))
       .filter((n: number) => !isNaN(n) && n > 0);
-    const avgReadSec = allReadSecs.length ? Math.round(allReadSecs.reduce((a, b) => a + b, 0) / allReadSecs.length) : 0;
+    const avgReadSec = allSessionSecs.length ? Math.round(allSessionSecs.reduce((a, b) => a + b, 0) / allSessionSecs.length) : 0;
 
     // ── 인기 행사 TOP 5 (행사 캘린더 클릭) ──
     const eventClickCounts: Record<string, number> = {};
@@ -296,7 +298,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
-        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="인사이트 모달 열람 · 데이터 수집 중" />
+        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="홈 화면 전체 체류 · 데이터 수집 중" />
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
@@ -587,7 +589,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 행사 클릭 · 평균 체류시간</p>
         <ul style={{ paddingLeft: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 기사 인사이트 모달을 열어본 평균 시간(초). 카테고리별 성과 표에서도 개별 확인 가능</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초). 탭이 백그라운드에 있는 동안은 카운트 제외</li>
+          <li>카테고리별 성과 표의 "평균 체류(초)"는 이것과 다름 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계</li>
         </ul>
       </HelpPanel>
     </div>

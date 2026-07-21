@@ -2,7 +2,8 @@ import { createClient } from "@/lib/supabase/client";
 
 // category_view: 홈 피드에 해당 카테고리 콘텐츠가 노출된 페이지 로드 1회당 카테고리 수만큼 기록.
 // "view"(총 접속 수 KPI 집계 대상)와 분리해 총 접속 수 지표가 부풀려지지 않게 함.
-export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search" | "category_view";
+// session_time: 뉴스룸 홈에 진입한 순간부터 이탈할 때까지의 전체 체류시간 (read_time은 인사이트 모달 열람 시간만 측정 — 둘은 별개 지표)
+export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search" | "category_view" | "session_time";
 
 type LogPayload = {
   event_type: EventType;
@@ -31,7 +32,19 @@ export function logReadTimeBeacon(news_id: string, read_sec: number) {
   if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
   if (typeof window !== "undefined" && window.location.hostname === "localhost") return;
   try {
-    const blob = new Blob([JSON.stringify({ news_id, read_sec })], { type: "application/json" });
+    const blob = new Blob([JSON.stringify({ event_type: "read_time", news_id, read_sec })], { type: "application/json" });
+    navigator.sendBeacon("/api/log-beacon", blob);
+  } catch {
+    // beacon 실패는 무시
+  }
+}
+
+/** 홈 화면 전체 체류시간(session_time) 이탈 시 beacon 전송 — logReadTimeBeacon과 동일한 경로, event_type만 다름 */
+export function logSessionTimeBeacon(read_sec: number) {
+  if (typeof navigator === "undefined" || !navigator.sendBeacon) return;
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") return;
+  try {
+    const blob = new Blob([JSON.stringify({ event_type: "session_time", read_sec })], { type: "application/json" });
     navigator.sendBeacon("/api/log-beacon", blob);
   } catch {
     // beacon 실패는 무시

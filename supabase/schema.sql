@@ -158,11 +158,11 @@ alter table public.user_logs
   add column if not exists read_sec     numeric,
   add column if not exists search_query text;
 
--- event_type check 제약 갱신 (read_time·search·category_view 추가 지원)
+-- event_type check 제약 갱신 (read_time·search·category_view·session_time 추가 지원)
 alter table public.user_logs drop constraint if exists user_logs_event_type_check;
 alter table public.user_logs
   add constraint user_logs_event_type_check
-  check (event_type in ('view','detail_view','outbound_click','event_click','read_time','search','category_view'));
+  check (event_type in ('view','detail_view','outbound_click','event_click','read_time','search','category_view','session_time'));
 
 -- ── gmail_tokens ──────────────────────────────────────────────────────
 create table if not exists public.gmail_tokens (
