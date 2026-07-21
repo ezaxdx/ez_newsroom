@@ -352,7 +352,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             {referrers.map((r) => (
               <div key={r.source}>
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm">{r.source}</span>
+                  <span className="text-sm">
+                    {r.source}
+                    {r.source === "봇/크롤러(자동수집)" && (
+                      <span className="text-xs ml-1.5" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+                        (사람 아님 · 카톡 미리보기·모니터링 등)
+                      </span>
+                    )}
+                  </span>
                   <span className="text-sm font-semibold">{r.count.toLocaleString()}</span>
                 </div>
                 <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
@@ -568,7 +575,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li>UTM 파라미터가 있으면 우선 사용 (카카오톡, 뉴스레터, SNS 등)</li>
           <li>UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘</li>
           <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
-          <li><strong style={{ color: "var(--on-surface)" }}>봇/크롤러(자동수집)</strong> — 링크 미리보기 봇(카카오톡 등)·모니터링·헤드리스 브라우저 접속을 사람 트래픽과 구분해 표시 (총 접속 수 집계에서 제외되진 않음)</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>봇/크롤러(자동수집)</strong> — 실제 사람이 아니라 시스템이 자동으로 페이지를 렌더링한 접속. 사람 트래픽과 구분해 표시하지만 총 접속 수 집계에서 제외되진 않음
+            <ul style={{ paddingLeft: 16, marginTop: 4 }}>
+              <li>카카오톡·슬랙·카카오뷰 등에 링크를 공유하면 메신저 서버가 미리보기용으로 한 번 접속 (링크 미리보기 봇)</li>
+              <li>사이트가 살아있는지 주기적으로 확인하는 모니터링/업타임 체크 봇</li>
+              <li>Playwright·Puppeteer 등 SEO 크롤러·자동화 테스트 툴</li>
+            </ul>
+          </li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>행사 클릭 · 평균 체류시간</p>
