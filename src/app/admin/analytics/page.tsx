@@ -271,7 +271,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const outboundRate = totals.view ? ((totals.outbound_click / totals.view) * 100).toFixed(1) : "0";
   const maxRef       = Math.max(1, ...referrers.map((r) => r.count));
   const maxSearch    = Math.max(1, ...topSearches.map((s) => s.count));
-  const maxCat       = Math.max(1, ...categories.map((c) => c.detail_views));
 
   return (
     <div className="p-8 max-w-5xl flex flex-col gap-8">
@@ -388,13 +387,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          접속 수 = 카테고리 아카이브 페이지 방문 / 관심도 = 기사 클릭 기준 상대적 참여 비율
+          접속 수 = 카테고리 아카이브 페이지 방문
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "접속 수", "기사 클릭", "원문 클릭", "평균 체류(초)", "관심도"].map((h) => (
+                {["카테고리", "접속 수", "기사 클릭", "원문 클릭", "평균 체류(초)"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -414,12 +413,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                     <td className="py-3 pr-4">{cat.detail_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.outbound.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.avg_read_sec ? cat.avg_read_sec.toLocaleString() : "-"}</td>
-                    <td className="py-3 pr-4 w-28">
-                      <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
-                        <div className="h-full rounded-full"
-                          style={{ width: `${(cat.detail_views / maxCat) * 100}%`, background: "var(--primary)" }} />
-                      </div>
-                    </td>
                   </tr>
                 );
               })}
@@ -557,7 +550,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li><strong style={{ color: "var(--on-surface)" }}>접속 수</strong> — 해당 카테고리 아카이브 페이지(/category/AI 등) 방문 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
-<li><strong style={{ color: "var(--on-surface)" }}>관심도</strong> — 기사 클릭 수 기준 카테고리 간 상대 비율. 가장 높은 카테고리가 100%</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>인기 검색어</p>
