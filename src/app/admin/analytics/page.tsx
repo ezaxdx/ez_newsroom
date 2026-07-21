@@ -4,7 +4,7 @@ import DateRangePicker from "./DateRangePicker";
 
 /* ── 빈 데이터 기본값 ── */
 const EMPTY = {
-  totals: { view: 0, detail_view: 0, outbound_click: 0 },
+  totals: { view: 0, detail_view: 0, outbound_click: 0, event_click: 0 },
   funnel: [
     { label: "메인 접속",  count: 0, pct: 100 },
     { label: "기사 클릭",  count: 0, pct: 0 },
@@ -12,9 +12,11 @@ const EMPTY = {
   ],
   referrers:    [] as { source: string; count: number }[],
   utmCampaigns: [] as { campaign: string; count: number }[],
-  categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number }[],
+  categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
   topArticles:  [] as { title: string; category: string; detail_views: number; outbound: number }[],
   topSearches:  [] as { query: string; count: number }[],
+  topEvents:    [] as { name: string; venue: string | null; clicks: number }[],
+  avgReadSec:   0,
 };
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -27,6 +29,33 @@ const SOURCE_LABEL: Record<string, string> = {
   instagram:   "Instagram",
   facebook:    "Facebook",
 };
+
+// UTM이 없을 때 document.referrer 호스트로 유입경로 추정 (사내 포털 등 UTM을 못 붙이는 채널용)
+const REFERRER_HOST_LABEL: { match: string; label: string }[] = [
+  { match: "aigate.ezpmp.co.kr", label: "사내 AIGate" },
+];
+
+function getSiteHost(): string {
+  try { return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app").hostname; }
+  catch { return ""; }
+}
+
+/** utm_source 우선, 없으면 referrer 호스트로 유입경로 판별. 둘 다 없으면 직접 접속 */
+function detectSource(utmSource: string | null, referrer: string | null, siteHost: string): string {
+  if (utmSource) {
+    const raw = utmSource.toLowerCase();
+    return SOURCE_LABEL[raw] ?? utmSource; // 매핑 없는 커스텀 utm 값은 원문 그대로 표시
+  }
+  if (referrer) {
+    try {
+      const host = new URL(referrer).hostname;
+      if (!host || host === siteHost) return "직접 접속"; // 자기 사이트 내 이동은 direct 취급
+      const known = REFERRER_HOST_LABEL.find((k) => host.includes(k.match));
+      return known ? known.label : host; // 매핑 없는 외부 도메인은 호스트명 그대로
+    } catch { /* 잘못된 referrer 값 */ }
+  }
+  return "직접 접속";
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function applyDate(query: any, from: string | null, to: string | null) {
@@ -44,45 +73,51 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       { count: view },
       { count: detail_view },
       { count: outbound },
+      { count: eventClickCount },
       { data: articles },
-      { data: detailLogs },   // detail_view with news_id → 카테고리/기사 집계
-      { data: outboundLogs }, // outbound_click with news_id
-      { data: readLogs },     // read_time with read_sec
-      { data: catViewLogs },  // view with category (아카이브 페이지)
-      { data: utmLogs },      // utm 유입 경로
-      { data: searchLogs },   // 검색어
+      { data: detailLogs },    // detail_view with news_id → 카테고리/기사 집계
+      { data: outboundLogs },  // outbound_click with news_id
+      { data: readLogs },      // read_time with read_sec
+      { data: catViewLogs },   // view with category (아카이브 페이지)
+      { data: sourceLogs },    // 유입 경로 판별용 — utm 유무와 무관하게 전체 view
+      { data: searchLogs },    // 검색어
+      { data: eventClickLogs },// event_click with event_id → 인기 행사 집계
     ] = await Promise.all([
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "view"), from, to),
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "detail_view"), from, to),
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "outbound_click"), from, to),
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "event_click"), from, to),
       db.from("news").select("id, title, category"),
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "detail_view").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "outbound_click").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("news_id, read_sec").eq("event_type", "read_time").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("category").eq("event_type", "view").not("category", "is", null).limit(5000), from, to),
-      applyDate(db.from("user_logs").select("utm_source, utm_campaign").not("utm_source", "is", null).limit(5000), from, to),
+      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
+      applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
     ]);
 
-    const viewCount    = view    ?? 0;
-    const detailCount  = detail_view ?? 0;
+    const viewCount     = view    ?? 0;
+    const detailCount   = detail_view ?? 0;
     const outboundCount = outbound ?? 0;
+    const eventClickTotal = eventClickCount ?? 0;
     if (viewCount === 0 && detailCount === 0) return EMPTY;
 
-    // ── 유입 경로 ──
+    // ── 유입 경로 (utm 우선, 없으면 referrer 호스트로 판별 — 사내 AIGate 등 UTM 못 붙이는 채널도 잡힘) ──
+    const siteHost = getSiteHost();
     const refMap: Record<string, number> = {};
-    for (const log of utmLogs ?? []) {
-      const raw   = (log.utm_source ?? "").toLowerCase();
-      const label = SOURCE_LABEL[raw] ?? "직접 접속";
+    for (const log of sourceLogs ?? []) {
+      const label = detectSource(log.utm_source, log.referrer, siteHost);
       refMap[label] = (refMap[label] ?? 0) + 1;
     }
     const referrers = Object.entries(refMap)
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count);
 
-    // ── UTM 캠페인 ──
+    // ── UTM 캠페인 (utm_source가 실제로 있는 방문만) ──
     const campMap: Record<string, number> = {};
-    for (const log of utmLogs ?? []) {
+    for (const log of sourceLogs ?? []) {
+      if (!log.utm_source) continue;
       const camp = log.utm_campaign ?? "(없음)";
       campMap[camp] = (campMap[camp] ?? 0) + 1;
     }
@@ -124,7 +159,33 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       page_views:   catPageViews[cat] ?? 0,
       detail_views: catDetails[cat]   ?? 0,
       outbound:     catOut[cat]       ?? 0,
+      avg_read_sec: catReadSecs[cat]?.length
+        ? Math.round(catReadSecs[cat].reduce((a, b) => a + b, 0) / catReadSecs[cat].length)
+        : 0,
     })).sort((a, b) => b.detail_views - a.detail_views);
+
+    // ── 전체 평균 체류시간 ──
+    const allReadSecs: number[] = (readLogs ?? [])
+      .map((l: { read_sec: number | null }) => Number(l.read_sec))
+      .filter((n: number) => !isNaN(n) && n > 0);
+    const avgReadSec = allReadSecs.length ? Math.round(allReadSecs.reduce((a, b) => a + b, 0) / allReadSecs.length) : 0;
+
+    // ── 인기 행사 TOP 5 (행사 캘린더 클릭) ──
+    const eventClickCounts: Record<string, number> = {};
+    for (const log of eventClickLogs ?? []) eventClickCounts[log.event_id] = (eventClickCounts[log.event_id] ?? 0) + 1;
+    const eventIds = Object.keys(eventClickCounts);
+    let topEvents: { name: string; venue: string | null; clicks: number }[] = [];
+    if (eventIds.length) {
+      const { data: eventsData } = await db.from("convention_events").select("id, event_name, venue").in("id", eventIds);
+      const eventMap = new Map((eventsData ?? []).map((e) => [e.id, e]));
+      topEvents = Object.entries(eventClickCounts)
+        .map(([id, clicks]) => {
+          const ev = eventMap.get(id);
+          return { name: ev?.event_name ?? "(삭제된 행사)", venue: ev?.venue ?? null, clicks };
+        })
+        .sort((a, b) => b.clicks - a.clicks)
+        .slice(0, 5);
+    }
 
     // ── 인기 기사 TOP 5 ──
     const artDetails: Record<string, number> = {};
@@ -151,17 +212,19 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .slice(0, 10);
 
     return {
-      totals: { view: viewCount, detail_view: detailCount, outbound_click: outboundCount },
+      totals: { view: viewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
       funnel: [
         { label: "메인 접속", count: viewCount,     pct: 100 },
         { label: "기사 클릭", count: detailCount,   pct: viewCount ? +((detailCount   / viewCount) * 100).toFixed(1) : 0 },
         { label: "원문 클릭", count: outboundCount, pct: viewCount ? +((outboundCount / viewCount) * 100).toFixed(1) : 0 },
       ],
-      referrers:    referrers.length    ? referrers    : [{ source: "직접 접속", count: viewCount }],
+      referrers,
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [],
       categories,
       topArticles,
       topSearches,
+      topEvents,
+      avgReadSec,
     };
   } catch {
     return EMPTY;
@@ -196,12 +259,12 @@ async function fetchNavCategories(): Promise<string[]> {
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { from, to } = await searchParams;
   const [data, navCategories] = await Promise.all([fetchAnalytics(from ?? null, to ?? null), fetchNavCategories()]);
-  const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches } = data;
+  const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
     const found = data.categories.find((c) => c.category === cat);
-    return found ?? { category: cat, page_views: 0, detail_views: 0, outbound: 0 };
+    return found ?? { category: cat, page_views: 0, detail_views: 0, outbound: 0, avg_read_sec: 0 };
   });
 
   const detailRate   = totals.view ? ((totals.detail_view    / totals.view) * 100).toFixed(1) : "0";
@@ -224,10 +287,12 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       </div>
 
       {/* ── KPI 카드 ── */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <StatCard label="총 접속 수" value={totals.view} />
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
+        <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
+        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="인사이트 모달 열람" />
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
@@ -329,7 +394,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "접속 수", "기사 클릭", "전환율", "원문 클릭", "관심도"].map((h) => (
+                {["카테고리", "접속 수", "기사 클릭", "전환율", "원문 클릭", "평균 체류(초)", "관심도"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -352,6 +417,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                     <td className="py-3 pr-4">{cat.detail_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{convRate === "-" ? "-" : `${convRate}%`}</td>
                     <td className="py-3 pr-4">{cat.outbound.toLocaleString()}</td>
+                    <td className="py-3 pr-4">{cat.avg_read_sec ? cat.avg_read_sec.toLocaleString() : "-"}</td>
                     <td className="py-3 pr-4 w-28">
                       <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
                         <div className="h-full rounded-full"
@@ -438,6 +504,38 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         </div>
       </section>
 
+      {/* ── 인기 행사 (EZPMP 픽 캘린더 클릭) ── */}
+      <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
+        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
+          style={{ color: "var(--on-surface-variant)" }}>인기 행사 TOP 5</p>
+        {topEvents.length === 0 ? (
+          <p className="text-sm text-center py-8 m-0" style={{ color: "var(--on-surface-variant)" }}>
+            아직 행사 클릭 데이터가 없습니다.
+          </p>
+        ) : (
+          <div className="flex flex-col">
+            {topEvents.map((ev, idx) => (
+              <div key={ev.name} className="flex items-center gap-4 py-3"
+                style={{ borderBottom: idx < topEvents.length - 1 ? "1px solid var(--surface-container-highest)" : "none" }}>
+                <span className="text-lg font-bold w-6 flex-shrink-0" style={{ color: "var(--on-surface-variant)" }}>
+                  {idx + 1}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium m-0 truncate">{ev.name}</p>
+                  {ev.venue && (
+                    <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>📍 {ev.venue}</span>
+                  )}
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>클릭</p>
+                  <p className="text-sm font-bold m-0">{ev.clicks}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       <HelpPanel title="애널리틱스 가이드">
         <p style={{ marginBottom: 16 }}>
           뉴스룸 독자의 행동 데이터를 자동 수집·분석합니다. 별도 설정 없이 방문자 발생 시 즉시 기록됩니다.
@@ -474,9 +572,16 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>트래픽 소스</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li>UTM 파라미터로 유입 채널 추적 (카카오톡, 뉴스레터, SNS 등)</li>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>UTM 파라미터가 있으면 우선 사용 (카카오톡, 뉴스레터, SNS 등)</li>
+          <li>UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘</li>
           <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>행사 클릭 · 평균 체류시간</p>
+        <ul style={{ paddingLeft: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 기사 인사이트 모달을 열어본 평균 시간(초). 카테고리별 성과 표에서도 개별 확인 가능</li>
         </ul>
       </HelpPanel>
     </div>
