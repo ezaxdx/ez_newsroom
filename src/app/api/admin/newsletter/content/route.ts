@@ -113,15 +113,22 @@ export async function GET() {
 
   // 실제 발송(send/route.ts)과 동일한 원칙: 어드민 ⭐ 픽 최우선 + 남는 자리는 자동 점수로 보충.
   // 이 엔드포인트는 발송 전 인트로 문구 작성을 돕기 위한 미리보기용이라, 실제 발송 결과와 어긋나면 안 됨.
-  // ⭐ 수동 픽이어도 최근 2개 발송호에 이미 나왔다면 이번 회차는 건너뜀 (같은 행사 반복 노출 방지)
-  const manualPicks = scored.filter(e => e.is_ezpmp_pick && !recentlyFeatured.has(e.id)).slice(0, 4);
+  const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+  const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  // ⭐ 수동 픽도 자동 픽과 동일하게 14일→30일→45일 근접도 순으로 정렬 (최근 발송호 노출분은 제외).
+  // 우선순위 자체(자동 픽보다 항상 먼저 채워짐)는 유지, 픽이 여럿일 때 어떤 걸 4자리에 넣을지만 자동 픽과 동일 기준 적용
+  const manualCandidates = scored.filter(e => e.is_ezpmp_pick && !recentlyFeatured.has(e.id));
+  const manualPicks = [
+    ...manualCandidates.filter(e => e.start_date <= d14),
+    ...manualCandidates.filter(e => e.start_date > d14 && e.start_date <= d30),
+    ...manualCandidates.filter(e => e.start_date > d30),
+  ].slice(0, 4);
   const pickedIds = new Set(manualPicks.map(e => e.id));
   const autoSlots = Math.max(0, 4 - manualPicks.length);
 
   // Pick 선정: 14일 이내 우선 → 부족하면 30일 이내로 보충 → 그래도 부족하면 45일 전체로 보충
   // ※ 전체 교체가 아닌 보충 방식 — 가까운 날짜 행사가 항상 우선 포함됨
-  const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const candidatePool = scored.filter(e => !pickedIds.has(e.id));
   const fresh = candidatePool.filter(e => !recentlyFeatured.has(e.id));
   const near = fresh.filter(e => e.start_date <= d14);
