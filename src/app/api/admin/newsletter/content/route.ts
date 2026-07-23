@@ -57,13 +57,17 @@ export async function GET() {
   endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
   const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
+  // Pick 후보는 근거리(45일 이내)만 쓰므로 조회 자체를 그 범위로 제한 (더 먼 미래 행사는 애초에 불필요)
+  const NEAR_TERM_DAYS = 45;
+  const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
   const { data: eventsPool } = await supabase
     .from("convention_events")
     .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description, is_ezpmp_pick")
     .eq("is_published", true)
     .neq("is_concurrent", true)   // 동시개최 행사 제외 (메인 행사만)
     .gte("start_date", todayStr)
-    .lte("start_date", new Date(today.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString().split("T")[0])
+    .lte("start_date", nearTermEnd)
     .order("start_date", { ascending: true })
     .limit(200);
 
@@ -107,15 +111,10 @@ export async function GET() {
     (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
   );
 
-  // 실제 발송(send/route.ts)과 동일한 원칙: 어드민 ⭐ 픽 최우선 + 근거리(45일 이내)
-  // 제한 + 남는 자리는 자동 점수로 보충. 이 엔드포인트는 발송 전 인트로 문구 작성을
-  // 돕기 위한 미리보기용이라, 실제 발송 결과와 어긋나면 안 됨.
-  const NEAR_TERM_DAYS = 45;
-  const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const scoredNearTerm = scored.filter(e => e.start_date <= nearTermEnd);
-
+  // 실제 발송(send/route.ts)과 동일한 원칙: 어드민 ⭐ 픽 최우선 + 남는 자리는 자동 점수로 보충.
+  // 이 엔드포인트는 발송 전 인트로 문구 작성을 돕기 위한 미리보기용이라, 실제 발송 결과와 어긋나면 안 됨.
   // ⭐ 수동 픽이어도 최근 2개 발송호에 이미 나왔다면 이번 회차는 건너뜀 (같은 행사 반복 노출 방지)
-  const manualPicks = scoredNearTerm.filter(e => e.is_ezpmp_pick && !recentlyFeatured.has(e.id)).slice(0, 4);
+  const manualPicks = scored.filter(e => e.is_ezpmp_pick && !recentlyFeatured.has(e.id)).slice(0, 4);
   const pickedIds = new Set(manualPicks.map(e => e.id));
   const autoSlots = Math.max(0, 4 - manualPicks.length);
 
@@ -123,7 +122,7 @@ export async function GET() {
   // ※ 전체 교체가 아닌 보충 방식 — 가까운 날짜 행사가 항상 우선 포함됨
   const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const candidatePool = scoredNearTerm.filter(e => !pickedIds.has(e.id));
+  const candidatePool = scored.filter(e => !pickedIds.has(e.id));
   const fresh = candidatePool.filter(e => !recentlyFeatured.has(e.id));
   const near = fresh.filter(e => e.start_date <= d14);
   const mid  = fresh.filter(e => e.start_date > d14 && e.start_date <= d30);
