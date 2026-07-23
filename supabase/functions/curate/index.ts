@@ -738,6 +738,10 @@ Deno.serve(async (req) => {
 
   const TIME_BUDGET_MS = 130_000; // Edge Function 150초 한계 대비 — 초과 시 남은 소스 스킵
   let budgetExceeded = false;
+  // 소스 단위 체크만으론 부족함 — 기사 1건당 원문스크래핑+AI생성이 느린 소스(네이버뉴스 등)는
+  // 소스 하나 처리하는 도중에도 예산을 넘겨 플랫폼에 강제 종료(shutdown)당할 수 있음.
+  // 그러면 로그도 안 남고 이번 소스는 통째로 날아가니, 기사 단위로도 예산 체크 필요.
+  const overBudget = () => Date.now() - runStart > TIME_BUDGET_MS;
 
   for (const source of sources) {
     // 시간 예산 초과 시 남은 소스는 다음 실행으로 미룸 (강제 종료 방지)
@@ -829,6 +833,7 @@ Deno.serve(async (req) => {
         const gmailItems = await fetchGmailNewsletters(cfg);
         console.log(`[Gmail] ${source.source_name}: ${gmailItems.length}개`);
         for (const item of gmailItems) {
+          if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
           // gmail:msgId → 원문 링크 없음, 스킵
           if (item.link.startsWith("gmail:")) { results.skipped++; continue; }
           if (existingUrls.has(item.link)) { results.skipped++; continue; }
@@ -848,6 +853,7 @@ Deno.serve(async (req) => {
         const naverItems = (await fetchNaverNews(source.url)).slice(0, PER_SOURCE_LIMIT);
         console.log(`[네이버뉴스] "${source.url}": ${naverItems.length}개`);
         for (const item of naverItems) {
+          if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
           if (existingUrls.has(item.link)) { results.skipped++; continue; }
           const { text: articleText, image_url } = await fetchArticleData(item.link);
           // 검색어 기반 소스라 실제 제목 내용으로 카테고리 재배정 (RSS와 동일 원칙)
@@ -886,6 +892,7 @@ Deno.serve(async (req) => {
         })
       );
       for (const item of resolved) {
+        if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
         if (existingUrls.has(item.link)) { results.skipped++; continue; }
         const { text: articleText, image_url } = await fetchArticleData(item.link);
         // 소스 고정 카테고리가 아니라 실제 제목 내용으로 재배정
