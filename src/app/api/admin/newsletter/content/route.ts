@@ -114,7 +114,8 @@ export async function GET() {
   const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
   const scoredNearTerm = scored.filter(e => e.start_date <= nearTermEnd);
 
-  const manualPicks = scoredNearTerm.filter(e => e.is_ezpmp_pick).slice(0, 4);
+  // ⭐ 수동 픽이어도 최근 2개 발송호에 이미 나왔다면 이번 회차는 건너뜀 (같은 행사 반복 노출 방지)
+  const manualPicks = scoredNearTerm.filter(e => e.is_ezpmp_pick && !recentlyFeatured.has(e.id)).slice(0, 4);
   const pickedIds = new Set(manualPicks.map(e => e.id));
   const autoSlots = Math.max(0, 4 - manualPicks.length);
 
