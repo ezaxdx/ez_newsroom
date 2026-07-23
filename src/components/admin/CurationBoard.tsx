@@ -67,11 +67,14 @@ export default function CurationBoard({
   const [tab, setTab] = useState<Tab>("live");
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [republishIds, setRepublishIds] = useState<string[]>([]);
+  // 대기열 일괄 처리용 선택 상태
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     setItems(initialNews);
     setDeletedIds([]);
     setRepublishIds([]);
+    setSelectedIds(new Set());
   }, [initialNews]);
 
   const dragIdx = useRef<number | null>(null);
@@ -84,7 +87,13 @@ export default function CurationBoard({
     ? calcLastScheduledRun(scheduleDays, scheduleHour).getTime()
     : Date.now() - displayWindowDays * 24 * 60 * 60 * 1000;
   const live = items.filter((i) => isLive(i, lastRunMs));
-  const staging = items.filter((i) => !i.is_published);
+  // 대기열은 품질점수 높은 순(동점이면 적합성 fit 높은 순)으로 정렬 — 발행할 만한 것부터 검토
+  const staging = items
+    .filter((i) => !i.is_published)
+    .sort((a, b) =>
+      (b.quality_score ?? 0) - (a.quality_score ?? 0) ||
+      (b.quality_criteria?.fit ?? 0) - (a.quality_criteria?.fit ?? 0)
+    );
   const archive = items.filter((i) => isArchive(i, lastRunMs));
 
   // Top News 계산 (카테고리별 display_order 가장 낮은 live 기사)
@@ -175,6 +184,35 @@ export default function CurationBoard({
     if (!confirm("이 기사를 삭제할까요?")) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeletedIds((prev) => [...prev, id]);
+  };
+
+  // ── 대기열 일괄 처리 ──
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const toggleSelectAll = (ids: string[]) => {
+    setSelectedIds((prev) => {
+      const allSelected = ids.length > 0 && ids.every((id) => prev.has(id));
+      return allSelected ? new Set() : new Set(ids);
+    });
+  };
+  const bulkPublish = () => {
+    const ids = selectedIds;
+    if (ids.size === 0) return;
+    setItems((prev) => prev.map((i) => ids.has(i.id) ? { ...i, is_published: true, published_at: new Date().toISOString() } : i));
+    setSelectedIds(new Set());
+  };
+  const bulkDelete = () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    if (!confirm(`선택한 ${ids.length}건을 삭제할까요?`)) return;
+    setItems((prev) => prev.filter((i) => !selectedIds.has(i.id)));
+    setDeletedIds((prev) => [...prev, ...ids]);
+    setSelectedIds(new Set());
   };
 
   // 아카이브 → 메인 재발행
@@ -340,7 +378,7 @@ export default function CurationBoard({
         {tabMeta.map(({ key, label, count }) => (
           <button
             key={key}
-            onClick={() => setTab(key)}
+            onClick={() => { setTab(key); setSelectedIds(new Set()); }}
             className="px-4 py-1.5 rounded-md text-sm font-medium transition-colors"
             style={{
               background: tab === key ? "var(--surface-container-lowest)" : "transparent",
@@ -409,6 +447,45 @@ export default function CurationBoard({
         ))}
       </div>
 
+      {/* ── 대기열 일괄 처리 바 ── */}
+      {tab === "staging" && filtered.length > 0 && (
+        <div className="mb-3 flex items-center gap-3 flex-wrap px-3 py-2 rounded-lg"
+          style={{ background: "var(--surface-container-lowest)" }}>
+          <label className="flex items-center gap-2 text-xs font-medium cursor-pointer" style={{ color: "var(--on-surface-variant)" }}>
+            <input
+              type="checkbox"
+              checked={filtered.length > 0 && filtered.every((i) => selectedIds.has(i.id))}
+              onChange={() => toggleSelectAll(filtered.map((i) => i.id))}
+              style={{ cursor: "pointer" }}
+            />
+            전체 선택
+          </label>
+          <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>
+            {selectedIds.size > 0 ? `${selectedIds.size}건 선택됨` : "품질점수 높은 순 정렬"}
+          </span>
+          <div className="flex-1" />
+          <button
+            onClick={bulkPublish}
+            disabled={selectedIds.size === 0}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold disabled:opacity-40 transition-opacity hover:opacity-80"
+            style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: selectedIds.size ? "pointer" : "default" }}
+          >
+            <Eye size={13} /> 선택 발행
+          </button>
+          <button
+            onClick={bulkDelete}
+            disabled={selectedIds.size === 0}
+            className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold disabled:opacity-40 transition-opacity hover:opacity-80"
+            style={{ background: "var(--surface-container-highest)", color: "#dc2626", border: "none", cursor: selectedIds.size ? "pointer" : "default" }}
+          >
+            <Trash2 size={13} /> 선택 삭제
+          </button>
+          <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", opacity: 0.7 }}>
+            변경 후 <strong>변경사항 저장</strong> 클릭
+          </span>
+        </div>
+      )}
+
       {/* ── 메인 표시 중 / 대기열 카드 목록 ── */}
       {tab !== "archive" && (
         <div className="flex flex-col gap-2">
@@ -468,6 +545,8 @@ export default function CurationBoard({
                   onRemove={remove}
                   onRepublish={republish}
                   LEVEL_STYLE={LEVEL_STYLE}
+                  selected={tab === "staging" ? selectedIds.has(item.id) : undefined}
+                  onToggleSelect={tab === "staging" ? toggleSelect : undefined}
                 />
               ))
           }
@@ -522,7 +601,7 @@ function ArticleCard({
   item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
   onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish,
-  LEVEL_STYLE,
+  LEVEL_STYLE, selected, onToggleSelect,
 }: {
   item: NewsItem;
   idx: number;
@@ -538,6 +617,8 @@ function ArticleCard({
   onRemove: (id: string) => void;
   onRepublish: (id: string) => void;
   LEVEL_STYLE: Record<string, { bg: string; color: string }>;
+  selected?: boolean;
+  onToggleSelect?: (id: string) => void;
 }) {
   const isDraggable = tab === "live";
 
@@ -555,12 +636,23 @@ function ArticleCard({
         cursor: isDraggable ? "grab" : "default",
       }}
     >
-      {/* drag handle */}
-      <GripVertical
-        size={16}
-        className="mt-1 flex-shrink-0"
-        style={{ color: isDraggable ? "var(--on-surface-variant)" : "transparent" }}
-      />
+      {/* 대기열 선택 체크박스 (staging 탭에서만) */}
+      {onToggleSelect ? (
+        <input
+          type="checkbox"
+          checked={!!selected}
+          onChange={() => onToggleSelect(item.id)}
+          className="mt-1 flex-shrink-0"
+          style={{ cursor: "pointer", width: 16, height: 16 }}
+        />
+      ) : (
+        /* drag handle */
+        <GripVertical
+          size={16}
+          className="mt-1 flex-shrink-0"
+          style={{ color: isDraggable ? "var(--on-surface-variant)" : "transparent" }}
+        />
+      )}
 
       {/* content */}
       <div className="flex-1 min-w-0">
@@ -605,10 +697,20 @@ function ArticleCard({
                 cursor: item.quality_criteria ? "help" : "default",
               }}
               title={item.quality_criteria
-                ? `관련성 ${item.quality_criteria.relevance} · 구체성 ${item.quality_criteria.specificity} · 실용성 ${item.quality_criteria.practicality} · 원문품질 ${item.quality_criteria.source_quality}\n자동발행 기준: ${qualityThresholds.auto_publish}점 / 대기열 기준: ${qualityThresholds.staging}점`
+                ? `관련성 ${item.quality_criteria.relevance} · 구체성 ${item.quality_criteria.specificity} · 실용성 ${item.quality_criteria.practicality} · 원문품질 ${item.quality_criteria.source_quality}${item.quality_criteria.fit != null ? ` · 회사적합성 ${item.quality_criteria.fit}` : ""}\n자동발행 기준: ${qualityThresholds.auto_publish}점 / 대기열 기준: ${qualityThresholds.staging}점`
                 : `자동발행 기준: ${qualityThresholds.auto_publish}점 / 대기열 기준: ${qualityThresholds.staging}점`}
             >
               ★ {item.quality_score}
+            </span>
+          )}
+          {tab === "staging" && item.quality_criteria?.fit != null && (
+            <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide"
+              title="회사(MICE·관광) 적합성 — 낮을수록 우리 관심사와 거리가 멂"
+              style={{
+                background: item.quality_criteria.fit >= 6 ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.12)",
+                color: item.quality_criteria.fit >= 6 ? "#16a34a" : "#dc2626",
+              }}>
+              적합 {item.quality_criteria.fit}
             </span>
           )}
           {tab === "staging" && item.created_at &&
