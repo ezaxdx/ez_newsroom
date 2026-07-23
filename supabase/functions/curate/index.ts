@@ -201,8 +201,9 @@ async function resolveGoogleNewsUrl(url: string): Promise<string> {
 }
 
 function parseRSS(xml: string, limit = 40) {
-  const items: { title: string; link: string; pubDate: string }[] = [];
-  const matches = xml.matchAll(/<item>([\s\S]*?)<\/item>/gi);
+  const items: { title: string; link: string; pubDate: string; description: string }[] = [];
+  // <item>(RSS 2.0) 뿐 아니라 <entry>(Atom)도 처리 — 네이버 블로그 등은 형식이 섞임
+  const matches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi), ...xml.matchAll(/<entry>([\s\S]*?)<\/entry>/gi)];
   for (const m of matches) {
     const c = m[1];
     const title = extractCDATA(c.match(/<title>([\s\S]*?)<\/title>/i)?.[1] ?? "");
@@ -210,8 +211,18 @@ function parseRSS(xml: string, limit = 40) {
       c.match(/<link>([\s\S]*?)<\/link>/i)?.[1] ??
       c.match(/<link[^>]+href="([^"]+)"/i)?.[1] ?? ""
     );
-    const pubDate = c.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim() ?? "";
-    if (title && link) items.push({ title, link, pubDate });
+    const pubDate = c.match(/<pubDate>([\s\S]*?)<\/pubDate>/i)?.[1]?.trim()
+      ?? c.match(/<published>([\s\S]*?)<\/published>/i)?.[1]?.trim()
+      ?? c.match(/<updated>([\s\S]*?)<\/updated>/i)?.[1]?.trim() ?? "";
+    // 본문: content:encoded(전문) 우선, 없으면 description/summary. 봇 차단으로 원문 스크래핑이
+    // 막히는 소스(네이버 블로그 등)는 이 RSS 본문을 폴백으로 사용해 발행 실패를 막음.
+    const rawBody =
+      c.match(/<content:encoded>([\s\S]*?)<\/content:encoded>/i)?.[1] ??
+      c.match(/<content[^>]*>([\s\S]*?)<\/content>/i)?.[1] ??
+      c.match(/<description>([\s\S]*?)<\/description>/i)?.[1] ??
+      c.match(/<summary[^>]*>([\s\S]*?)<\/summary>/i)?.[1] ?? "";
+    const description = extractText(extractCDATA(rawBody));
+    if (title && link) items.push({ title, link, pubDate, description });
   }
   return items.slice(0, limit);
 }
@@ -346,7 +357,7 @@ function stripNaverMarkup(s: string): string {
     .trim();
 }
 
-async function fetchNaverNews(query: string): Promise<{ title: string; link: string; pubDate: string }[]> {
+async function fetchNaverNews(query: string): Promise<{ title: string; link: string; pubDate: string; description: string }[]> {
   const clientId = Deno.env.get("NAVER_CLIENT_ID");
   const clientSecret = Deno.env.get("NAVER_CLIENT_SECRET");
   if (!clientId || !clientSecret) {
@@ -368,11 +379,13 @@ async function fetchNaverNews(query: string): Promise<{ title: string; link: str
     }
     const json = await res.json();
     const items = Array.isArray(json.items) ? json.items : [];
-    return items.map((it: { title?: string; originallink?: string; link?: string; pubDate?: string }) => ({
+    return items.map((it: { title?: string; originallink?: string; link?: string; pubDate?: string; description?: string }) => ({
       title: stripNaverMarkup(it.title ?? ""),
       // 원문 URL 우선, 없으면 네이버뉴스 링크
       link: it.originallink || it.link || "",
       pubDate: it.pubDate ?? "",
+      // API가 주는 요약문 — 원문 스크래핑이 막힐 때 폴백용
+      description: stripNaverMarkup(it.description ?? ""),
     })).filter((it: { title: string; link: string }) => it.title && it.link);
   } catch (e) {
     console.log(`[네이버뉴스] "${query}" 요청 실패:`, (e as Error).message);
@@ -855,7 +868,10 @@ Deno.serve(async (req) => {
         for (const item of naverItems) {
           if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
           if (existingUrls.has(item.link)) { results.skipped++; continue; }
-          const { text: articleText, image_url } = await fetchArticleData(item.link);
+          const { text: scraped, image_url } = await fetchArticleData(item.link);
+          // 원문 스크래핑이 짧게 잡히면 API가 준 요약문으로 폴백
+          const articleText = scraped.length >= 200 ? scraped
+            : (item.description.length > scraped.length ? item.description : scraped);
           // 검색어 기반 소스라 실제 제목 내용으로 카테고리 재배정 (RSS와 동일 원칙)
           const categoryOverride = resolveArticleCategory(item.title, category);
           await insertArticle(articleText, item.link, image_url, item.pubDate, categoryOverride);
@@ -894,7 +910,10 @@ Deno.serve(async (req) => {
       for (const item of resolved) {
         if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
         if (existingUrls.has(item.link)) { results.skipped++; continue; }
-        const { text: articleText, image_url } = await fetchArticleData(item.link);
+        const { text: scraped, image_url } = await fetchArticleData(item.link);
+        // 원문 스크래핑이 봇 차단 등으로 짧게 잡히면 RSS 본문(description/content:encoded)으로 폴백
+        const articleText = scraped.length >= 200 ? scraped
+          : (item.description.length > scraped.length ? item.description : scraped);
         // 소스 고정 카테고리가 아니라 실제 제목 내용으로 재배정
         // (예: "Google News_MICE Tech"처럼 키워드 필터 없는 소스도 AI 기사를 물어올 수 있음 —
         //  소스 유형과 무관하게 항상 내용 기준으로 분류해야 MICE/AI가 섞이지 않음)
