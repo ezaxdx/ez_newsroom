@@ -585,7 +585,7 @@ async function generateArticle(
   persona: string, audience: string, keywords: string[],
   levelPrompts: Record<string, string>,
   companyContext?: string
-): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number; quality_criteria: { relevance: number; specificity: number; practicality: number; source_quality: number } } | null> {
+): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number; quality_criteria: { relevance: number; specificity: number; practicality: number; source_quality: number; fit: number } } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
   const userPrompt = `${persona}
 타겟 독자: ${audience}${keywordHint}
@@ -595,7 +595,15 @@ async function generateArticle(
 - specificity(구체성): 수치·사례·데이터의 풍부함
 - practicality(실용성): 즉시 활용 가능한 시사점 여부
 - source_quality(원문품질): 원문 접근 가능성 및 내용 충실도
-- quality_score(종합): 위 4항목을 종합한 최종 점수
+- fit(회사 적합성): 이 기사가 MICE(전시·컨벤션·국제회의·이벤트 기획·행사 유치/운영) 또는
+  관광(특히 스마트관광·지역관광·인바운드) "실무"에 직접 닿아 있는가. quality_score와 별개로 판단.
+  9~10: MICE/관광 산업·정책·행사·인재양성·산학협력에 직접 관련 (국내·지역 동향 포함)
+  6~8: MICE/관광·이벤트 기획 업무에 응용되는 AI·기술이거나 간접 관련
+  3~5: 일반 산업/기술 뉴스로 MICE·관광 접점이 약함
+  1~2: MICE·관광과 무관한 순수 AI·IT·타산업 뉴스
+        (반도체·칩·빅테크 투자·데이터센터·개발자 코딩 실무·해외 AI 규제/정치/보안 등)
+- quality_score(종합): 위 relevance·specificity·practicality·source_quality 4항목을 종합한 글 완성도 점수
+  (fit은 여기 포함하지 말 것 — 적합성은 별도 항목)
   9~10: 업계 핵심 인사이트, 구체적 수치/사례 풍부, 즉시 실행 가능한 시사점
   7~8: 관련성 높고 실용적, 부분적으로 구체적
   5~6: 일반적 내용, 시사점이 다소 추상적
@@ -627,7 +635,7 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 문체 규칙: '~습니다/~입니다' 경어체로 작성하되, 딱딱하지 않고 읽기 편한 뉴스레터 톤으로 작성하세요. 신문체('~다', '~한다') 사용 금지.
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
-{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
+{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
 
 원문 URL: ${url}
 ${articleText.length > 50 ? `원문:\n${articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
@@ -798,7 +806,19 @@ Deno.serve(async (req) => {
       const score = generated.quality_score ?? 5;
       scoreDist[score] = (scoreDist[score] ?? 0) + 1;
       if (score < qualityThresholds.staging) { results.skipped++; stat.skipped++; existingUrls.add(url); return; }
-      const shouldAutoPublish = score >= qualityThresholds.auto_publish;
+      // ── 회사 적합성(fit) 게이트 ──
+      // 품질이 높아도 MICE·관광 실무와 무관하면(fit 낮음) 자동발행하지 않음.
+      // fit < 3: MICE·관광과 완전 무관 → 폐기(대기열도 안 쌓음)
+      // fit 3~5: 접점 약함 → 대기열(수동 검토 후 발행 판단)
+      // fit >= 6 & 품질 충족: 자동발행
+      const fit = generated.quality_criteria?.fit ?? 5;
+      const FIT_DISCARD = 3;  // 이 미만이면 폐기
+      const FIT_PUBLISH = 6;  // 이 이상이어야 자동발행 허용
+      if (fit < FIT_DISCARD) {
+        console.log(`[SKIP] 적합성 미달 (fit ${fit}, score ${score}): ${generated.title}`);
+        results.skipped++; stat.skipped++; existingUrls.add(url); return;
+      }
+      const shouldAutoPublish = score >= qualityThresholds.auto_publish && fit >= FIT_PUBLISH;
       const { error } = await supabase.from("news").upsert({
         title: generated.title, summary_short: generated.summary_short,
         content_long: generated.content_long, implications: generated.implications,
