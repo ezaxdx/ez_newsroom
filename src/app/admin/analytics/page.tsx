@@ -417,13 +417,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          아카이브 방문 = 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지를 연 횟수 · 평균 체류(초)는 데이터 수집 중
+          카테고리별 콘텐츠 소비 (홈·아카이브 경로 무관 합산) · 평균 체류(초)는 데이터 수집 중
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "아카이브 방문", "기사 클릭", "원문 클릭", "평균 체류(초)"].map((h) => (
+                {["카테고리", "기사 클릭", "원문 클릭", "평균 체류(초)"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -439,7 +439,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                         {cat.category}
                       </span>
                     </td>
-                    <td className="py-3 pr-4">{cat.page_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.detail_views.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.outbound.toLocaleString()}</td>
                     <td className="py-3 pr-4">{cat.avg_read_sec ? cat.avg_read_sec.toLocaleString() : "-"}</td>
@@ -591,8 +590,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 카테고리별 성과</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>아카이브 방문</strong> — 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지(/category/AI 등)를 연 횟수. 홈에서 기사를 바로 클릭하는 소비는 아래 기사 클릭에 잡힘</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
+          <li>카테고리별 <strong style={{ color: "var(--on-surface)" }}>콘텐츠 소비</strong>를 봅니다 (홈 피드·아카이브 등 경로 무관 합산). 어디서 소비됐는지(지점별) 상세는 로그에 쌓이고 있어 필요 시 추가 가능</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
         </ul>
 
