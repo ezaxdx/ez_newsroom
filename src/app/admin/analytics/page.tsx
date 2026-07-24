@@ -386,7 +386,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </div>
           {internalNavCount > 0 && (
             <p className="text-[0.68rem] mt-4 pt-3 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6, borderTop: "1px solid var(--surface-container-highest)" }}>
-              ※ 사이트 내 이동(아카이브 카테고리 탐색) {internalNavCount.toLocaleString()}회는 유입이 아니라 사용자 여정 — 카테고리별 성과·퍼널에서 확인
+              ※ 아카이브 카테고리 페이지 방문 {internalNavCount.toLocaleString()}회 (유입 아닌 사이트 내 이동) — 카테고리별 기사 반응에서 확인
             </p>
           )}
         </section>
@@ -415,7 +415,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       {/* ── 카테고리별 성과 ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-          style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
+          style={{ color: "var(--on-surface-variant)" }}>카테고리별 기사 반응</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
           아카이브 방문 = 상단 카테고리를 눌러 아카이브 페이지를 연 횟수 · 기사·원문 클릭은 경로(홈·아카이브) 무관 합산 · 평균 체류(초)는 데이터 수집 중
         </p>
@@ -589,7 +589,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 카테고리별 성과</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 카테고리별 기사 반응</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>아카이브 방문</strong> — 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지(/category/AI 등)를 연 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
