@@ -11,7 +11,6 @@ const EMPTY = {
     { label: "원문 클릭",  count: 0, pct: 0 },
   ],
   referrers:    [] as { source: string; count: number }[],
-  internalNavCount: 0,
   utmCampaigns: [] as { campaign: string; count: number }[],
   categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
   topArticles:  [] as { title: string; category: string; detail_views: number; outbound: number }[],
@@ -117,7 +116,6 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
     const siteHost = getSiteHost();
     const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
-    const internalNavCount = (sourceLogs ?? []).length - entryLogs.length;
     const refMap: Record<string, number> = {};
     for (const log of entryLogs) {
       const label = detectSource(log.utm_source, log.referrer, siteHost, log.user_agent);
@@ -232,7 +230,6 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
         { label: "원문 클릭", count: outboundCount, pct: viewCount ? +((outboundCount / viewCount) * 100).toFixed(1) : 0 },
       ],
       referrers,
-      internalNavCount,
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [],
       categories,
       topArticles,
@@ -274,7 +271,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const { from, to } = await searchParams;
   const [data, navCategories] = await Promise.all([fetchAnalytics(from ?? null, to ?? null), fetchNavCategories()]);
   const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
-  const internalNavCount = (data as { internalNavCount?: number }).internalNavCount ?? 0;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
@@ -384,11 +380,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               </div>
             ))}
           </div>
-          {internalNavCount > 0 && (
-            <p className="text-[0.68rem] mt-4 pt-3 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6, borderTop: "1px solid var(--surface-container-highest)" }}>
-              ※ 아카이브 카테고리 페이지 방문 {internalNavCount.toLocaleString()}회 (유입 아닌 사이트 내 이동) — 카테고리별 기사 반응에서 확인
-            </p>
-          )}
         </section>
 
         {/* UTM 캠페인 */}

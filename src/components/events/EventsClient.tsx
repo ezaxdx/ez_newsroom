@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, Calendar } from "lucide-react";
 import { logEvent } from "@/lib/analytics";
 import { selectEzpmpPickIds, isEzpmpPartner } from "@/lib/event-score";
@@ -55,6 +55,12 @@ const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","
 export default function EventsClient({ events }: Props) {
   const today = new Date();
   const todayDateStr = today.toISOString().split("T")[0];
+
+  // 행사 페이지 방문 로깅 — category "EVENTS" 태그로 홈 첫 진입(유입경로)과 구분.
+  // 지금은 대시보드에 별도 표시 안 함(로그만 축적) — 사용량 늘면 지점별 지표에 활용.
+  useEffect(() => {
+    logEvent({ event_type: "view", category: "EVENTS" });
+  }, []);
 
   // ── 이즈픽 추천 — 홈 캘린더와 동일 로직 (어드민 ⭐ 최우선 + 자동 점수, 공통 슬롯 수)
   const recommendations = useMemo(() => {
