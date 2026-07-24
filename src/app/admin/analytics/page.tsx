@@ -98,8 +98,9 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "outbound_click").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("news_id, read_sec").eq("event_type", "read_time").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("read_sec").eq("event_type", "session_time").not("read_sec", "is", null).limit(5000), from, to),
-      // 접속 수 = 카테고리 아카이브 방문(view+category) + 홈 피드 노출(category_view)
-      applyDate(db.from("user_logs").select("category").in("event_type", ["view", "category_view"]).not("category", "is", null).limit(5000), from, to),
+      // 아카이브 방문 = 카테고리 아카이브 페이지(/category/X)를 연 것 (view + category)
+      // ※ 과거 category_view(홈 피드 노출) 이벤트는 사실상 홈 방문 수와 동일해 신호가 없어 집계에서 제외
+      applyDate(db.from("user_logs").select("category").eq("event_type", "view").not("category", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent, category").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
       applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
@@ -416,13 +417,13 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>카테고리별 성과</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          접속 수 = 홈 피드에 노출된 횟수 + 카테고리 아카이브 페이지 방문 · 평균 체류(초)는 데이터 수집 중
+          아카이브 방문 = 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지를 연 횟수 · 평균 체류(초)는 데이터 수집 중
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
-                {["카테고리", "접속 수", "기사 클릭", "원문 클릭", "평균 체류(초)"].map((h) => (
+                {["카테고리", "아카이브 방문", "기사 클릭", "원문 클릭", "평균 체류(초)"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
                     style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                 ))}
@@ -590,7 +591,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 카테고리별 성과</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>접속 수</strong> — 카테고리 아카이브 페이지(/category/AI 등) 방문 + 홈 화면에 해당 카테고리 콘텐츠가 노출된 페이지 로드 수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>아카이브 방문</strong> — 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지(/category/AI 등)를 연 횟수. 홈에서 기사를 바로 클릭하는 소비는 아래 기사 클릭에 잡힘</li>
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
         </ul>
