@@ -11,6 +11,7 @@ const EMPTY = {
     { label: "원문 클릭",  count: 0, pct: 0 },
   ],
   referrers:    [] as { source: string; count: number }[],
+  internalNavCount: 0,
   utmCampaigns: [] as { campaign: string; count: number }[],
   categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
   topArticles:  [] as { title: string; category: string; detail_views: number; outbound: number }[],
@@ -84,7 +85,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       { data: readLogs },      // read_time with read_sec (기사 모달 열람 — 카테고리별 성과용)
       { data: sessionLogs },   // session_time with read_sec (홈 화면 전체 체류 — KPI 카드용)
       { data: catViewLogs },   // view with category (아카이브 페이지)
-      { data: sourceLogs },    // 유입 경로 판별용 — utm 유무와 무관하게 전체 view
+      { data: sourceLogs },    // 유입 경로 판별용 — view 전체(category로 홈 진입/아카이브 이동 구분)
       { data: searchLogs },    // 검색어
       { data: eventClickLogs },// event_click with event_id → 인기 행사 집계
     ] = await Promise.all([
@@ -99,7 +100,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("read_sec").eq("event_type", "session_time").not("read_sec", "is", null).limit(5000), from, to),
       // 접속 수 = 카테고리 아카이브 방문(view+category) + 홈 피드 노출(category_view)
       applyDate(db.from("user_logs").select("category").in("event_type", ["view", "category_view"]).not("category", "is", null).limit(5000), from, to),
-      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent").eq("event_type", "view").limit(5000), from, to),
+      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent, category").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
       applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
     ]);
@@ -110,10 +111,14 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     const eventClickTotal = eventClickCount ?? 0;
     if (viewCount === 0 && detailCount === 0) return EMPTY;
 
-    // ── 유입 경로 (utm 우선, 없으면 referrer 호스트로 판별 — 사내 AIGate 등 UTM 못 붙이는 채널도 잡힘) ──
+    // ── 유입 경로 (홈 첫 진입만 — "어떻게 사이트에 들어왔나") ──
+    // category 없는 view = 홈 첫 진입(유입). category 있는 view = 아카이브 카테고리 이동(사이트 내 이동).
+    // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
     const siteHost = getSiteHost();
+    const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
+    const internalNavCount = (sourceLogs ?? []).length - entryLogs.length;
     const refMap: Record<string, number> = {};
-    for (const log of sourceLogs ?? []) {
+    for (const log of entryLogs) {
       const label = detectSource(log.utm_source, log.referrer, siteHost, log.user_agent);
       refMap[label] = (refMap[label] ?? 0) + 1;
     }
@@ -121,9 +126,9 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count);
 
-    // ── UTM 캠페인 (utm_source가 실제로 있는 방문만) ──
+    // ── UTM 캠페인 (홈 첫 진입 중 utm_source가 있는 것만) ──
     const campMap: Record<string, number> = {};
-    for (const log of sourceLogs ?? []) {
+    for (const log of entryLogs) {
       if (!log.utm_source) continue;
       const camp = log.utm_campaign ?? "(없음)";
       campMap[camp] = (campMap[camp] ?? 0) + 1;
@@ -226,6 +231,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
         { label: "원문 클릭", count: outboundCount, pct: viewCount ? +((outboundCount / viewCount) * 100).toFixed(1) : 0 },
       ],
       referrers,
+      internalNavCount,
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [],
       categories,
       topArticles,
@@ -267,6 +273,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const { from, to } = await searchParams;
   const [data, navCategories] = await Promise.all([fetchAnalytics(from ?? null, to ?? null), fetchNavCategories()]);
   const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
+  const internalNavCount = (data as { internalNavCount?: number }).internalNavCount ?? 0;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
@@ -343,8 +350,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 gap-5">
         {/* 유입 경로 */}
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
+          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
             style={{ color: "var(--on-surface-variant)" }}>유입 경로 (Referrer)</p>
+          <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+            홈 첫 진입 기준 · 어떻게 사이트에 들어왔는지
+          </p>
           {referrers.length === 0 && (
             <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
               유입 데이터가 없습니다.
@@ -373,6 +383,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               </div>
             ))}
           </div>
+          {internalNavCount > 0 && (
+            <p className="text-[0.68rem] mt-4 pt-3 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6, borderTop: "1px solid var(--surface-container-highest)" }}>
+              ※ 사이트 내 이동(아카이브 카테고리 탐색) {internalNavCount.toLocaleString()}회는 유입이 아니라 사용자 여정 — 카테고리별 성과·퍼널에서 확인
+            </p>
+          )}
         </section>
 
         {/* UTM 캠페인 */}
