@@ -18,14 +18,25 @@ function extractText(html: string): string {
     .slice(0, 6000);
 }
 
+// 봇 차단 페이지(WAF 등)는 본문처럼 200자를 넘기는 경우가 있어 실제 원문으로 오인될 수 있음 —
+// "Access Denied" 같은 차단 페이지 특유의 문구가 있으면 접근 불가로 간주.
+const BLOCK_PAGE_MARKERS = ["access denied", "403 forbidden", "request blocked", "are you a robot", "unusual traffic", "just a moment"];
+function looksLikeBlockPage(text: string): boolean {
+  const t = text.toLowerCase();
+  return BLOCK_PAGE_MARKERS.some((m) => t.includes(m));
+}
+
 async function fetchOriginalText(url: string): Promise<string> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36" },
       signal: AbortSignal.timeout(8000),
     });
+    if (res.status === 403 || res.status === 429 || res.status === 503) return "";
     const html = await res.text();
-    return extractText(html);
+    const text = extractText(html);
+    if (looksLikeBlockPage(text)) return "";
+    return text;
   } catch {
     return "";
   }

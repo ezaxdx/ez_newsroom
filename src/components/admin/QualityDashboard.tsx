@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Check, Sparkles, X } from "lucide-react";
+import { ExternalLink, Check, Sparkles, X, RefreshCw } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import HelpPanel from "@/components/admin/HelpPanel";
 
@@ -242,6 +242,7 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
     title: item.title, summary_short: item.summary_short,
     content_long: item.content_long, implications: item.implications ?? "",
   });
+  const [retrying, setRetrying] = useState(false);
   const [aiFixing, setAiFixing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -250,6 +251,25 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
     setForm({ title: item.title, summary_short: item.summary_short, content_long: item.content_long, implications: item.implications ?? "" });
     setErrorMsg(null);
     setEditing(true);
+  };
+
+  const retry = async () => {
+    setRetrying(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/admin/news/retry-audit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "재검증 실패");
+      router.refresh();
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "오류 발생");
+    } finally {
+      setRetrying(false);
+    }
   };
 
   const aiFix = async () => {
@@ -263,12 +283,12 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "AI 수정 제안 실패");
-      setForm({
-        title: json.fixed.title ?? form.title,
-        summary_short: json.fixed.summary_short ?? form.summary_short,
-        content_long: json.fixed.content_long ?? form.content_long,
-        implications: json.fixed.implications ?? form.implications,
-      });
+      setForm((f) => ({
+        title: json.fixed.title ?? f.title,
+        summary_short: json.fixed.summary_short ?? f.summary_short,
+        content_long: json.fixed.content_long ?? f.content_long,
+        implications: json.fixed.implications ?? f.implications,
+      }));
       setEditing(true);
     } catch (e) {
       setErrorMsg(e instanceof Error ? e.message : "오류 발생");
@@ -350,7 +370,17 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
       )}
 
       {!editing ? (
-        <div style={{ display: "flex", gap: 6 }}>
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {item.faithfulness_score == null && (
+            <button onClick={retry} disabled={retrying} title="직접 접속해 정상 확인했다면 같은 URL로 다시 검증" className="transition-transform active:scale-95" style={{
+              display: "flex", alignItems: "center", gap: 4,
+              padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
+              border: "1px solid var(--surface-container-high)", cursor: retrying ? "wait" : "pointer",
+              background: "transparent", color: "var(--on-surface-variant)", opacity: retrying ? 0.6 : 1,
+            }}>
+              <RefreshCw size={11} /> {retrying ? "재검증 중..." : "재검증"}
+            </button>
+          )}
           <button onClick={aiFix} disabled={aiFixing} className="transition-transform active:scale-95" style={{
             display: "flex", alignItems: "center", gap: 4,
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
