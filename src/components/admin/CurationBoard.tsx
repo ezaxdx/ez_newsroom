@@ -230,10 +230,19 @@ export default function CurationBoard({
   const handleSave = async () => {
     setSaving(true);
     try {
+      // 실제로 바뀐 항목만 전송 — 매번 화면에 있는 뉴스 전체를 다시 쓰면 항목 수만큼 느려짐
+      const initialById = new Map(initialNews.map((n) => [n.id, n]));
+      const changedItems = items.filter((item) => {
+        const before = initialById.get(item.id);
+        if (!before) return true; // 원본에 없던 항목(방금 재발행 등)은 안전하게 포함
+        return before.is_published !== item.is_published
+          || before.display_order !== item.display_order
+          || before.level !== item.level;
+      });
       const res = await fetch("/api/admin/save-curation", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items, deletedIds, republishIds }),
+        body: JSON.stringify({ items: changedItems, deletedIds, republishIds }),
       });
       if (!res.ok) throw new Error("저장 실패");
       setDeletedIds([]);

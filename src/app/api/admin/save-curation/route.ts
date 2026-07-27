@@ -41,9 +41,10 @@ export async function POST(req: NextRequest) {
     .in("id", items.map((i) => i.id));
   const wasPublished = new Map((currentStates ?? []).map((s) => [s.id, s.is_published]));
 
-  for (const item of items) {
+  // 한 건씩 순차 대기(await in for-loop)하면 항목 수만큼 왕복이 쌓여 느려짐 — 병렬로 전송
+  await Promise.all(items.map((item) => {
     const justPublished = item.is_published && !wasPublished.get(item.id);
-    await supabase
+    return supabase
       .from("news")
       .update({
         is_published: item.is_published,
@@ -52,7 +53,7 @@ export async function POST(req: NextRequest) {
         ...(justPublished && { published_at: new Date().toISOString() }),
       })
       .eq("id", item.id);
-  }
+  }));
 
   revalidatePath("/");
   revalidatePath("/admin");
