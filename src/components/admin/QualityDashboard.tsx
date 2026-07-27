@@ -95,10 +95,17 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
   },
 ];
 
+// 공백을 제거해 비교 — 같은 주제가 표기 차이("스마트 관광" vs "스마트관광")로
+// 미분류 처리되는 것을 막음. 시스템 내에서도 curate(KEYWORD_CATEGORY_MAP)는 붙여쓴 표기를
+// 쓰고 있어 표기가 엇갈리므로, 매칭 단계에서 정규화하는 편이 안전하다.
+function normalizeForMatch(s: string): string {
+  return s.toLowerCase().replace(/\s+/g, "");
+}
+
 function getDomains(text: string): string[] {
-  const t = text.toLowerCase();
+  const t = normalizeForMatch(text);
   return DOMAINS.filter((d) =>
-    d.keywords.some((kw) => t.includes(kw.toLowerCase()))
+    d.keywords.some((kw) => t.includes(normalizeForMatch(kw)))
   ).map((d) => d.label);
 }
 
@@ -216,7 +223,14 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
     const articles: Record<string, NewsItem[]> = {};
     const unclassifiedItems: NewsItem[] = [];
     for (const n of published) {
-      const text = `${n.title} ${n.summary_short ?? ""} ${n.category ?? ""}`;
+      // 본문·시사점까지 포함 — 제목·요약에만 의존하면 본문에서만 언급된 사업영역이 미분류로 빠짐
+      const text = [
+        n.title,
+        n.summary_short ?? "",
+        n.category ?? "",
+        n.content_long ?? "",
+        n.implications ?? "",
+      ].join(" ");
       const domains = getDomains(text);
       if (domains.length === 0) unclassifiedItems.push(n);
       domains.forEach((d) => {
@@ -1584,6 +1598,7 @@ export default function QualityDashboard({ news, events, sources }: Props) {
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📊 사업영역 커버리지</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li>발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 키워드와 얼마나 겹치는지 비율로 표시합니다.</li>
+          <li>매칭 범위는 제목·요약·카테고리 + <strong style={{ color: "var(--on-surface)" }}>본문·시사점</strong>까지 포함하며, 띄어쓰기 차이(&ldquo;스마트 관광&rdquo; / &ldquo;스마트관광&rdquo;)는 자동으로 같게 처리합니다.</li>
           <li>건수/퍼센트에 마우스를 올리면 해당 도메인의 기사 목록(최대 8건)을 미리볼 수 있습니다.</li>
           <li><strong style={{ color: "var(--on-surface)" }}>미분류</strong> — 어느 도메인 키워드에도 매칭되지 않는 기사. 비율이 높으면 큐레이션 설정의 강조 키워드를 점검하거나 도메인 키워드 확장을 검토하세요.</li>
           <li>하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 &gt; 100% 가능).</li>
