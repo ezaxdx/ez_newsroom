@@ -27,7 +27,7 @@ export async function GET() {
   const vol_number = (issueCount ?? 0) + 1;
 
   type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
-  const toCard = (n: RawNews): NewsCard => ({ title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
+  const toCard = (n: RawNews): NewsCard => ({ id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
 
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
     const { data: topRaw } = await supabase.from("news")

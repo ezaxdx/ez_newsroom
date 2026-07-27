@@ -117,6 +117,23 @@ async function fetchNews(lastRunISO: string): Promise<NewsItem[]> {
   }
 }
 
+// 뉴스레터 등 딥링크(?news=id)로 들어온 기사 — 아카이브(피드에서 내려간 것)돼도 열려야 하므로 별도 조회
+async function fetchDeepLinkNews(id: string | undefined): Promise<NewsItem | null> {
+  if (!id) return null;
+  try {
+    const supabase = createAdminClient();
+    const { data } = await supabase
+      .from("news")
+      .select("*")
+      .eq("id", id)
+      .eq("is_published", true)
+      .single();
+    return (data as NewsItem) ?? null;
+  } catch {
+    return null;
+  }
+}
+
 async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
   try {
     const supabase = createAdminClient();
@@ -161,14 +178,18 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
   }
 }
 
-export default async function NewsroomPage() {
+type Props = { searchParams: Promise<{ news?: string }> };
+
+export default async function NewsroomPage({ searchParams }: Props) {
+  const { news: deepLinkNewsId } = await searchParams;
   const { navCategories, carouselIntervalMs, lastRunISO } = await fetchSiteSettings();
 
   const heroCategories = [...navCategories, "BLOG"];
-  const [heroNews, feedAllNews, events] = await Promise.all([
+  const [heroNews, feedAllNews, events, deepLinkItem] = await Promise.all([
     fetchHeroNews(heroCategories),   // 히어로: 카테고리별 최신 1건 (시간 무관)
     fetchNews(lastRunISO),           // 피드: 최근 큐레이션 이후
     fetchUpcomingEvents(),
+    fetchDeepLinkNews(deepLinkNewsId),
   ]);
 
   // 히어로 슬라이드 (카테고리 순서대로)
@@ -209,6 +230,7 @@ export default async function NewsroomPage() {
           categoryGroups={categoryGroups}
           events={events}
           carouselInterval={carouselIntervalMs}
+          deepLinkItem={deepLinkItem}
         />
       </main>
       <Footer />

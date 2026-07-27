@@ -177,7 +177,7 @@ export async function POST(req: NextRequest) {
   // ── 뉴스 수집 ──
   type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
   function toNewsCard(n: RawNews): NewsCard {
-    return { title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url };
+    return { id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url };
   }
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
     const { data: topRaw } = await supabase.from("news")

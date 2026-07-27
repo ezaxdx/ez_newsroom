@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
 
   type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
   const toCard = (n: RawNews): NewsCard =>
-    ({ title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
+    ({ id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
 
   // TOPNEWS 1건 + 최근 발행순 1건 수집
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {

@@ -17,6 +17,7 @@ type Props = {
   categoryGroups: CategoryGroup[];
   events:         CalendarEvent[];
   carouselInterval?: number;
+  deepLinkItem?: NewsItem | null; // ?news=id 로 진입 시 자동으로 열 기사 (뉴스레터 딥링크 등)
 };
 
 const LEVELS = ["Total", "Beginner", "Intermediate", "Advanced"] as const;
@@ -29,6 +30,7 @@ export default function NewsroomClient({
   categoryGroups,
   events,
   carouselInterval,
+  deepLinkItem,
 }: Props) {
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("Total");
@@ -83,6 +85,17 @@ export default function NewsroomClient({
     setActiveItem(item);
     logEvent({ event_type: "detail_view", news_id: item.id });
   }, []);
+
+  // 뉴스레터 등 딥링크(?news=id)로 진입 시 해당 기사 모달 자동 오픈
+  useEffect(() => {
+    if (!deepLinkItem) return;
+    handleOpen(deepLinkItem);
+    // 주소창의 ?news= 파라미터 제거 — 새로고침·뒤로가기 시 재오픈 방지
+    const url = new URL(window.location.href);
+    url.searchParams.delete("news");
+    window.history.replaceState({}, "", url.toString());
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkItem]);
 
   const filteredGroups = useMemo(
     () =>

@@ -1,4 +1,5 @@
 export type NewsCard = {
+  id: string;
   title: string;
   summary: string;
   image_url: string | null;
@@ -89,8 +90,10 @@ function proxyImg(image_url: string | null, site_url: string, _is_email = false)
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
 
-// 모든 뉴스는 EZ 뉴스룸으로 연결
-const NEWS_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
+// 뉴스 카드 → 뉴스룸 해당 기사 모달 딥링크 (?news=id) — 아카이브된 기사도 열리도록 홈에서 별도 조회
+function newsDeepLink(id: string, site_url: string): string {
+  return `${site_url}/?news=${id}`;
+}
 
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 function newsCard(item: NewsCard, vol: number, site_url: string, is_email = false): string {
@@ -112,7 +115,7 @@ function newsCard(item: NewsCard, vol: number, site_url: string, is_email = fals
   const summary = item.summary;
   return `
 <td width="255" valign="top">
-  <a href="${withUTM(NEWS_LINK, vol)}" style="text-decoration:none;color:inherit;display:block;">
+  <a href="${withUTM(newsDeepLink(item.id, site_url), vol)}" style="text-decoration:none;color:inherit;display:block;">
     <table cellpadding="0" cellspacing="0" width="255">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
       <tr><td style="padding:3px 4px 0;">
