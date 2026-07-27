@@ -188,8 +188,40 @@ function DomainEditor({ item }: { item: NewsItem }) {
 
 // ── 뉴스 정합성 탭 ─────────────────────────────────────────────────
 function NewsTab({ news }: { news: NewsItem[] }) {
+  const router = useRouter();
   const [issueFilter, setIssueFilter] = useState<"all" | "missing" | "mismatch">("all");
   const [showUnclassified, setShowUnclassified] = useState(false);
+  const [auditRunning, setAuditRunning] = useState(false);
+  const [auditResult, setAuditResult] = useState<string | null>(null);
+
+  // 콘텐츠 품질 감사 — 발행 기사의 제목·요약·본문이 원문에 충실한지(할루시네이션·왜곡 여부) 재검증한 결과 집계
+  const contentAudit = useMemo(() => {
+    const published = news.filter((n) => n.is_published);
+    const audited = published.filter((n) => n.audited_at);
+    const flagged = audited.filter((n) => (n.faithfulness_score ?? 10) <= 6 || (n.faithfulness_issues?.length ?? 0) > 0)
+      .sort((a, b) => (a.faithfulness_score ?? 0) - (b.faithfulness_score ?? 0));
+    const avg = audited.length
+      ? Math.round((audited.reduce((s, n) => s + (n.faithfulness_score ?? 0), 0) / audited.length) * 10) / 10
+      : null;
+    return { auditedCount: audited.length, unauditedCount: published.length - audited.length, flagged, avg };
+  }, [news]);
+
+  const runAudit = async () => {
+    setAuditRunning(true);
+    setAuditResult(null);
+    try {
+      const res = await fetch("/api/admin/audit-content", { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      if (json.message) setAuditResult(`⏳ ${json.message}`);
+      else setAuditResult(`✅ 감사 ${json.audited}건 / 원문접근불가 ${json.skipped}건 / 실패 ${json.failed}건${json.budget_exceeded ? " · ⚠️ 시간예산 초과, 재실행 시 이어서 처리" : ""}`);
+      router.refresh();
+    } catch (e) {
+      setAuditResult(`❌ ${e instanceof Error ? e.message : "오류 발생"}`);
+    } finally {
+      setAuditRunning(false);
+    }
+  };
 
   const stats = useMemo(() => {
     const published = news.filter((n) => n.is_published);
@@ -486,6 +518,88 @@ function NewsTab({ news }: { news: NewsItem[] }) {
           </div>
         </div>
       )}
+
+      {/* 콘텐츠 품질 감사 — 원문 대비 제목·요약·본문 충실도 재검증 */}
+      <div style={{ marginTop: 32, padding: 20, borderRadius: 12,
+        background: "var(--surface-container-lowest)",
+        border: "1px solid var(--surface-container-high)" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, flexWrap: "wrap", gap: 8 }}>
+          <div>
+            <p style={{ margin: 0, fontWeight: 700, fontSize: "0.88rem" }}>🔬 콘텐츠 품질 감사</p>
+            <p style={{ margin: "2px 0 0", fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
+              발행 기사가 원문 내용에 충실한지(할루시네이션·과장 여부) AI로 재검증
+            </p>
+          </div>
+          <button
+            onClick={runAudit}
+            disabled={auditRunning}
+            style={{
+              padding: "6px 14px", borderRadius: 8, fontSize: "0.78rem", fontWeight: 600,
+              border: "none", cursor: auditRunning ? "wait" : "pointer",
+              background: "var(--primary)", color: "#fff", opacity: auditRunning ? 0.6 : 1,
+            }}
+          >
+            {auditRunning ? "실행 중..." : "감사 실행"}
+          </button>
+        </div>
+
+        {auditResult && (
+          <p style={{ fontSize: "0.78rem", margin: "0 0 12px", color: "var(--on-surface-variant)" }}>{auditResult}</p>
+        )}
+
+        <div style={{ display: "flex", gap: 16, marginBottom: 14, fontSize: "0.75rem", color: "var(--on-surface-variant)" }}>
+          <span>감사 완료 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.auditedCount}</strong>건</span>
+          <span>미감사 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.unauditedCount}</strong>건</span>
+          {contentAudit.avg != null && <span>평균 충실도 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.avg}</strong>/10</span>}
+        </div>
+
+        {contentAudit.flagged.length > 0 ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
+            {contentAudit.flagged.slice(0, 30).map((n) => (
+              <div key={n.id} style={{
+                padding: "8px 10px", borderRadius: 6,
+                background: "var(--surface-container)",
+                border: "1px solid var(--surface-container-high)",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
+                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--on-surface)", lineHeight: 1.4 }}>{n.title}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                    <span style={{
+                      fontSize: "0.65rem", fontWeight: 700, padding: "1px 7px", borderRadius: 10,
+                      background: (n.faithfulness_score ?? 0) <= 4 ? "#ef444418" : "#f59e0b18",
+                      color: (n.faithfulness_score ?? 0) <= 4 ? "#ef4444" : "#f59e0b",
+                    }}>
+                      충실도 {n.faithfulness_score ?? "-"}
+                    </span>
+                    <a href={n.original_url} target="_blank" rel="noopener noreferrer"
+                      style={{ display: "flex", color: "var(--on-surface-variant)" }}>
+                      <ExternalLink size={12} />
+                    </a>
+                  </div>
+                </div>
+                {(n.faithfulness_issues ?? []).length > 0 && (
+                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: "0.68rem", color: "var(--on-surface-variant)" }}>
+                    {(n.faithfulness_issues ?? []).map((issue, i) => <li key={i}>{issue}</li>)}
+                  </ul>
+                )}
+              </div>
+            ))}
+            {contentAudit.flagged.length > 30 && (
+              <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--on-surface-variant)", margin: 0 }}>
+                외 {contentAudit.flagged.length - 30}건 더 있음
+              </p>
+            )}
+          </div>
+        ) : contentAudit.auditedCount > 0 ? (
+          <p style={{ fontSize: "0.75rem", color: "var(--on-surface-variant)", margin: 0 }}>
+            문제로 표시된 기사가 없습니다.
+          </p>
+        ) : (
+          <p style={{ fontSize: "0.75rem", color: "var(--on-surface-variant)", margin: 0 }}>
+            아직 감사를 실행하지 않았습니다. &ldquo;감사 실행&rdquo; 버튼을 눌러 시작하세요.
+          </p>
+        )}
+      </div>
     </div>
   );
 }
@@ -1413,6 +1527,14 @@ export default function QualityDashboard({ news, events }: Props) {
           <li>⚠️ 아이콘이 있는 행은 주최기관 없음·이름 짧음(데이터 짤림 의심)·카테고리 없음 중 하나 이상의 이슈가 있습니다.</li>
           <li>공개/비공개 버튼으로 뉴스룸 행사 섹션 노출 여부를 즉시 전환합니다.</li>
           <li><strong style={{ color: "var(--on-surface)" }}>인라인 편집</strong> — 행사명·주최기관·시작일·종료일 셀을 클릭하면 바로 수정할 수 있습니다. Enter 또는 클릭 아웃 시 저장, ESC로 취소. 변경 즉시 DB에 반영됩니다.</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🔬 콘텐츠 품질 감사</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li>사업영역 분류가 <strong style={{ color: "var(--on-surface)" }}>&ldquo;맞는 카테고리에 넣었는가&rdquo;</strong>를 본다면, 이건 <strong style={{ color: "var(--on-surface)" }}>&ldquo;글 자체가 원문에 충실한가&rdquo;</strong>를 봅니다 — 서로 다른 검증입니다.</li>
+          <li>원문(original_url)을 다시 가져와 생성된 제목·요약·본문과 대조, 할루시네이션(원문에 없는 내용)·과장·왜곡 여부를 AI로 재판단합니다.</li>
+          <li>이미 감사한 기사는 건너뛰므로 여러 번 실행해도 비용이 중복되지 않고, 시간예산 초과로 다 못 돈 나머지는 다음 실행에서 이어서 처리됩니다.</li>
+          <li>충실도 점수 6점 이하이거나 문제점이 있는 기사만 목록에 표시됩니다.</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>

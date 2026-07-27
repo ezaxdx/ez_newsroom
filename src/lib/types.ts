@@ -21,6 +21,9 @@ export type NewsItem = {
     fit?: number; // 회사(MICE·관광) 적합성 — 2026-07 이후 생성분부터 존재
   } | null;
   business_domains?: string[]; // AI가 생성 시점에 직접 분류한 EZPMP 7대 사업영역 — 이후 생성분부터 존재
+  faithfulness_score?: number | null; // 원문 대비 충실도 재검증 점수(1~10) — audit-content 실행분부터 존재
+  faithfulness_issues?: string[] | null;
+  audited_at?: string | null;
   created_at?: string;
 };
 
