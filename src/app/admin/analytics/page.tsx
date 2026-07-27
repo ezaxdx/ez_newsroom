@@ -11,6 +11,7 @@ const EMPTY = {
     { label: "원문 클릭",  count: 0, pct: 0 },
   ],
   referrers:    [] as { source: string; count: number }[],
+  previewCount: 0,
   utmCampaigns: [] as { campaign: string; count: number }[],
   categories:   [] as { category: string; page_views: number; detail_views: number; outbound: number; avg_read_sec: number }[],
   topArticles:  [] as { title: string; category: string; detail_views: number; outbound: number }[],
@@ -19,31 +20,39 @@ const EMPTY = {
   avgReadSec:   0,
 };
 
+// 유입경로 라벨: "직접 클릭해 들어온 경로"임을 명확히 — 재방문·북마크는 '직접 접속'으로 잡히는 한계 반영
 const SOURCE_LABEL: Record<string, string> = {
-  newsletter:  "뉴스레터",
-  kakao:       "카카오톡",
-  kakaotalk:   "카카오톡",
-  linkedin:    "LinkedIn",
-  twitter:     "Twitter / X",
-  x:           "Twitter / X",
-  instagram:   "Instagram",
-  facebook:    "Facebook",
+  newsletter:  "뉴스레터 클릭 유입",
+  kakao:       "카카오톡 클릭 유입",
+  kakaotalk:   "카카오톡 클릭 유입",
+  linkedin:    "LinkedIn 클릭 유입",
+  twitter:     "Twitter / X 클릭 유입",
+  x:           "Twitter / X 클릭 유입",
+  instagram:   "Instagram 클릭 유입",
+  facebook:    "Facebook 클릭 유입",
 };
 
 // UTM이 없을 때 document.referrer 호스트로 유입경로 추정 (사내 포털 등 UTM을 못 붙이는 채널용)
 const REFERRER_HOST_LABEL: { match: string; label: string }[] = [
-  { match: "aigate.ezpmp.co.kr", label: "사내 AIGate" },
+  { match: "aigate.ezpmp.co.kr", label: "사내 AIGate 클릭 유입" },
 ];
 
 // 사람이 아닌 자동화 트래픽(링크 미리보기 봇·모니터링·헤드리스 크롤러) 판별용 — 직접 접속과 구분 표시
 const BOT_UA_PATTERN = /bot|crawler|spider|headlesschrome|vercel-screenshot|google-app-companion/i;
+
+// 관리자·개발자가 테스트하는 Vercel 프리뷰/브랜치 배포 도메인 — 실사용자 유입이 아니므로
+// 유입경로 순위표에서 제외하고 별도로만 집계 (봇과 달리 총 접속 수 성격의 트래픽 자체가 아님)
+const PREVIEW_SENTINEL = "__PREVIEW__";
+function isPreviewHost(host: string, siteHost: string): boolean {
+  return host !== siteHost && host.endsWith(".vercel.app");
+}
 
 function getSiteHost(): string {
   try { return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app").hostname; }
   catch { return ""; }
 }
 
-/** utm_source 우선, 없으면 referrer 호스트로 유입경로 판별. 봇 UA는 별도 라벨로 분리. 둘 다 없으면 직접 접속 */
+/** utm_source 우선, 없으면 referrer 호스트로 유입경로 판별. 봇 UA·프리뷰 배포는 별도 판별. 둘 다 없으면 직접 접속 */
 function detectSource(utmSource: string | null, referrer: string | null, siteHost: string, userAgent: string | null): string {
   if (userAgent && BOT_UA_PATTERN.test(userAgent)) return "봇/크롤러(자동수집)";
   if (utmSource) {
@@ -54,6 +63,7 @@ function detectSource(utmSource: string | null, referrer: string | null, siteHos
     try {
       const host = new URL(referrer).hostname;
       if (!host || host === siteHost) return "직접 접속"; // 자기 사이트 내 이동은 direct 취급
+      if (isPreviewHost(host, siteHost)) return PREVIEW_SENTINEL; // 프리뷰 배포 — 순위표에서 제외
       const known = REFERRER_HOST_LABEL.find((k) => host.includes(k.match));
       return known ? known.label : host; // 매핑 없는 외부 도메인은 호스트명 그대로
     } catch { /* 잘못된 referrer 값 */ }
@@ -117,8 +127,10 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     const siteHost = getSiteHost();
     const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
     const refMap: Record<string, number> = {};
+    let previewCount = 0;
     for (const log of entryLogs) {
       const label = detectSource(log.utm_source, log.referrer, siteHost, log.user_agent);
+      if (label === PREVIEW_SENTINEL) { previewCount++; continue; } // 관리자 프리뷰 테스트 — 순위표에서 제외
       refMap[label] = (refMap[label] ?? 0) + 1;
     }
     const referrers = Object.entries(refMap)
@@ -230,6 +242,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
         { label: "원문 클릭", count: outboundCount, pct: viewCount ? +((outboundCount / viewCount) * 100).toFixed(1) : 0 },
       ],
       referrers,
+      previewCount,
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [],
       categories,
       topArticles,
@@ -270,7 +283,7 @@ async function fetchNavCategories(): Promise<string[]> {
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { from, to } = await searchParams;
   const [data, navCategories] = await Promise.all([fetchAnalytics(from ?? null, to ?? null), fetchNavCategories()]);
-  const { totals, funnel, referrers, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
+  const { totals, funnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
@@ -350,7 +363,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
             style={{ color: "var(--on-surface-variant)" }}>유입 경로 (Referrer)</p>
           <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-            홈 첫 진입 기준 · 어떻게 사이트에 들어왔는지
+            직접 클릭해 들어온 경로 기준 · 북마크·재방문·주소 직접입력은 &lsquo;직접 접속&rsquo;에 포함
           </p>
           {referrers.length === 0 && (
             <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
@@ -380,6 +393,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               </div>
             ))}
           </div>
+          {previewCount > 0 && (
+            <p className="text-[0.68rem] mt-4 pt-3 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6, borderTop: "1px solid var(--surface-container-highest)" }}>
+              ※ 관리자 프리뷰 배포 테스트 접속 {previewCount.toLocaleString()}건은 실사용자 유입이 아니라 위 순위에서 제외함
+            </p>
+          )}
         </section>
 
         {/* UTM 캠페인 */}
@@ -571,6 +589,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li>UTM 파라미터가 있으면 우선 사용 (카카오톡, 뉴스레터, SNS 등)</li>
           <li>UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘</li>
           <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
+          <li><strong style={{ color: "var(--on-surface)" }}>&ldquo;OO 클릭 유입&rdquo;의 의미</strong> — 각 라벨은 <strong style={{ color: "var(--on-surface)" }}>그 방문이 해당 링크를 직접 클릭해 들어왔다</strong>는 뜻(last-touch). 같은 사람이 나중에 북마크·주소입력으로 재방문하면 &lsquo;직접 접속&rsquo;으로 잡히므로, &ldquo;뉴스레터가 끌어온 누적 트래픽&rdquo;이 아니라 &ldquo;이번 방문의 직접 유입원&rdquo;으로 해석해야 정확함</li>
           <li><strong style={{ color: "var(--on-surface)" }}>봇/크롤러(자동수집)</strong> — 실제 사람이 아니라 시스템이 자동으로 페이지를 렌더링한 접속. 사람 트래픽과 구분해 표시하지만 총 접속 수 집계에서 제외되진 않음
             <ul style={{ paddingLeft: 16, marginTop: 4 }}>
               <li>카카오톡·슬랙·카카오뷰 등에 링크를 공유하면 메신저 서버가 미리보기용으로 한 번 접속 (링크 미리보기 봇)</li>
