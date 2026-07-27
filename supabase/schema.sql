@@ -19,13 +19,15 @@ create table if not exists public.news (
   priority_score  integer default 0,
   is_published    boolean default false,
   display_order   integer default 0,
+  business_domains text[] default '{}',                 -- AI가 생성 시점에 직접 분류한 EZPMP 7대 사업영역 (키워드 사후매칭 대체)
   published_at    timestamptz default now()
 );
 
 alter table public.news
   add column if not exists level            text default 'Intermediate',
   add column if not exists quality_score    integer,
-  add column if not exists quality_criteria jsonb;
+  add column if not exists quality_criteria jsonb,
+  add column if not exists business_domains text[] default '{}';
 
 -- original_url unique 제약 (news_original_url_unique) — 재발행 시 duplicate key 처리 기준
 do $$ begin

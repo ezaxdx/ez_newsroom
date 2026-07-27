@@ -23,93 +23,19 @@ type EventRow = {
 
 type Props = { news: NewsItem[]; events: EventRow[]; sources: RssSource[] };
 
-// ── EZPMP 사업 영역 정의 (docs/ezpmp_promotion_ai_reference_260519.md 기준) ─────
-const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
-  {
-    label: "스마트립",
-    color: "#0ea5e9",
-    keywords: [
-      "스마트 관광", "관광 DX", "지역 관광", "맞춤형 여행", "관광 데이터",
-      "체류형 관광", "로컬 콘텐츠", "지자체 관광", "관광 앱", "방문객 경험",
-      "지역 상권", "SMARTRIP", "스마트립",
-      "여행 플랫폼", "여행 앱", "숙박 플랫폼", "호텔 기술", "여행 테크",
-    ],
-  },
-  {
-    label: "글로컬 관광",
-    color: "#10b981",
-    keywords: [
-      "글로컬", "글로벌 관광객", "다국어 관광", "로컬 브랜딩", "K-관광",
-      "지역 체류", "국제행사 연계", "관광 스토리텔링", "지역 상생",
-      "외래 관광객", "인바운드", "해외 관광객", "관광 브랜딩",
-    ],
-  },
-  {
-    label: "AI 관광",
-    color: "#6366f1",
-    keywords: [
-      "AI 관광", "관광 챗봇", "개인화 추천", "여행 AI", "다국어 안내",
-      "관광 데이터 분석", "스마트 관광 안내", "생성형 AI", "관광 운영 자동화",
-      "여행 일정 추천", "AI 안내", "관광 AI", "여행 추천 AI",
-    ],
-  },
-  {
-    label: "MICE Tech",
-    color: "#f59e0b",
-    keywords: [
-      "MICE", "마이스", "O2MEET", "LeadX", "리드엑스", "행사 자동화",
-      "전시 DX", "비즈니스 매칭", "하이브리드 행사", "컨벤션", "전시회",
-      "박람회", "PCO", "컨퍼런스", "포럼", "행사 플랫폼", "SaaS", "CSAP",
-      "이벤트 테크", "행사 기획", "전시 기획", "세미나 운영", "엑스포 운영",
-    ],
-  },
-  {
-    label: "ATT(관광 전시)",
-    color: "#ec4899",
-    keywords: [
-      "All That Travel", "ATT", "관광 박람회", "관광 비즈니스", "관광 산업",
-      "여행 트렌드", "관광 스타트업", "관광 네트워킹", "관광 B2B", "관광 체험",
-      "지역 관광 홍보", "관광 엑스포", "여행 박람회",
-    ],
-  },
-  {
-    label: "MEeT(의료 전시)",
-    color: "#ef4444",
-    keywords: [
-      // "MEeT" 단독 키워드는 제외 — 정규화("meet")가 MICE Tech 자사 제품명
-      // "O2Meet" 안에 그대로 포함되어 무관한 기사를 대량으로 오분류시킴
-      "Medical Emerging Technology", "의료기술", "디지털헬스",
-      "의료기기", "헬스케어", "바이오", "메디컬 테크", "의료 컨퍼런스",
-      "의료 전시", "글로벌 바이어", "투자 매칭", "의료", "healthcare",
-      "헬스테크", "의료 AI", "바이오테크", "디지털 의료",
-    ],
-  },
-  {
-    label: "AXDX",
-    color: "#8b5cf6",
-    keywords: [
-      "AXDX", "인공지능", "AI 솔루션", "AI 서비스", "AI 에이전트", "AI 플랫폼",
-      "AI 기업", "AI 스타트업", "AI 도입", "AI 활용", "AI 개발", "AI 투자",
-      "AI 모델", "OpenAI", "ChatGPT", "GPT", "Claude", "Gemini", "Anthropic",
-      "LLM", "언어 모델", "멀티모달", "파운데이션 모델",
-      "디지털 전환", "DX 전략", "자동화 솔루션", "데이터 분석",
-    ],
-  },
+// ── EZPMP 7대 사업영역 — AI가 기사 생성 시점에 직접 분류(news.business_domains)한 값을
+// 그대로 집계만 함. 과거엔 제목·본문을 키워드로 사후 스캔했으나, AI가 매 기사마다
+// "우리 사업과 어떻게 연결되는지"를 억지로 서술하도록 지침이 잡혀 있어(company_context)
+// 본문 텍스트 기반 매칭은 구조적으로 오탐이 컸음 — AI 판단을 그대로 신뢰하는 쪽으로 전환.
+const DOMAINS: { label: string; color: string }[] = [
+  { label: "스마트립",        color: "#0ea5e9" },
+  { label: "글로컬 관광",      color: "#10b981" },
+  { label: "AI 관광",         color: "#6366f1" },
+  { label: "MICE Tech",      color: "#f59e0b" },
+  { label: "ATT(관광 전시)",   color: "#ec4899" },
+  { label: "MEeT(의료 전시)",  color: "#ef4444" },
+  { label: "AXDX",           color: "#8b5cf6" },
 ];
-
-// 공백을 제거해 비교 — 같은 주제가 표기 차이("스마트 관광" vs "스마트관광")로
-// 미분류 처리되는 것을 막음. 시스템 내에서도 curate(KEYWORD_CATEGORY_MAP)는 붙여쓴 표기를
-// 쓰고 있어 표기가 엇갈리므로, 매칭 단계에서 정규화하는 편이 안전하다.
-function normalizeForMatch(s: string): string {
-  return s.toLowerCase().replace(/\s+/g, "");
-}
-
-function getDomains(text: string): string[] {
-  const t = normalizeForMatch(text);
-  return DOMAINS.filter((d) =>
-    d.keywords.some((kw) => t.includes(normalizeForMatch(kw)))
-  ).map((d) => d.label);
-}
 
 // EZPMP 카테고리 → 사업영역 연관도
 const CATEGORY_RELEVANCE: Record<string, { level: "high" | "mid" | "low"; label: string }> = {
@@ -225,18 +151,9 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
     const articles: Record<string, NewsItem[]> = {};
     const unclassifiedItems: NewsItem[] = [];
     for (const n of published) {
-      // 본문(content_long)까지 포함 — 제목·요약에만 의존하면 본문에서만 언급된 사업영역이 미분류로 빠짐.
-      // implications(시사점)는 제외 — AI가 모든 기사를 "MICE·관광에 어떻게 도움될지"로 억지로
-      // 연결하도록 작성되어 있어(예: 조선업 기사에도 "MICE·관광 산업에 기회" 식 보일러플레이트),
-      // 포함 시 무관한 기사가 대량으로 오분류됨 (실측: 시사점 포함 시 미분류 16건 → 제외 시 56건,
-      // 후자가 실제에 더 가까움).
-      const text = [
-        n.title,
-        n.summary_short ?? "",
-        n.category ?? "",
-        n.content_long ?? "",
-      ].join(" ");
-      const domains = getDomains(text);
+      // AI가 생성 시점에 직접 분류한 값을 그대로 집계. 구 큐레이션분(business_domains 없음)은
+      // 미분류로 표시 — 백필 스크립트로 채우기 전까지는 정상적인 상태.
+      const domains = n.business_domains ?? [];
       if (domains.length === 0) unclassifiedItems.push(n);
       domains.forEach((d) => {
         counts[d] = (counts[d] ?? 0) + 1;
@@ -259,8 +176,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
         if (!n.summary_short) issues.push("요약 없음");
         if (n.is_published && (n.quality_score ?? 10) < 4) issues.push("저품질 발행");
 
-        const text = `${n.title} ${n.summary_short ?? ""} ${n.category ?? ""}`;
-        const domains = getDomains(text);
+        const domains = n.business_domains ?? [];
 
         return { ...n, issues, domains };
       })
@@ -473,7 +389,7 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
                         {issue}
                       </span>
                     ))}
-                    {n.domains.map((d) => {
+                    {n.domains.map((d: string) => {
                       const dom = DOMAINS.find((x) => x.label === d);
                       return (
                         <span key={d} style={{
@@ -1602,11 +1518,10 @@ export default function QualityDashboard({ news, events, sources }: Props) {
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📊 사업영역 커버리지</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 키워드와 얼마나 겹치는지 비율로 표시합니다.</li>
-          <li>매칭 범위는 제목·요약·카테고리 + <strong style={{ color: "var(--on-surface)" }}>본문(상세분석)</strong>까지 포함하며, 띄어쓰기 차이(&ldquo;스마트 관광&rdquo; / &ldquo;스마트관광&rdquo;)는 자동으로 같게 처리합니다.</li>
-          <li>시사점(implications)은 매칭에서 제외 — AI가 모든 기사를 MICE·관광 업계 관점으로 억지 연결해 쓰기 때문에, 포함하면 무관한 기사까지 대량 오분류됩니다.</li>
+          <li>발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 중 어디에 해당하는지 비율로 표시합니다.</li>
+          <li>키워드로 본문을 사후 스캔하지 않고, <strong style={{ color: "var(--on-surface)" }}>큐레이션 시 AI가 기사 생성과 동시에 직접 판단</strong>해 저장한 값(business_domains)을 그대로 집계합니다 — 본문에 우연히 스친 단어로 오분류되지 않습니다.</li>
           <li>건수/퍼센트에 마우스를 올리면 해당 도메인의 기사 목록(최대 8건)을 미리볼 수 있습니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>미분류</strong> — 어느 도메인 키워드에도 매칭되지 않는 기사. 비율이 높으면 큐레이션 설정의 강조 키워드를 점검하거나 도메인 키워드 확장을 검토하세요.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>미분류</strong> — AI가 7개 사업영역 중 어디에도 해당 없다고 판단했거나, 이 분류 기능 도입 이전에 생성된 기사(값 없음)입니다. 비율이 높으면 시스템 프롬프트(회사 컨텍스트)의 사업영역 정의를 점검하세요.</li>
           <li>하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 &gt; 100% 가능).</li>
         </ul>
 

@@ -20,6 +20,7 @@ export type NewsItem = {
     source_quality: number;
     fit?: number; // 회사(MICE·관광) 적합성 — 2026-07 이후 생성분부터 존재
   } | null;
+  business_domains?: string[]; // AI가 생성 시점에 직접 분류한 EZPMP 7대 사업영역 — 이후 생성분부터 존재
   created_at?: string;
 };
 

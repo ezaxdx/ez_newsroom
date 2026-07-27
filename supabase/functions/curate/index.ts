@@ -585,7 +585,7 @@ async function generateArticle(
   persona: string, audience: string, keywords: string[],
   levelPrompts: Record<string, string>,
   companyContext?: string
-): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number; quality_criteria: { relevance: number; specificity: number; practicality: number; source_quality: number; fit: number } } | null> {
+): Promise<{ title: string; summary_short: string; content_long: string; implications: string; level: string; quality_score: number; quality_criteria: { relevance: number; specificity: number; practicality: number; source_quality: number; fit: number }; business_domains: string[] } | null> {
   const keywordHint = keywords.length ? `\n강조 키워드: ${keywords.join(", ")}` : "";
   const userPrompt = `${persona}
 타겟 독자: ${audience}${keywordHint}
@@ -634,8 +634,15 @@ Intermediate — 위 두 조건 모두 해당 없을 때
 
 문체 규칙: '~습니다/~입니다' 경어체로 작성하되, 딱딱하지 않고 읽기 편한 뉴스레터 톤으로 작성하세요. 신문체('~다', '~한다') 사용 금지.
 
+business_domains(사업영역 분류): 시스템 지침(company_context)의 "7대 사업영역" 정의를 참고해,
+이 기사의 핵심 주제가 아래 7개 중 어느 것과 직접 관련되는지 판단해 배열로 반환하세요.
+  - 후보: ["스마트립","글로컬 관광","AI 관광","MICE Tech","ATT(관광 전시)","MEeT(의료 전시)","AXDX"]
+  - 기사의 핵심 주제가 해당 영역일 때만 포함 — 스쳐 지나가는 언급이나 억지 연결은 제외
+  - 시사점(implications)에서 사업 연결을 언급했다고 해서 자동으로 포함하지 말 것 — 별개 판단
+  - 여러 영역에 핵심적으로 걸치면 복수 반환 가능, 어디에도 해당 없으면 빈 배열 []
+
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
-{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"}
+{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":["AI 관광"]}
 
 원문 URL: ${url}
 ${articleText.length > 50 ? `원문:\n${articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
@@ -657,7 +664,10 @@ ${articleText.length > 50 ? `원문:\n${articleText}` : "(원문 접근 불가 �
     if (!res.ok) { console.error("[Gemini error]", json); return null; }
     const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim()
       .replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    // business_domains 누락·오형식 방어 — 못 받아도 기사 발행 자체는 계속되게
+    if (!Array.isArray(parsed.business_domains)) parsed.business_domains = [];
+    return parsed;
   } catch (e) {
     console.error("[Claude error]", e);
     return null;
@@ -827,6 +837,7 @@ Deno.serve(async (req) => {
         original_url: url,
         category: cat, quality_score: score,
         quality_criteria: generated.quality_criteria ?? null,
+        business_domains: generated.business_domains ?? [],
         is_published: shouldAutoPublish,
         priority_score: source.weight * 10, display_order: 1000 - score * 10,
         published_at: shouldAutoPublish ? new Date().toISOString() : safeDateISO(pubDate),
