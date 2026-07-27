@@ -351,7 +351,7 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
 
       {!editing ? (
         <div style={{ display: "flex", gap: 6 }}>
-          <button onClick={aiFix} disabled={aiFixing} style={{
+          <button onClick={aiFix} disabled={aiFixing} className="transition-transform active:scale-95" style={{
             display: "flex", alignItems: "center", gap: 4,
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
             border: "none", cursor: aiFixing ? "wait" : "pointer",
@@ -359,21 +359,21 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
           }}>
             <Sparkles size={11} /> {aiFixing ? "생성 중..." : "AI로 수정 제안"}
           </button>
-          <button onClick={startEdit} style={{
+          <button onClick={startEdit} className="transition-transform active:scale-95" style={{
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
             border: "1px solid var(--surface-container-high)", cursor: "pointer",
             background: "transparent", color: "var(--on-surface-variant)",
           }}>
             직접 수정
           </button>
-          <button onClick={unpublish} style={{
+          <button onClick={unpublish} className="transition-transform active:scale-95" style={{
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
             border: "1px solid #ef444440", cursor: "pointer",
             background: "transparent", color: "#ef4444",
           }}>
             발행취소
           </button>
-          <button onClick={dismiss} title="확인했으나 수정하지 않고 목록에서 제외" style={{
+          <button onClick={dismiss} title="확인했으나 수정하지 않고 목록에서 제외" className="transition-transform active:scale-95" style={{
             display: "flex", alignItems: "center", gap: 3,
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
             border: "1px solid var(--surface-container-high)", cursor: "pointer",
@@ -393,14 +393,14 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
           <textarea value={form.implications} onChange={(e) => setForm((f) => ({ ...f, implications: e.target.value }))}
             rows={2} style={textareaStyle} placeholder="시사점" />
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={save} disabled={saving} style={{
+            <button onClick={save} disabled={saving} className="transition-transform active:scale-95" style={{
               padding: "4px 12px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 700,
               border: "none", cursor: saving ? "wait" : "pointer",
               background: "var(--primary)", color: "#fff", opacity: saving ? 0.6 : 1,
             }}>
               {saving ? "저장 중..." : "저장"}
             </button>
-            <button onClick={() => setEditing(false)} disabled={saving} style={{
+            <button onClick={() => setEditing(false)} disabled={saving} className="transition-transform active:scale-95" style={{
               display: "flex", alignItems: "center", gap: 3,
               padding: "4px 10px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600,
               border: "1px solid var(--surface-container-high)", cursor: "pointer",
@@ -780,6 +780,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <button
               onClick={() => setShowCriteria((v) => !v)}
+              className="transition-transform active:scale-95"
               style={{
                 padding: "6px 10px", borderRadius: 8, fontSize: "0.72rem", fontWeight: 600,
                 border: "1px solid var(--surface-container-high)", cursor: "pointer",
@@ -791,6 +792,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
             <button
               onClick={runAudit}
               disabled={auditRunning}
+              className="transition-transform active:scale-95"
               style={{
                 padding: "6px 14px", borderRadius: 8, fontSize: "0.78rem", fontWeight: 600,
                 border: "none", cursor: auditRunning ? "wait" : "pointer",
