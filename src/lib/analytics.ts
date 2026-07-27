@@ -12,6 +12,8 @@ type LogPayload = {
   category?: string;
   read_sec?: number;
   search_query?: string;
+  // 뉴스레터 등 딥링크(?news=id)로 자동 오픈된 것인지 — 탐색형(직접 클릭) 여정과 구분해 퍼널 집계
+  via_deeplink?: boolean;
 };
 
 function getUtmParams() {
@@ -64,6 +66,7 @@ export async function logEvent(payload: LogPayload) {
       category:      payload.category     ?? null,
       read_sec:      payload.read_sec     ?? null,
       search_query:  payload.search_query ?? null,
+      via_deeplink:  payload.via_deeplink ?? false,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       entry_path: typeof window !== "undefined" ? window.location.pathname : null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,

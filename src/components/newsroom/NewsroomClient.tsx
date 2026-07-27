@@ -33,6 +33,7 @@ export default function NewsroomClient({
   deepLinkItem,
 }: Props) {
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
+  const [activeViaDeepLink, setActiveViaDeepLink] = useState(false);
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("Total");
 
   // ── 홈 화면 전체 체류시간 측정 ── 진입 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지로 라우팅)까지
@@ -41,7 +42,8 @@ export default function NewsroomClient({
   const visibleSinceRef   = useRef<number | null>(null);
 
   useEffect(() => {
-    logEvent({ event_type: "view" });
+    // 딥링크(뉴스레터 등) 진입인지 태깅 — 탐색형 여정과 분리 집계하기 위함
+    logEvent({ event_type: "view", via_deeplink: !!deepLinkItem });
 
     accumulatedSecRef.current = 0;
     visibleSinceRef.current = document.visibilityState === "visible" ? Date.now() : null;
@@ -81,15 +83,16 @@ export default function NewsroomClient({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleOpen = useCallback((item: NewsItem) => {
+  const handleOpen = useCallback((item: NewsItem, viaDeepLink = false) => {
     setActiveItem(item);
-    logEvent({ event_type: "detail_view", news_id: item.id });
+    setActiveViaDeepLink(viaDeepLink);
+    logEvent({ event_type: "detail_view", news_id: item.id, via_deeplink: viaDeepLink });
   }, []);
 
-  // 뉴스레터 등 딥링크(?news=id)로 진입 시 해당 기사 모달 자동 오픈
+  // 뉴스레터 등 딥링크(?news=id)로 진입 시 해당 기사 모달 자동 오픈 (탐색형 클릭과 구분해 집계)
   useEffect(() => {
     if (!deepLinkItem) return;
-    handleOpen(deepLinkItem);
+    handleOpen(deepLinkItem, true);
     // 주소창의 ?news= 파라미터 제거 — 새로고침·뒤로가기 시 재오픈 방지
     const url = new URL(window.location.href);
     url.searchParams.delete("news");
@@ -210,7 +213,7 @@ export default function NewsroomClient({
         <EventTicker events={tickerEvents} />
       </div>
 
-      <InsightModal item={activeItem} onClose={() => setActiveItem(null)} />
+      <InsightModal item={activeItem} viaDeepLink={activeViaDeepLink} onClose={() => setActiveItem(null)} />
     </>
   );
 }

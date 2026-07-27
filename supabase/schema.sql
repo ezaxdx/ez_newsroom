@@ -149,6 +149,7 @@ create table if not exists public.user_logs (
   utm_campaign text,
   entry_path   text,
   user_agent   text,
+  via_deeplink boolean default false,
   created_at   timestamptz default now()
 );
 
@@ -156,7 +157,8 @@ alter table public.user_logs
   add column if not exists event_id     uuid references public.convention_events(id) on delete set null,
   add column if not exists category     text,
   add column if not exists read_sec     numeric,
-  add column if not exists search_query text;
+  add column if not exists search_query text,
+  add column if not exists via_deeplink boolean default false;
 
 -- event_type check 제약 갱신 (read_time·search·category_view·session_time 추가 지원)
 alter table public.user_logs drop constraint if exists user_logs_event_type_check;

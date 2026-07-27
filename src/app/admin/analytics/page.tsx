@@ -5,10 +5,15 @@ import DateRangePicker from "./DateRangePicker";
 /* ── 빈 데이터 기본값 ── */
 const EMPTY = {
   totals: { view: 0, detail_view: 0, outbound_click: 0, event_click: 0 },
-  funnel: [
+  exploreFunnel: [
     { label: "메인 접속",  count: 0, pct: 100 },
     { label: "기사 클릭",  count: 0, pct: 0 },
     { label: "원문 클릭",  count: 0, pct: 0 },
+  ],
+  deeplinkFunnel: [
+    { label: "딥링크 진입", count: 0, pct: 100 },
+    { label: "기사 열람",   count: 0, pct: 0 },
+    { label: "원문 클릭",   count: 0, pct: 0 },
   ],
   referrers:    [] as { source: string; count: number }[],
   previewCount: 0,
@@ -88,6 +93,9 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       { count: detail_view },
       { count: outbound },
       { count: eventClickCount },
+      { count: viewDeeplink },
+      { count: detailDeeplink },
+      { count: outboundDeeplink },
       { data: articles },
       { data: detailLogs },    // detail_view with news_id → 카테고리/기사 집계
       { data: outboundLogs },  // outbound_click with news_id
@@ -102,6 +110,10 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "detail_view"), from, to),
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "outbound_click"), from, to),
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "event_click"), from, to),
+      // 딥링크(뉴스레터 등 자동오픈) 여정 — 탐색형 퍼널과 분리 집계용
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "view").eq("via_deeplink", true), from, to),
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "detail_view").eq("via_deeplink", true), from, to),
+      applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "outbound_click").eq("via_deeplink", true), from, to),
       db.from("news").select("id, title, category"),
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "detail_view").not("news_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("news_id").eq("event_type", "outbound_click").not("news_id", "is", null).limit(5000), from, to),
@@ -120,6 +132,27 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     const outboundCount = outbound ?? 0;
     const eventClickTotal = eventClickCount ?? 0;
     if (viewCount === 0 && detailCount === 0) return EMPTY;
+
+    // ── 탐색형 vs 딥링크 퍼널 분리 ──
+    // 딥링크(뉴스레터 등 ?news=id) 진입은 도착 즉시 모달이 자동으로 뜨므로 "기사 클릭"이 항상 100%에 가까움.
+    // 탐색형(직접 클릭) 여정과 섞으면 실제 콘텐츠 매력도 신호가 왜곡되어 퍼널을 둘로 나눠 집계.
+    const dlView    = viewDeeplink    ?? 0;
+    const dlDetail  = detailDeeplink  ?? 0;
+    const dlOutbound = outboundDeeplink ?? 0;
+    const orgView    = Math.max(0, viewCount   - dlView);
+    const orgDetail  = Math.max(0, detailCount - dlDetail);
+    const orgOutbound = Math.max(0, outboundCount - dlOutbound);
+    const pct = (n: number, base: number) => base ? +((n / base) * 100).toFixed(1) : 0;
+    const exploreFunnel = [
+      { label: "메인 접속", count: orgView,     pct: 100 },
+      { label: "기사 클릭", count: orgDetail,   pct: pct(orgDetail, orgView) },
+      { label: "원문 클릭", count: orgOutbound, pct: pct(orgOutbound, orgView) },
+    ];
+    const deeplinkFunnel = [
+      { label: "딥링크 진입", count: dlView,     pct: 100 },
+      { label: "기사 열람",   count: dlDetail,   pct: pct(dlDetail, dlView) },
+      { label: "원문 클릭",   count: dlOutbound, pct: pct(dlOutbound, dlView) },
+    ];
 
     // ── 유입 경로 (홈 첫 진입만 — "어떻게 사이트에 들어왔나") ──
     // category 없는 view = 홈 첫 진입(유입). category 있는 view = 아카이브 카테고리 이동(사이트 내 이동).
@@ -236,11 +269,8 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
 
     return {
       totals: { view: viewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
-      funnel: [
-        { label: "메인 접속", count: viewCount,     pct: 100 },
-        { label: "기사 클릭", count: detailCount,   pct: viewCount ? +((detailCount   / viewCount) * 100).toFixed(1) : 0 },
-        { label: "원문 클릭", count: outboundCount, pct: viewCount ? +((outboundCount / viewCount) * 100).toFixed(1) : 0 },
-      ],
+      exploreFunnel,
+      deeplinkFunnel,
       referrers,
       previewCount,
       utmCampaigns: utmCampaigns.length ? utmCampaigns : [],
@@ -266,6 +296,45 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   );
 }
 
+type FunnelStep = { label: string; count: number; pct: number };
+
+function FunnelBlock({ title, steps }: { title: string; steps: FunnelStep[] }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-[0.68rem] font-semibold tracking-[0.05em] uppercase m-0" style={{ color: "var(--on-surface-variant)" }}>
+        {title}
+      </p>
+      {steps.map((step, idx) => (
+        <div key={step.label} className="flex items-center gap-4">
+          <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[0.65rem] font-bold"
+            style={{ background: "var(--primary)", color: "#fff" }}>
+            {idx + 1}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-sm font-medium">{step.label}</span>
+              <span className="text-sm font-bold">{step.count.toLocaleString()}
+                <span className="text-xs font-normal ml-1.5" style={{ color: "var(--on-surface-variant)" }}>
+                  ({step.pct}%)
+                </span>
+              </span>
+            </div>
+            <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${step.pct}%`,
+                  background: idx === 0 ? "var(--primary)" : idx === 1 ? "#3b3b3b" : "#6b6b6b",
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 async function fetchNavCategories(): Promise<string[]> {
   try {
     const supabase = createAdminClient();
@@ -283,7 +352,7 @@ async function fetchNavCategories(): Promise<string[]> {
 export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
   const { from, to } = await searchParams;
   const [data, navCategories] = await Promise.all([fetchAnalytics(from ?? null, to ?? null), fetchNavCategories()]);
-  const { totals, funnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
+  const { totals, exploreFunnel, deeplinkFunnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
@@ -319,40 +388,18 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
-      {/* ── 인게이지먼트 퍼널 ── */}
+      {/* ── 인게이지먼트 퍼널 (탐색형 vs 딥링크 분리) ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
+        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>
           인게이지먼트 퍼널
         </p>
-        <div className="flex flex-col gap-4">
-          {funnel.map((step, idx) => (
-            <div key={step.label} className="flex items-center gap-4">
-              <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[0.65rem] font-bold"
-                style={{ background: "var(--primary)", color: "#fff" }}>
-                {idx + 1}
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center justify-between mb-1.5">
-                  <span className="text-sm font-medium">{step.label}</span>
-                  <span className="text-sm font-bold">{step.count.toLocaleString()}
-                    <span className="text-xs font-normal ml-1.5" style={{ color: "var(--on-surface-variant)" }}>
-                      ({step.pct}%)
-                    </span>
-                  </span>
-                </div>
-                <div className="h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
-                  <div
-                    className="h-full rounded-full transition-all"
-                    style={{
-                      width: `${step.pct}%`,
-                      background: idx === 0 ? "var(--primary)" : idx === 1 ? "#3b3b3b" : "#6b6b6b",
-                    }}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+        <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+          딥링크(뉴스레터 등 ?news=)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까움 — 탐색형(직접 클릭) 여정과 분리 집계
+        </p>
+        <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-2 gap-8" : ""}>
+          <FunnelBlock title="탐색형 (직접 클릭)" steps={exploreFunnel} />
+          {deeplinkFunnel[0].count > 0 && <FunnelBlock title="딥링크 (자동 오픈)" steps={deeplinkFunnel} />}
         </div>
       </section>
 
@@ -579,9 +626,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>2. 인게이지먼트 퍼널</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 순으로 전환율 확인</li>
-          <li>기사 클릭률이 높을수록 콘텐츠 제목·요약의 흡입력이 좋은 것</li>
-          <li>원문 클릭률이 높을수록 인사이트 콘텐츠 품질이 높은 것</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>탐색형</strong> — 홈에 들어와 직접 기사를 클릭한 여정. <strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 전환율이 실제 콘텐츠 매력도를 반영</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>딥링크</strong> — 뉴스레터 등 &lsquo;?news=&rsquo; 링크로 들어와 도착 즉시 모달이 자동으로 열린 여정. &ldquo;기사 클릭&rdquo;은 항상 100%에 가까우므로 이 단계 전환율은 의미 없고, <strong style={{ color: "var(--on-surface)" }}>원문 클릭률</strong>만 유의미 (열람 후 실제로 더 알아봤는지)</li>
+          <li>둘을 분리하는 이유 — 딥링크 유입이 늘면 탐색형과 섞인 하나의 퍼널은 "기사 클릭률"이 왜곡되어 실제 콘텐츠 매력도를 잘못 읽게 됨</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>3. 트래픽 소스</p>

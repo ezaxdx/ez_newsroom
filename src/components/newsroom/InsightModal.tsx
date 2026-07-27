@@ -7,12 +7,13 @@ import { logEvent, logReadTimeBeacon } from "@/lib/analytics";
 
 type Props = {
   item: NewsItem | null;
+  viaDeepLink?: boolean; // 뉴스레터 등 딥링크로 자동 오픈된 모달인지 — 원문 클릭도 탐색형과 구분 집계
   onClose: () => void;
 };
 
 const MAX_READ_SEC = 600; // 10분 — 이상치 방어 (자리비움 등으로 과도하게 긴 값 캡)
 
-export default function InsightModal({ item, onClose }: Props) {
+export default function InsightModal({ item, viaDeepLink = false, onClose }: Props) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   // onClose를 ref로 감싸 이벤트 리스너 재등록 방지
   const onCloseRef = useRef(onClose);
@@ -108,7 +109,7 @@ export default function InsightModal({ item, onClose }: Props) {
   };
 
   const handleOutboundClick = () => {
-    if (item) logEvent({ event_type: "outbound_click", news_id: item.id });
+    if (item) logEvent({ event_type: "outbound_click", news_id: item.id, via_deeplink: viaDeepLink });
   };
 
   return (

@@ -90,9 +90,19 @@ function proxyImg(image_url: string | null, site_url: string, _is_email = false)
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
 
-// 뉴스 카드 → 뉴스룸 해당 기사 모달 딥링크 (?news=id) — 아카이브된 기사도 열리도록 홈에서 별도 조회
+// 이번 주(7/28)까지는 기존대로 데이터허브, 다음 주 화요일(8/4)부터 뉴스룸 딥링크로 전환.
+// KST 기준으로 비교 — 발송이 보통 자정 직후 실행되므로 UTC 그대로 비교하면 하루 어긋날 수 있음.
+const NEWSROOM_LINK_CUTOVER = "2026-08-04";
+const LEGACY_DATAHUB_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
+function isNewsroomLinkLive(): boolean {
+  const kstDateStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
+  return kstDateStr >= NEWSROOM_LINK_CUTOVER;
+}
+
+// 뉴스 카드 → 뉴스룸 해당 기사 모달 딥링크 (?news=id) — 아카이브된 기사도 열리도록 홈에서 별도 조회.
+// 전환일 이전엔 기존 데이터허브 링크 유지(이번 주 발송은 지금까지와 동일해야 함).
 function newsDeepLink(id: string, site_url: string): string {
-  return `${site_url}/?news=${id}`;
+  return isNewsroomLinkLive() ? `${site_url}/?news=${id}` : LEGACY_DATAHUB_LINK;
 }
 
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
