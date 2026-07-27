@@ -24,6 +24,7 @@ export type NewsItem = {
   faithfulness_score?: number | null; // 원문 대비 충실도 재검증 점수(1~10) — audit-content 실행분부터 존재
   faithfulness_issues?: string[] | null;
   audited_at?: string | null;
+  audit_dismissed_at?: string | null; // 관리자가 "확인했으나 수정 안 함"으로 완료처리한 시각
   created_at?: string;
 };
 

@@ -47,5 +47,17 @@ export async function POST(req: NextRequest) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // 큐레이션(curate)을 거치지 않는 수동 발행이라 그쪽의 자동 감사 트리거를 못 탐 — 여기서 직접 깨움.
+  // await하지 않음(기다리면 "기사 발행" 버튼이 최대 수십 초 멈춰버려 저장 자체가 느려짐) — 그냥 시도만
+  // 하고 응답은 바로 반환. 이 요청이 중간에 끊기더라도 다음 curate 실행 때 자동 감사가 다시 훑으므로
+  // 결국은 감사됨 — 여기서는 "되면 좋고, 안 되도 그만"인 best-effort 트리거.
+  if (payload.is_published) {
+    fetch(`${supabaseUrl}/functions/v1/audit-content`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${process.env.CRON_SECRET ?? ""}` },
+    }).catch(() => {});
+  }
+
   return NextResponse.json({ data });
 }

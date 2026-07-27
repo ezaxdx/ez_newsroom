@@ -23,6 +23,7 @@ create table if not exists public.news (
   faithfulness_score integer,                            -- 원문 대비 충실도 재검증 점수(1~10) — audit-content 엣지함수가 채움
   faithfulness_issues jsonb,                             -- 재검증에서 발견된 문제점 목록 (할루시네이션·과장 등)
   audited_at      timestamptz,                           -- 콘텐츠 품질 재검증 실행 시각 (null이면 미감사)
+  audit_dismissed_at timestamptz,                        -- 관리자가 "확인했으나 수정 안 함"으로 완료처리한 시각 — 감사 목록에서 제외
   published_at    timestamptz default now()
 );
 
@@ -33,7 +34,8 @@ alter table public.news
   add column if not exists business_domains text[] default '{}',
   add column if not exists faithfulness_score integer,
   add column if not exists faithfulness_issues jsonb,
-  add column if not exists audited_at      timestamptz;
+  add column if not exists audited_at      timestamptz,
+  add column if not exists audit_dismissed_at timestamptz;
 
 -- original_url unique 제약 (news_original_url_unique) — 재발행 시 duplicate key 처리 기준
 do $$ begin

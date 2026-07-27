@@ -27,7 +27,7 @@ export async function POST(req: NextRequest) {
   const { error: updateError } = await supabase.from("news").update({
     title, summary_short, content_long,
     implications: implications ?? null,
-    audited_at: null, faithfulness_score: null, faithfulness_issues: null,
+    audited_at: null, faithfulness_score: null, faithfulness_issues: null, audit_dismissed_at: null,
   }).eq("id", id);
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 

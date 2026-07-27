@@ -258,6 +258,15 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
     router.refresh();
   };
 
+  const dismiss = async () => {
+    await fetch("/api/admin/news/dismiss-audit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.id }),
+    });
+    router.refresh();
+  };
+
   const textareaStyle: React.CSSProperties = {
     width: "100%", padding: "6px 8px", borderRadius: 6, fontSize: "0.75rem",
     border: "1px solid var(--surface-container-high)", background: "var(--surface-container-lowest)",
@@ -316,6 +325,14 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
           }}>
             발행취소
           </button>
+          <button onClick={dismiss} title="확인했으나 수정하지 않고 목록에서 제외" style={{
+            display: "flex", alignItems: "center", gap: 3,
+            padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
+            border: "1px solid var(--surface-container-high)", cursor: "pointer",
+            background: "transparent", color: "var(--on-surface-variant)",
+          }}>
+            <Check size={11} /> 완료처리
+          </button>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -364,12 +381,14 @@ function NewsTab({ news }: { news: NewsItem[] }) {
   const contentAudit = useMemo(() => {
     const published = news.filter((n) => n.is_published);
     const audited = published.filter((n) => n.audited_at);
-    const flagged = audited.filter((n) => (n.faithfulness_score ?? 10) <= 6 || (n.faithfulness_issues?.length ?? 0) > 0)
+    const flagged = audited
+      .filter((n) => !n.audit_dismissed_at && ((n.faithfulness_score ?? 10) <= 6 || (n.faithfulness_issues?.length ?? 0) > 0))
       .sort((a, b) => (a.faithfulness_score ?? 0) - (b.faithfulness_score ?? 0));
+    const dismissedCount = audited.filter((n) => n.audit_dismissed_at).length;
     const avg = audited.length
       ? Math.round((audited.reduce((s, n) => s + (n.faithfulness_score ?? 0), 0) / audited.length) * 10) / 10
       : null;
-    return { auditedCount: audited.length, unauditedCount: published.length - audited.length, flagged, avg };
+    return { auditedCount: audited.length, unauditedCount: published.length - audited.length, flagged, dismissedCount, avg };
   }, [news]);
 
   const runAudit = async () => {
@@ -742,6 +761,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
           <span>감사 완료 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.auditedCount}</strong>건</span>
           <span>미감사 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.unauditedCount}</strong>건</span>
           {contentAudit.avg != null && <span>평균 충실도 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.avg}</strong>/10</span>}
+          {contentAudit.dismissedCount > 0 && <span>완료처리 <strong style={{ color: "var(--on-surface)" }}>{contentAudit.dismissedCount}</strong>건</span>}
         </div>
 
         {contentAudit.flagged.length > 0 ? (
@@ -1703,6 +1723,8 @@ export default function QualityDashboard({ news, events }: Props) {
           <li><strong style={{ color: "var(--on-surface)" }}>AI로 수정 제안</strong> — 원문과 지적된 문제점을 근거로 AI가 고친 버전을 생성해 편집창에 채워줍니다. 자동 저장되지 않으므로 검토·수정 후 저장하세요.</li>
           <li><strong style={{ color: "var(--on-surface)" }}>직접 수정</strong> — 제목·요약·본문·시사점을 바로 편집해 저장할 수 있습니다.</li>
           <li>수정해 저장하면 재감사 대상으로 다시 큐에 들어가고, 걸렸던 문제점은 이후 큐레이션 프롬프트에 &ldquo;이런 실수 반복하지 말 것&rdquo;으로 누적 반영됩니다.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>완료처리</strong> — 확인했지만 수정하지 않기로 한 경우 목록에서 제외합니다(삭제·발행취소 아님).</li>
+          <li>새 기사가 발행될 때(큐레이션 실행 직후, 또는 &ldquo;기사 작성&rdquo;에서 URL로 직접 발행 시) 감사가 자동으로 실행됩니다. &ldquo;감사 실행&rdquo; 버튼은 놓친 것을 몰아서 처리하는 보조 수단입니다.</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>

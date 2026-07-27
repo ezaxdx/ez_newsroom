@@ -999,6 +999,24 @@ Deno.serve(async (req) => {
     errors: budgetExceeded ? [...runErrors, { source: "(시스템)", error: "시간예산 초과로 일부 소스 스킵" }] : runErrors,
   });
   if (logError) console.error("[curation_logs insert 실패]", logError.message);
+
+  // 이번 실행에서 새로 발행된 콘텐츠를 백그라운드로 자동 품질 감사 — 응답은 기다리지 않고 즉시 반환.
+  // audit-content는 audited_at이 null인 모든 발행 기사를 대상으로 하므로, 수동 발행(articles/new)
+  // 등 다른 경로로 쌓인 미감사 기사도 이 실행을 계기로 함께 처리됨.
+  try {
+    const auditPromise = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/audit-content`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${Deno.env.get("CRON_SECRET") ?? ""}` },
+    }).catch((e) => console.error("[자동 감사 트리거 실패]", e));
+    // @ts-ignore Supabase Edge Runtime 전역 — 응답 이후에도 백그라운드 작업이 계속되게 함
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) {
+      // @ts-ignore
+      EdgeRuntime.waitUntil(auditPromise);
+    }
+  } catch (e) {
+    console.error("[자동 감사 연결 실패]", e);
+  }
+
   return new Response(JSON.stringify({ ok: true, ...results, budget_exceeded: budgetExceeded, duration_ms: durationMs }), {
     headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" },
   });
