@@ -20,16 +20,6 @@ type EventRow = {
   created_at: string;
 };
 
-export type RssSource = {
-  id: string;
-  source_name: string;
-  url: string;
-  source_type: string | null;
-  default_category: string | null;
-  weight: number;
-  is_active: boolean;
-};
-
 async function fetchNews(): Promise<NewsItem[]> {
   try {
     const supabase = createAdminClient();
@@ -54,18 +44,7 @@ async function fetchEvents(): Promise<EventRow[]> {
   } catch { return []; }
 }
 
-async function fetchRssSources(): Promise<RssSource[]> {
-  try {
-    const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("rss_sources")
-      .select("id, source_name, url, source_type, default_category, weight, is_active")
-      .order("source_name");
-    return (data ?? []) as RssSource[];
-  } catch { return []; }
-}
-
 export default async function QualityPage() {
-  const [news, events, sources] = await Promise.all([fetchNews(), fetchEvents(), fetchRssSources()]);
-  return <QualityDashboard news={news} events={events} sources={sources} />;
+  const [news, events] = await Promise.all([fetchNews(), fetchEvents()]);
+  return <QualityDashboard news={news} events={events} />;
 }

@@ -4,7 +4,6 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Check } from "lucide-react";
 import { NewsItem } from "@/lib/types";
-import type { RssSource } from "@/app/admin/quality/page";
 import HelpPanel from "@/components/admin/HelpPanel";
 
 type EventRow = {
@@ -23,7 +22,7 @@ type EventRow = {
   created_at: string;
 };
 
-type Props = { news: NewsItem[]; events: EventRow[]; sources: RssSource[] };
+type Props = { news: NewsItem[]; events: EventRow[] };
 
 // ── EZPMP 7대 사업영역 — AI가 기사 생성 시점에 직접 분류(news.business_domains)한 값을
 // 그대로 집계만 함. 과거엔 제목·본문을 키워드로 사후 스캔했으나, AI가 매 기사마다
@@ -38,17 +37,6 @@ const DOMAINS: { label: string; color: string }[] = [
   { label: "MEeT(의료 전시)",  color: "#ef4444" },
   { label: "AXDX",           color: "#8b5cf6" },
 ];
-
-// EZPMP 카테고리 → 사업영역 연관도
-const CATEGORY_RELEVANCE: Record<string, { level: "high" | "mid" | "low"; label: string }> = {
-  AI:         { level: "high", label: "AXDX · AI 관광 · MICE Tech" },
-  MICE:       { level: "high", label: "MICE Tech · ATT" },
-  TOURISM:    { level: "high", label: "스마트립 · 글로컬 · ATT" },
-  STARTUP:    { level: "mid",  label: "간접 연관 가능" },
-  POLICY:     { level: "mid",  label: "간접 연관 가능" },
-  OPERATIONS: { level: "low",  label: "사업영역 외 가능성" },
-  INDUSTRY:   { level: "low",  label: "사업영역 외 가능성" },
-};
 
 // ── 도메인 툴팁 (viewport 경계 자동 감지) ──────────────────────────
 function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color: string; label: string }) {
@@ -199,11 +187,9 @@ function DomainEditor({ item }: { item: NewsItem }) {
 }
 
 // ── 뉴스 정합성 탭 ─────────────────────────────────────────────────
-function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) {
+function NewsTab({ news }: { news: NewsItem[] }) {
   const [issueFilter, setIssueFilter] = useState<"all" | "missing" | "mismatch">("all");
   const [showUnclassified, setShowUnclassified] = useState(false);
-  const [togglingSource, setTogglingSource] = useState<string | null>(null);
-  const [sourceList, setSourceList] = useState<RssSource[]>(sources);
 
   const stats = useMemo(() => {
     const published = news.filter((n) => n.is_published);
@@ -497,181 +483,6 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
                 외 {issueItems.length - 50}건 더 있음
               </p>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* RSS 소스 분석 */}
-      <RssSourcesPanel sources={sourceList} onToggle={async (id, current) => {
-        setTogglingSource(id);
-        try {
-          const res = await fetch("/api/admin/rss", {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ id, is_active: !current }),
-          });
-          if (res.ok) {
-            setSourceList((prev) =>
-              prev.map((s) => s.id === id ? { ...s, is_active: !current } : s)
-            );
-          }
-        } finally {
-          setTogglingSource(null);
-        }
-      }} toggling={togglingSource} />
-    </div>
-  );
-}
-
-// ── RSS 소스 분석 패널 ────────────────────────────────────────────
-function RssSourcesPanel({
-  sources,
-  onToggle,
-  toggling,
-}: {
-  sources: RssSource[];
-  onToggle: (id: string, current: boolean) => void;
-  toggling: string | null;
-}) {
-  const [open, setOpen] = useState(true);
-
-  const activeCount = sources.filter((s) => s.is_active).length;
-  const byCategory = useMemo(() => {
-    const map: Record<string, RssSource[]> = {};
-    for (const s of sources) {
-      const key = s.default_category ?? "미지정";
-      if (!map[key]) map[key] = [];
-      map[key].push(s);
-    }
-    return map;
-  }, [sources]);
-
-  const SOURCE_TYPE_LABEL: Record<string, string> = {
-    rss: "RSS", url: "URL", api: "API", gmail: "Gmail",
-  };
-
-  const RELEVANCE_COLOR = { high: "#10b981", mid: "#f59e0b", low: "#ef4444" };
-
-  return (
-    <div style={{ marginTop: 32 }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          display: "flex", alignItems: "center", gap: 8, background: "none",
-          border: "none", cursor: "pointer", padding: 0, marginBottom: 12,
-        }}
-      >
-        <p style={{ margin: 0, fontWeight: 700, fontSize: "0.88rem", color: "var(--on-surface)" }}>
-          📡 RSS 소스 분석
-        </p>
-        <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
-          활성 {activeCount} / 전체 {sources.length}개 {open ? "▲" : "▼"}
-        </span>
-      </button>
-
-      {open && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {/* 카테고리별 연관도 요약 */}
-          <div style={{
-            display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 4,
-          }}>
-            {Object.entries(CATEGORY_RELEVANCE).map(([cat, info]) => {
-              const count = (byCategory[cat] ?? []).filter((s) => s.is_active).length;
-              if (!count) return null;
-              return (
-                <div key={cat} style={{
-                  padding: "4px 10px", borderRadius: 20, fontSize: "0.68rem",
-                  fontWeight: 600,
-                  background: RELEVANCE_COLOR[info.level] + "18",
-                  color: RELEVANCE_COLOR[info.level],
-                  border: `1px solid ${RELEVANCE_COLOR[info.level]}40`,
-                }}>
-                  {cat} {count}개 — {info.label}
-                </div>
-              );
-            })}
-            {(byCategory["미지정"] ?? []).filter((s) => s.is_active).length > 0 && (
-              <div style={{
-                padding: "4px 10px", borderRadius: 20, fontSize: "0.68rem",
-                fontWeight: 600, background: "#94a3b818", color: "#94a3b8",
-                border: "1px solid #94a3b840",
-              }}>
-                카테고리 미지정 {(byCategory["미지정"] ?? []).filter((s) => s.is_active).length}개
-              </div>
-            )}
-          </div>
-
-          {/* 소스 테이블 */}
-          <div style={{ borderRadius: 10, overflow: "hidden",
-            border: "1px solid var(--surface-container-high)" }}>
-            {/* 헤더 */}
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 90px 60px 50px 70px 60px",
-              padding: "7px 14px", gap: 8,
-              background: "var(--surface-container)",
-              fontSize: "0.65rem", fontWeight: 700,
-              letterSpacing: "0.04em", textTransform: "uppercase",
-              color: "var(--on-surface-variant)",
-            }}>
-              <span>소스명</span>
-              <span>카테고리</span>
-              <span>연관도</span>
-              <span>유형</span>
-              <span>가중치</span>
-              <span>활성</span>
-            </div>
-            <div style={{ maxHeight: 440, overflowY: "auto" }}>
-              {sources.map((s, idx) => {
-                const rel = s.default_category ? CATEGORY_RELEVANCE[s.default_category] : null;
-                return (
-                  <div key={s.id} style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 90px 60px 50px 70px 60px",
-                    padding: "8px 14px", gap: 8, alignItems: "center",
-                    borderTop: idx > 0 ? "1px solid var(--surface-container-high)" : "none",
-                    background: s.is_active ? "var(--surface-container-lowest)" : "var(--surface-container)",
-                    opacity: s.is_active ? 1 : 0.55,
-                  }}>
-                    <span style={{
-                      fontSize: "0.78rem", color: "var(--on-surface)",
-                      overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-                    }} title={s.url}>
-                      {s.source_name}
-                    </span>
-                    <span style={{
-                      fontSize: "0.72rem", fontWeight: 600,
-                      color: rel ? RELEVANCE_COLOR[rel.level] : "#94a3b8",
-                    }}>
-                      {s.default_category ?? "—"}
-                    </span>
-                    <span style={{ fontSize: "0.68rem", color: rel ? RELEVANCE_COLOR[rel.level] : "#94a3b8" }}>
-                      {rel ? (rel.level === "high" ? "✅ 높음" : rel.level === "mid" ? "⚠️ 보통" : "❌ 낮음") : "—"}
-                    </span>
-                    <span style={{ fontSize: "0.68rem", color: "var(--on-surface-variant)" }}>
-                      {SOURCE_TYPE_LABEL[s.source_type ?? ""] ?? s.source_type ?? "—"}
-                    </span>
-                    <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
-                      x{s.weight}
-                    </span>
-                    <button
-                      onClick={() => onToggle(s.id, s.is_active)}
-                      disabled={toggling === s.id}
-                      style={{
-                        padding: "3px 8px", borderRadius: 20, fontSize: "0.65rem",
-                        fontWeight: 700, cursor: toggling === s.id ? "wait" : "pointer",
-                        border: "none", opacity: toggling === s.id ? 0.5 : 1,
-                        background: s.is_active ? "#10b98118" : "#64748b18",
-                        color: s.is_active ? "#10b981" : "#64748b",
-                        transition: "all 0.15s",
-                      }}
-                    >
-                      {s.is_active ? "활성" : "비활성"}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
           </div>
         </div>
       )}
@@ -1531,7 +1342,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 }
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────
-export default function QualityDashboard({ news, events, sources }: Props) {
+export default function QualityDashboard({ news, events }: Props) {
   const [tab, setTab] = useState<"news" | "events">("news");
 
   return (
@@ -1573,7 +1384,7 @@ export default function QualityDashboard({ news, events, sources }: Props) {
         ))}
       </div>
 
-      {tab === "news" ? <NewsTab news={news} sources={sources} /> : <EventsTab initialEvents={events} />}
+      {tab === "news" ? <NewsTab news={news} /> : <EventsTab initialEvents={events} />}
 
       <HelpPanel title="정합성 관리 가이드">
         <p style={{ marginBottom: 12 }}>
@@ -1596,13 +1407,6 @@ export default function QualityDashboard({ news, events, sources }: Props) {
           <li>하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 &gt; 100% 가능).</li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📡 RSS 소스 분석</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>연관도 높음(✅)</strong> — AI·MICE·TOURISM 카테고리 소스. 사업영역과 직접 연관됩니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>연관도 보통(⚠️)</strong> — 간접 연관 가능한 소스 (스타트업·정책 등).</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>연관도 낮음(❌)</strong> — 사업영역 외 가능성이 높은 소스. 비활성 전환을 검토하세요.</li>
-          <li>활성/비활성 버튼으로 소스별 수집을 즉시 ON/OFF 할 수 있습니다.</li>
-        </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📅 행사 관리 탭</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
