@@ -424,7 +424,10 @@ function NewsTab({ news }: { news: NewsItem[] }) {
     // 미발행한 경우가 대부분이라 이상치 탐지에서 제외. 자동발행 기준(8점) 미만인데
     // 발행된 것만 진짜 이상 신호로 봄
     const mismatch = news.filter((n) => n.is_published && (n.quality_score ?? 10) < 4);
-    return { total: news.length, published: published.length, pending: pending.length, pendingRecent: pendingRecent.length, missingField: missingField.length, mismatch: mismatch.length };
+    // fit 게이트(회사 적합성) 위반 — fit<6이면 자동발행 안 되게 만들어뒀는데 발행된 경우.
+    // fit이 아직 없는(게이트 도입 이전) 기사는 판단 대상 아님 — null이면 스킵.
+    const fitMismatch = news.filter((n) => n.is_published && n.quality_criteria?.fit != null && n.quality_criteria.fit < 6);
+    return { total: news.length, published: published.length, pending: pending.length, pendingRecent: pendingRecent.length, missingField: missingField.length, mismatch: mismatch.length, fitMismatch: fitMismatch.length };
   }, [news]);
 
   // 사업영역 커버리지
@@ -458,6 +461,8 @@ function NewsTab({ news }: { news: NewsItem[] }) {
         if (!n.category) issues.push("카테고리 없음");
         if (!n.summary_short) issues.push("요약 없음");
         if (n.is_published && (n.quality_score ?? 10) < 4) issues.push("저품질 발행");
+        // fit 게이트(회사 적합성) 위반 — fit<6이면 자동발행 안 되는 규칙인데 발행된 경우
+        if (n.is_published && n.quality_criteria?.fit != null && n.quality_criteria.fit < 6) issues.push("적합성 미달 발행");
 
         const domains = n.business_domains ?? [];
 
@@ -465,7 +470,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
       })
       .filter((n) => {
         if (issueFilter === "missing") return n.issues.some((i) => i.includes("없음"));
-        if (issueFilter === "mismatch") return n.issues.includes("저품질 발행");
+        if (issueFilter === "mismatch") return n.issues.includes("저품질 발행") || n.issues.includes("적합성 미달 발행");
         return n.issues.length > 0;
       });
   }, [news, issueFilter]);
@@ -475,7 +480,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
     { label: "발행됨", value: stats.published, color: "#2563eb" },
     { label: "이번 주 신규 대기", value: stats.pendingRecent, color: "#d97706", desc: `전체 대기 ${stats.pending}건` },
     { label: "빠진 필드", value: stats.missingField, color: "#ef4444" },
-    { label: "저품질 발행", value: stats.mismatch, color: "#9333ea" },
+    { label: "발행 기준 위반", value: stats.mismatch + stats.fitMismatch, color: "#9333ea" },
   ];
 
   return (
@@ -605,13 +610,16 @@ function NewsTab({ news }: { news: NewsItem[] }) {
         <div style={{ padding: 20, borderRadius: 12,
           background: "var(--surface-container-lowest)",
           border: "1px solid var(--surface-container-high)" }}>
-          <p style={{ margin: "0 0 16px", fontWeight: 700, fontSize: "0.88rem" }}>
+          <p style={{ margin: "0 0 2px", fontWeight: 700, fontSize: "0.88rem" }}>
             🔍 큐레이션 정확도 체크
+          </p>
+          <p style={{ margin: "0 0 14px", fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
+            발행 규칙(품질점수·적합성 기준)이 실제로 지켜졌는지, 필수 필드가 빠지지 않았는지 확인 — AI 재판단이 아니라 값 대조라 즉시·무료로 확인됩니다
           </p>
           {[
             { key: "all" as const, label: "전체 이슈", count: issueItems.length, color: "#64748b" },
             { key: "missing" as const, label: "빠진 필드", count: news.filter(n => !n.category || !n.summary_short).length, color: "#ef4444" },
-            { key: "mismatch" as const, label: "저품질 발행", count: stats.mismatch, color: "#9333ea" },
+            { key: "mismatch" as const, label: "발행 기준 위반", count: stats.mismatch + stats.fitMismatch, color: "#9333ea" },
           ].map(({ key, label, count, color }) => (
             <button
               key={key}
@@ -1693,8 +1701,8 @@ export default function QualityDashboard({ news, events }: Props) {
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📰 뉴스 정합성 탭</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>빠진 필드</strong> — 카테고리 또는 요약(summary_short)이 없는 기사. 뉴스룸 리스트·검색에서 빈 카드로 노출될 수 있습니다. (이미지 없음은 로고 자동 대체되므로 이슈 아님)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>URL 중복</strong> — 동일한 원문 URL이 2건 이상 저장된 경우. 큐레이션 보드에서 수동 삭제하거나 하단 중복 정리 기능을 활용하세요.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>점수 불일치</strong> — 발행됐으나 품질점수 4점 미만이거나, 고품질(8점↑)이지만 미발행 상태인 기사. 검토 후 발행 여부를 조정하세요.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>발행 기준 위반</strong> — 자동발행 규칙을 어기고 발행된 경우. <strong style={{ color: "var(--on-surface)" }}>저품질 발행</strong>(품질점수 4점 미만인데 발행) 또는 <strong style={{ color: "var(--on-surface)" }}>적합성 미달 발행</strong>(fit 6점 미만인데 발행 — MICE·관광 실무와 무관한데 자동발행됨) 두 가지를 봅니다. AI 재판단이 아니라 저장된 값과 규칙을 그대로 대조하는 것이라 즉시·무료로 확인됩니다.</li>
+          <li>URL 중복은 <code style={{ fontSize: 11 }}>news_original_url_unique</code> 제약으로 DB 단에서 아예 발생하지 않아 별도 체크가 필요 없습니다.</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📊 사업영역 커버리지</p>
