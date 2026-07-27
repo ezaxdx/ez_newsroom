@@ -62,58 +62,65 @@ function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color
   const preview = articles.slice(0, 8);
 
   return (
+    // 바깥 래퍼는 트리거에 딱 붙여(gap 없음) 렌더 — 트리거→툴팁 이동 중 빈 픽셀을 지나면서
+    // mouseleave가 먼저 발동해 사라지는 걸 방지. 시각적 여백은 패딩으로만 만듦(투명 영역도
+    // 이 래퍼의 일부라 호버가 안 끊김). pointerEvents는 반드시 있어야 스크롤이 가능함.
     <div
       ref={ref}
       style={{
         position: "absolute",
         right: 0,
-        ...(flipUp ? { bottom: "calc(100% + 4px)" } : { top: "calc(100% + 4px)" }),
+        ...(flipUp ? { bottom: "100%", paddingBottom: 4 } : { top: "100%", paddingTop: 4 }),
         zIndex: 50,
         width: 300,
-        maxHeight: 320,
-        overflowY: "auto",
-        background: "var(--surface-container-lowest)",
-        border: "1px solid var(--surface-container-high)",
-        borderRadius: 8,
-        boxShadow: "0 8px 24px rgba(26,28,29,0.14)",
-        pointerEvents: "none",
       }}
     >
-      <p style={{
-        margin: 0, padding: "8px 12px 6px",
-        fontSize: "0.65rem", fontWeight: 700,
-        letterSpacing: "0.05em", textTransform: "uppercase",
-        color, borderBottom: "1px solid var(--surface-container-high)",
-        position: "sticky", top: 0,
-        background: "var(--surface-container-lowest)",
-      }}>
-        {label} · {articles.length}건
-      </p>
-      {preview.map((a) => (
-        <div key={a.id} style={{
-          padding: "6px 12px",
-          borderBottom: "1px solid var(--surface-container-high)",
-        }}>
-          <p style={{
-            margin: 0, fontSize: "0.73rem", color: "var(--on-surface)",
-            overflow: "hidden", textOverflow: "ellipsis",
-            whiteSpace: "nowrap", lineHeight: 1.4,
-          }}>
-            {a.title}
-          </p>
-          <p style={{ margin: 0, fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>
-            {a.category}
-          </p>
-        </div>
-      ))}
-      {articles.length > 8 && (
+      <div
+        style={{
+          maxHeight: 320,
+          overflowY: "auto",
+          background: "var(--surface-container-lowest)",
+          border: "1px solid var(--surface-container-high)",
+          borderRadius: 8,
+          boxShadow: "0 8px 24px rgba(26,28,29,0.14)",
+        }}
+      >
         <p style={{
-          margin: 0, padding: "6px 12px",
-          fontSize: "0.65rem", color: "var(--on-surface-variant)",
+          margin: 0, padding: "8px 12px 6px",
+          fontSize: "0.65rem", fontWeight: 700,
+          letterSpacing: "0.05em", textTransform: "uppercase",
+          color, borderBottom: "1px solid var(--surface-container-high)",
+          position: "sticky", top: 0,
+          background: "var(--surface-container-lowest)",
         }}>
-          외 {articles.length - 8}건 더 있음
+          {label} · {articles.length}건
         </p>
-      )}
+        {preview.map((a) => (
+          <div key={a.id} style={{
+            padding: "6px 12px",
+            borderBottom: "1px solid var(--surface-container-high)",
+          }}>
+            <p style={{
+              margin: 0, fontSize: "0.73rem", color: "var(--on-surface)",
+              overflow: "hidden", textOverflow: "ellipsis",
+              whiteSpace: "nowrap", lineHeight: 1.4,
+            }}>
+              {a.title}
+            </p>
+            <p style={{ margin: 0, fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>
+              {a.category}
+            </p>
+          </div>
+        ))}
+        {articles.length > 8 && (
+          <p style={{
+            margin: 0, padding: "6px 12px",
+            fontSize: "0.65rem", color: "var(--on-surface-variant)",
+          }}>
+            외 {articles.length - 8}건 더 있음
+          </p>
+        )}
+      </div>
     </div>
   );
 }
