@@ -349,9 +349,24 @@ async function fetchNavCategories(): Promise<string[]> {
   }
 }
 
-export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
-  const { from, to } = await searchParams;
-  const [data, navCategories] = await Promise.all([fetchAnalytics(from ?? null, to ?? null), fetchNavCategories()]);
+// 기간 미지정 시 기본값 — 이번 주(월요일~오늘, KST 기준)
+function defaultWeekRange(): { from: string; to: string } {
+  const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  const day = nowKST.getUTCDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const mon = new Date(nowKST);
+  mon.setUTCDate(nowKST.getUTCDate() - diff);
+  return { from: mon.toISOString().split("T")[0], to: nowKST.toISOString().split("T")[0] };
+}
+
+export default async function AnalyticsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; range?: string }> }) {
+  const { from, to, range } = await searchParams;
+  const isAll = range === "all";
+  const hasRange = Boolean(from || to);
+  const defaultRange = defaultWeekRange();
+  const effectiveFrom = isAll ? null : hasRange ? (from ?? null) : defaultRange.from;
+  const effectiveTo   = isAll ? null : hasRange ? (to ?? null)   : defaultRange.to;
+  const [data, navCategories] = await Promise.all([fetchAnalytics(effectiveFrom, effectiveTo), fetchNavCategories()]);
   const { totals, exploreFunnel, deeplinkFunnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)

@@ -1,12 +1,34 @@
-﻿"use client";
+"use client";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
+
+// 페이지(page.tsx)의 defaultWeekRange()와 동일한 로직 — 파라미터 없을 때 표시할 기본값(이번 주)
+function getWeekRange(): { from: string; to: string } {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = day === 0 ? 6 : day - 1;
+  const mon = new Date(now); mon.setDate(now.getDate() - diff);
+  return { from: mon.toISOString().split("T")[0], to: now.toISOString().split("T")[0] };
+}
+function getMonthRange(): { from: string; to: string } {
+  const now = new Date();
+  return {
+    from: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0],
+    to: now.toISOString().split("T")[0],
+  };
+}
 
 export default function DateRangePicker() {
   const router = useRouter();
   const sp = useSearchParams();
-  const [from, setFrom] = useState(sp.get("from") ?? "");
-  const [to, setTo] = useState(sp.get("to") ?? "");
+  const isAll = sp.get("range") === "all";
+  const paramFrom = sp.get("from");
+  const paramTo = sp.get("to");
+  const hasParamRange = Boolean(paramFrom || paramTo);
+  // 파라미터가 아예 없으면(최초 진입) 기본값인 이번 주를 그대로 보여줌
+  const week = getWeekRange();
+  const [from, setFrom] = useState(isAll ? "" : paramFrom ?? (hasParamRange ? "" : week.from));
+  const [to, setTo]     = useState(isAll ? "" : paramTo   ?? (hasParamRange ? "" : week.to));
 
   function apply(f: string, t: string) {
     const p = new URLSearchParams();
@@ -16,22 +38,19 @@ export default function DateRangePicker() {
   }
 
   function setPreset(preset: "week" | "month" | "all") {
-    const now = new Date();
-    if (preset === "all") { setFrom(""); setTo(""); apply("", ""); return; }
-    if (preset === "week") {
-      const day = now.getDay();
-      const diff = day === 0 ? 6 : day - 1;
-      const mon = new Date(now); mon.setDate(now.getDate() - diff);
-      const f = mon.toISOString().split("T")[0];
-      const t = now.toISOString().split("T")[0];
-      setFrom(f); setTo(t); apply(f, t);
-    }
-    if (preset === "month") {
-      const f = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
-      const t = now.toISOString().split("T")[0];
-      setFrom(f); setTo(t); apply(f, t);
-    }
+    if (preset === "all") { setFrom(""); setTo(""); router.push("/admin/analytics?range=all"); return; }
+    const { from: f, to: t } = preset === "week" ? getWeekRange() : getMonthRange();
+    setFrom(f); setTo(t); apply(f, t);
   }
+
+  // 현재 표시 중인 값이 어느 프리셋과 일치하는지로 활성 버튼 판별
+  const week2 = getWeekRange();
+  const month2 = getMonthRange();
+  const activePreset: "week" | "month" | "all" | null = isAll
+    ? "all"
+    : from === week2.from && to === week2.to ? "week"
+    : from === month2.from && to === month2.to ? "month"
+    : null;
 
   const inputStyle: React.CSSProperties = {
     height: 32, padding: "0 8px", borderRadius: 6, fontSize: 13,
@@ -43,9 +62,9 @@ export default function DateRangePicker() {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
       {/* 빠른 선택 */}
-      {(["all", "month", "week"] as const).map((p) => {
+      {(["week", "month", "all"] as const).map((p) => {
         const labels = { all: "전체", month: "이번 달", week: "이번 주" };
-        const active = p === "all" ? (!from && !to) : false;
+        const active = activePreset === p;
         return (
           <button key={p} onClick={() => setPreset(p)}
             style={{
