@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { LayoutDashboard, Rss, Settings, BarChart2, ArrowLeft, PenLine, LogOut, ShieldCheck, Mail } from "lucide-react";
 
 const NAV = [
@@ -16,6 +16,7 @@ const NAV = [
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
 
   const handleLogout = async () => {
     await fetch("/api/admin/auth", { method: "DELETE" });
@@ -44,17 +45,25 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Nav */}
-        {NAV.map(({ href, label, icon: Icon }) => (
-          <Link
-            key={href}
-            href={href}
-            className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-[--surface-container-high]"
-            style={{ color: "var(--on-surface)", textDecoration: "none" }}
-          >
-            <Icon size={15} style={{ color: "var(--on-surface-variant)" }} />
-            {label}
-          </Link>
-        ))}
+        {NAV.map(({ href, label, icon: Icon }) => {
+          const isActive = href === "/admin" ? pathname === "/admin" : pathname.startsWith(href);
+          return (
+            <Link
+              key={href}
+              href={href}
+              className="flex items-center gap-2.5 px-3 py-2 rounded-md text-sm font-medium transition-colors hover:bg-[--surface-container-high]"
+              style={{
+                color: "var(--on-surface)",
+                fontWeight: isActive ? 700 : 500,
+                background: isActive ? "var(--surface-container-high)" : "transparent",
+                textDecoration: "none",
+              }}
+            >
+              <Icon size={15} style={{ color: isActive ? "var(--primary)" : "var(--on-surface-variant)" }} />
+              {label}
+            </Link>
+          );
+        })}
 
         {/* Back to newsroom + Logout */}
         <div className="mt-2 pt-2 flex flex-col gap-1" style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
