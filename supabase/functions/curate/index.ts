@@ -701,7 +701,7 @@ Deno.serve(async (req) => {
   const sources = [...sourcesRaw].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
 
   const { data: settings } = await supabase
-    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords, business_domain_examples")
+    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords, business_domain_examples, content_quality_notes")
     .limit(1).single();
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> = settings?.category_settings ?? {};
   const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
@@ -715,7 +715,13 @@ Deno.serve(async (req) => {
     ? `\n\n【사업영역 분류 확정 예시 — 관리자가 직접 검수함, 비슷한 유형의 제목은 이 사례를 참고해 분류하세요】\n` +
       domainExamples.slice(0, 30).map((e) => `- "${e.title}" → ${JSON.stringify(e.business_domains)}`).join("\n")
     : "";
-  const companyContextWithExamples = companyContext + domainExamplesHint;
+  // 콘텐츠 품질 감사에서 실제로 수정까지 된 문제 유형 누적 — "이런 실수를 반복하지 말 것"으로 경고
+  const qualityNotes: string[] = Array.isArray(settings?.content_quality_notes) ? settings.content_quality_notes : [];
+  const qualityNotesHint = qualityNotes.length
+    ? `\n\n【콘텐츠 품질 감사에서 실제로 발견·수정된 문제 유형 — 아래와 같은 실수를 반복하지 마세요】\n` +
+      qualityNotes.slice(0, 30).map((n) => `- ${n}`).join("\n")
+    : "";
+  const companyContextWithExamples = companyContext + domainExamplesHint + qualityNotesHint;
 
   // 관심 키워드: 언론사 전체피드(keyword_filter=true)에서 관련 기사만 통과시킴
   // curation_settings.focus_keywords 우선, 없으면 기본값(회사 검색어)

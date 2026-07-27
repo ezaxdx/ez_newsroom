@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ExternalLink, Check } from "lucide-react";
+import { ExternalLink, Check, Sparkles, X } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import HelpPanel from "@/components/admin/HelpPanel";
 
@@ -186,6 +186,171 @@ function DomainEditor({ item }: { item: NewsItem }) {
   );
 }
 
+// ── 콘텐츠 품질 감사에서 걸린 기사 1건 — 문제점 확인 + AI 수정제안/직접수정 + 저장 ──────
+function AuditedItemRow({ item }: { item: NewsItem }) {
+  const router = useRouter();
+  const [editing, setEditing] = useState(false);
+  const [form, setForm] = useState({
+    title: item.title, summary_short: item.summary_short,
+    content_long: item.content_long, implications: item.implications ?? "",
+  });
+  const [aiFixing, setAiFixing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const startEdit = () => {
+    setForm({ title: item.title, summary_short: item.summary_short, content_long: item.content_long, implications: item.implications ?? "" });
+    setErrorMsg(null);
+    setEditing(true);
+  };
+
+  const aiFix = async () => {
+    setAiFixing(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/admin/news/ai-fix", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "AI 수정 제안 실패");
+      setForm({
+        title: json.fixed.title ?? form.title,
+        summary_short: json.fixed.summary_short ?? form.summary_short,
+        content_long: json.fixed.content_long ?? form.content_long,
+        implications: json.fixed.implications ?? form.implications,
+      });
+      setEditing(true);
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "오류 발생");
+    } finally {
+      setAiFixing(false);
+    }
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setErrorMsg(null);
+    try {
+      const res = await fetch("/api/admin/news/update-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, ...form }),
+      });
+      if (!res.ok) { const j = await res.json(); throw new Error(j.error ?? "저장 실패"); }
+      setEditing(false);
+      router.refresh();
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "오류 발생");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const unpublish = async () => {
+    if (!confirm("이 기사를 발행취소할까요?")) return;
+    await fetch("/api/admin/news/toggle-publish", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id: item.id, is_published: false }),
+    });
+    router.refresh();
+  };
+
+  const textareaStyle: React.CSSProperties = {
+    width: "100%", padding: "6px 8px", borderRadius: 6, fontSize: "0.75rem",
+    border: "1px solid var(--surface-container-high)", background: "var(--surface-container-lowest)",
+    color: "var(--on-surface)", resize: "vertical", fontFamily: "inherit",
+  };
+
+  return (
+    <div style={{
+      padding: "8px 10px", borderRadius: 6,
+      background: "var(--surface-container)",
+      border: "1px solid var(--surface-container-high)",
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
+        <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--on-surface)", lineHeight: 1.4 }}>{item.title}</p>
+        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+          <span style={{
+            fontSize: "0.65rem", fontWeight: 700, padding: "1px 7px", borderRadius: 10,
+            background: (item.faithfulness_score ?? 0) <= 4 ? "#ef444418" : "#f59e0b18",
+            color: (item.faithfulness_score ?? 0) <= 4 ? "#ef4444" : "#f59e0b",
+          }}>
+            충실도 {item.faithfulness_score ?? "-"}
+          </span>
+          <a href={item.original_url} target="_blank" rel="noopener noreferrer"
+            style={{ display: "flex", color: "var(--on-surface-variant)" }}>
+            <ExternalLink size={12} />
+          </a>
+        </div>
+      </div>
+      {(item.faithfulness_issues ?? []).length > 0 && (
+        <ul style={{ margin: "0 0 6px", paddingLeft: 16, fontSize: "0.68rem", color: "var(--on-surface-variant)" }}>
+          {(item.faithfulness_issues ?? []).map((issue, i) => <li key={i}>{issue}</li>)}
+        </ul>
+      )}
+
+      {!editing ? (
+        <div style={{ display: "flex", gap: 6 }}>
+          <button onClick={aiFix} disabled={aiFixing} style={{
+            display: "flex", alignItems: "center", gap: 4,
+            padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
+            border: "none", cursor: aiFixing ? "wait" : "pointer",
+            background: "var(--primary)", color: "#fff", opacity: aiFixing ? 0.6 : 1,
+          }}>
+            <Sparkles size={11} /> {aiFixing ? "생성 중..." : "AI로 수정 제안"}
+          </button>
+          <button onClick={startEdit} style={{
+            padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
+            border: "1px solid var(--surface-container-high)", cursor: "pointer",
+            background: "transparent", color: "var(--on-surface-variant)",
+          }}>
+            직접 수정
+          </button>
+          <button onClick={unpublish} style={{
+            padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
+            border: "1px solid #ef444440", cursor: "pointer",
+            background: "transparent", color: "#ef4444",
+          }}>
+            발행취소
+          </button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          <input value={form.title} onChange={(e) => setForm((f) => ({ ...f, title: e.target.value }))}
+            style={{ ...textareaStyle, fontWeight: 600 }} placeholder="제목" />
+          <textarea value={form.summary_short} onChange={(e) => setForm((f) => ({ ...f, summary_short: e.target.value }))}
+            rows={2} style={textareaStyle} placeholder="요약" />
+          <textarea value={form.content_long} onChange={(e) => setForm((f) => ({ ...f, content_long: e.target.value }))}
+            rows={4} style={textareaStyle} placeholder="본문" />
+          <textarea value={form.implications} onChange={(e) => setForm((f) => ({ ...f, implications: e.target.value }))}
+            rows={2} style={textareaStyle} placeholder="시사점" />
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={save} disabled={saving} style={{
+              padding: "4px 12px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 700,
+              border: "none", cursor: saving ? "wait" : "pointer",
+              background: "var(--primary)", color: "#fff", opacity: saving ? 0.6 : 1,
+            }}>
+              {saving ? "저장 중..." : "저장"}
+            </button>
+            <button onClick={() => setEditing(false)} disabled={saving} style={{
+              display: "flex", alignItems: "center", gap: 3,
+              padding: "4px 10px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 600,
+              border: "1px solid var(--surface-container-high)", cursor: "pointer",
+              background: "transparent", color: "var(--on-surface-variant)",
+            }}>
+              <X size={11} /> 취소
+            </button>
+          </div>
+        </div>
+      )}
+      {errorMsg && <p style={{ margin: "6px 0 0", fontSize: "0.68rem", color: "#ef4444" }}>{errorMsg}</p>}
+    </div>
+  );
+}
+
 // ── 뉴스 정합성 탭 ─────────────────────────────────────────────────
 function NewsTab({ news }: { news: NewsItem[] }) {
   const router = useRouter();
@@ -193,6 +358,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
   const [showUnclassified, setShowUnclassified] = useState(false);
   const [auditRunning, setAuditRunning] = useState(false);
   const [auditResult, setAuditResult] = useState<string | null>(null);
+  const [showCriteria, setShowCriteria] = useState(false);
 
   // 콘텐츠 품질 감사 — 발행 기사의 제목·요약·본문이 원문에 충실한지(할루시네이션·왜곡 여부) 재검증한 결과 집계
   const contentAudit = useMemo(() => {
@@ -530,18 +696,43 @@ function NewsTab({ news }: { news: NewsItem[] }) {
               발행 기사가 원문 내용에 충실한지(할루시네이션·과장 여부) AI로 재검증
             </p>
           </div>
-          <button
-            onClick={runAudit}
-            disabled={auditRunning}
-            style={{
-              padding: "6px 14px", borderRadius: 8, fontSize: "0.78rem", fontWeight: 600,
-              border: "none", cursor: auditRunning ? "wait" : "pointer",
-              background: "var(--primary)", color: "#fff", opacity: auditRunning ? 0.6 : 1,
-            }}
-          >
-            {auditRunning ? "실행 중..." : "감사 실행"}
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <button
+              onClick={() => setShowCriteria((v) => !v)}
+              style={{
+                padding: "6px 10px", borderRadius: 8, fontSize: "0.72rem", fontWeight: 600,
+                border: "1px solid var(--surface-container-high)", cursor: "pointer",
+                background: "transparent", color: "var(--on-surface-variant)",
+              }}
+            >
+              판단 기준 {showCriteria ? "▲" : "▼"}
+            </button>
+            <button
+              onClick={runAudit}
+              disabled={auditRunning}
+              style={{
+                padding: "6px 14px", borderRadius: 8, fontSize: "0.78rem", fontWeight: 600,
+                border: "none", cursor: auditRunning ? "wait" : "pointer",
+                background: "var(--primary)", color: "#fff", opacity: auditRunning ? 0.6 : 1,
+              }}
+            >
+              {auditRunning ? "실행 중..." : "감사 실행"}
+            </button>
+          </div>
         </div>
+
+        {showCriteria && (
+          <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 8, fontSize: "0.72rem",
+            lineHeight: 1.7, color: "var(--on-surface-variant)", background: "var(--surface-container)" }}>
+            <strong style={{ color: "var(--on-surface)" }}>충실도(faithfulness_score, 1~10)는 아래 기준으로 AI가 판단합니다:</strong>
+            <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>
+              <li>원문에 없는 사실을 지어내지 않았는가 (할루시네이션)</li>
+              <li>제목이 원문 내용을 과장·왜곡하지 않았는가</li>
+              <li>요약·본문이 원문의 핵심(숫자·고유명사 포함)을 정확히 전달하는가</li>
+            </ul>
+            <p style={{ margin: "6px 0 0" }}>10=완벽히 충실 · 5~6=사소한 과장/누락 · 1~3=원문에 없는 내용 포함 또는 심각한 왜곡. <strong style={{ color: "var(--on-surface)" }}>6점 이하 또는 문제점 발견 시</strong> 아래 목록에 표시됩니다.</p>
+          </div>
+        )}
 
         {auditResult && (
           <p style={{ fontSize: "0.78rem", margin: "0 0 12px", color: "var(--on-surface-variant)" }}>{auditResult}</p>
@@ -556,33 +747,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
         {contentAudit.flagged.length > 0 ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 320, overflowY: "auto" }}>
             {contentAudit.flagged.slice(0, 30).map((n) => (
-              <div key={n.id} style={{
-                padding: "8px 10px", borderRadius: 6,
-                background: "var(--surface-container)",
-                border: "1px solid var(--surface-container-high)",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8, marginBottom: 4 }}>
-                  <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--on-surface)", lineHeight: 1.4 }}>{n.title}</p>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                    <span style={{
-                      fontSize: "0.65rem", fontWeight: 700, padding: "1px 7px", borderRadius: 10,
-                      background: (n.faithfulness_score ?? 0) <= 4 ? "#ef444418" : "#f59e0b18",
-                      color: (n.faithfulness_score ?? 0) <= 4 ? "#ef4444" : "#f59e0b",
-                    }}>
-                      충실도 {n.faithfulness_score ?? "-"}
-                    </span>
-                    <a href={n.original_url} target="_blank" rel="noopener noreferrer"
-                      style={{ display: "flex", color: "var(--on-surface-variant)" }}>
-                      <ExternalLink size={12} />
-                    </a>
-                  </div>
-                </div>
-                {(n.faithfulness_issues ?? []).length > 0 && (
-                  <ul style={{ margin: 0, paddingLeft: 16, fontSize: "0.68rem", color: "var(--on-surface-variant)" }}>
-                    {(n.faithfulness_issues ?? []).map((issue, i) => <li key={i}>{issue}</li>)}
-                  </ul>
-                )}
-              </div>
+              <AuditedItemRow key={n.id} item={n} />
             ))}
             {contentAudit.flagged.length > 30 && (
               <p style={{ textAlign: "center", fontSize: "0.72rem", color: "var(--on-surface-variant)", margin: 0 }}>
@@ -1534,7 +1699,10 @@ export default function QualityDashboard({ news, events }: Props) {
           <li>사업영역 분류가 <strong style={{ color: "var(--on-surface)" }}>&ldquo;맞는 카테고리에 넣었는가&rdquo;</strong>를 본다면, 이건 <strong style={{ color: "var(--on-surface)" }}>&ldquo;글 자체가 원문에 충실한가&rdquo;</strong>를 봅니다 — 서로 다른 검증입니다.</li>
           <li>원문(original_url)을 다시 가져와 생성된 제목·요약·본문과 대조, 할루시네이션(원문에 없는 내용)·과장·왜곡 여부를 AI로 재판단합니다.</li>
           <li>이미 감사한 기사는 건너뛰므로 여러 번 실행해도 비용이 중복되지 않고, 시간예산 초과로 다 못 돈 나머지는 다음 실행에서 이어서 처리됩니다.</li>
-          <li>충실도 점수 6점 이하이거나 문제점이 있는 기사만 목록에 표시됩니다.</li>
+          <li>충실도 점수 6점 이하이거나 문제점이 있는 기사만 목록에 표시됩니다. 자동으로 발행취소되지 않으니 직접 확인 후 조치하세요.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>AI로 수정 제안</strong> — 원문과 지적된 문제점을 근거로 AI가 고친 버전을 생성해 편집창에 채워줍니다. 자동 저장되지 않으므로 검토·수정 후 저장하세요.</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>직접 수정</strong> — 제목·요약·본문·시사점을 바로 편집해 저장할 수 있습니다.</li>
+          <li>수정해 저장하면 재감사 대상으로 다시 큐에 들어가고, 걸렸던 문제점은 이후 큐레이션 프롬프트에 &ldquo;이런 실수 반복하지 말 것&rdquo;으로 누적 반영됩니다.</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>
