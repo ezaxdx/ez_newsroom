@@ -639,7 +639,9 @@ business_domains(사업영역 분류): 시스템 지침(company_context)의 "7�
   - 후보: ["스마트립","글로컬 관광","AI 관광","MICE Tech","ATT(관광 전시)","MEeT(의료 전시)","AXDX"]
   - 기사의 핵심 주제가 해당 영역일 때만 포함 — 스쳐 지나가는 언급이나 억지 연결은 제외
   - 시사점(implications)에서 사업 연결을 언급했다고 해서 자동으로 포함하지 말 것 — 별개 판단
-  - 여러 영역에 핵심적으로 걸치면 복수 반환 가능, 어디에도 해당 없으면 빈 배열 []
+  - 특히 "MICE Tech"는 오투미트(O2MEET)·LeadX 같은 기술/플랫폼 요소가 실제로 있을 때만 — 국제회의 유치,
+    산학협력, 인력양성 등 기술과 무관한 일반 MICE 산업 뉴스는 절대 포함하지 말 것
+  - 여러 영역에 핵심적으로 걸치면 복수 반환 가능, 어디에도 해당 없으면 빈 배열 [] (억지로 채우지 말 것)
 
 다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
 {"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":["AI 관광"]}
