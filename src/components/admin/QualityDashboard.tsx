@@ -614,7 +614,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
             🔍 큐레이션 정확도 체크
           </p>
           <p style={{ margin: "0 0 14px", fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
-            발행 규칙(품질점수·적합성 기준)이 실제로 지켜졌는지, 필수 필드가 빠지지 않았는지 확인 — AI 재판단이 아니라 값 대조라 즉시·무료로 확인됩니다
+            발행 규칙(품질점수·적합성 기준)이 실제로 지켜졌는지, 필수 필드가 빠지지 않았는지 확인
           </p>
           {[
             { key: "all" as const, label: "전체 이슈", count: issueItems.length, color: "#64748b" },
