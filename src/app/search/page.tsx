@@ -15,7 +15,7 @@ async function searchNews(query: string): Promise<NewsItem[]> {
       .from("news")
       .select("*")
       .eq("is_published", true)
-      .or(`title.ilike.%${query}%,summary_short.ilike.%${query}%`)
+      .or(`title.ilike.%${query}%,summary_short.ilike.%${query}%,content_long.ilike.%${query}%,implications.ilike.%${query}%`)
       .order("published_at", { ascending: false })
       .limit(50);
     return (data as NewsItem[]) ?? [];
