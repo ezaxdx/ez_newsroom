@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
+import { ExternalLink, Check } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import type { RssSource } from "@/app/admin/quality/page";
 import HelpPanel from "@/components/admin/HelpPanel";
@@ -107,9 +109,10 @@ function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color
             }}>
               {a.title}
             </p>
-            <p style={{ margin: 0, fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>
+            <p style={{ margin: "0 0 4px", fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>
               {a.category}
             </p>
+            <DomainEditor item={a} />
           </div>
         ))}
         {articles.length > 8 && (
@@ -121,6 +124,76 @@ function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color
           </p>
         )}
       </div>
+    </div>
+  );
+}
+
+// ── 사업영역 수동 보정 컨트롤 ──────────────────────────────────────
+// 저장 시 news.business_domains를 즉시 갱신하고, curation_settings.business_domain_examples에
+// {title, business_domains}로 누적 저장 — 다음 큐레이션부터 AI 프롬프트의 few-shot 예시로 주입되어
+// "이런 제목은 이렇게 분류해야 한다"를 실제 사례로 학습하듯 반영됨.
+function DomainEditor({ item }: { item: NewsItem }) {
+  const router = useRouter();
+  const [selected, setSelected] = useState<string[]>(item.business_domains ?? []);
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify([...selected].sort()) !== JSON.stringify([...(item.business_domains ?? [])].sort());
+
+  const toggle = (label: string) => {
+    setSelected((prev) => prev.includes(label) ? prev.filter((d) => d !== label) : [...prev, label]);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const res = await fetch("/api/admin/news/domains", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: item.id, title: item.title, business_domains: selected }),
+      });
+      if (!res.ok) throw new Error("저장 실패");
+      router.refresh();
+    } catch {
+      alert("사업영역 저장 중 오류가 발생했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+      {DOMAINS.map((d) => {
+        const on = selected.includes(d.label);
+        return (
+          <button
+            key={d.label}
+            onClick={() => toggle(d.label)}
+            style={{
+              display: "flex", alignItems: "center", gap: 2,
+              padding: "1px 7px", borderRadius: 20, fontSize: "0.62rem", fontWeight: 600,
+              border: `1px solid ${on ? d.color : "var(--surface-container-high)"}`,
+              background: on ? d.color + "18" : "transparent",
+              color: on ? d.color : "var(--on-surface-variant)",
+              cursor: "pointer",
+            }}
+          >
+            {on && <Check size={9} />}
+            {d.label}
+          </button>
+        );
+      })}
+      {dirty && (
+        <button
+          onClick={save}
+          disabled={saving}
+          style={{
+            padding: "1px 9px", borderRadius: 20, fontSize: "0.62rem", fontWeight: 700,
+            border: "none", cursor: saving ? "default" : "pointer",
+            background: "var(--primary)", color: "#fff", opacity: saving ? 0.6 : 1,
+          }}
+        >
+          {saving ? "저장 중" : "저장"}
+        </button>
+      )}
     </div>
   );
 }
@@ -288,20 +361,13 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
                 <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 4,
                   maxHeight: 280, overflowY: "auto" }}>
                   {domainCoverage.unclassifiedItems.map((n) => (
-                    <a
-                      key={n.id}
-                      href={n.original_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      style={{ textDecoration: "none" }}
-                    >
-                      <div style={{
-                        padding: "7px 10px", borderRadius: 6,
-                        background: "var(--surface-container)",
-                        border: "1px solid var(--surface-container-high)",
-                        display: "flex", justifyContent: "space-between",
-                        alignItems: "flex-start", gap: 8,
-                      }}>
+                    <div key={n.id} style={{
+                      padding: "7px 10px", borderRadius: 6,
+                      background: "var(--surface-container)",
+                      border: "1px solid var(--surface-container-high)",
+                      display: "flex", flexDirection: "column", gap: 5,
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                         <p style={{
                           margin: 0, fontSize: "0.75rem", color: "var(--on-surface)",
                           overflow: "hidden", textOverflow: "ellipsis",
@@ -311,22 +377,20 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
                         }}>
                           {n.title}
                         </p>
-                        <div style={{ display: "flex", flexDirection: "column",
-                          alignItems: "flex-end", gap: 3, flexShrink: 0 }}>
-                          <span style={{
-                            fontSize: "0.62rem", padding: "1px 6px", borderRadius: 10,
-                            background: "#64748b18", color: "#64748b", fontWeight: 600,
-                          }}>
-                            {n.category ?? "미분류"}
-                          </span>
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
                           {n.quality_score != null && (
                             <span style={{ fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>
                               품질 {n.quality_score}점
                             </span>
                           )}
+                          <a href={n.original_url} target="_blank" rel="noopener noreferrer"
+                            style={{ display: "flex", color: "var(--on-surface-variant)" }}>
+                            <ExternalLink size={12} />
+                          </a>
                         </div>
                       </div>
-                    </a>
+                      <DomainEditor item={n} />
+                    </div>
                   ))}
                 </div>
               )}

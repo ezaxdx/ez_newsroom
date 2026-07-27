@@ -65,7 +65,8 @@ create table if not exists public.curation_settings (
   level_prompts         jsonb default '{}',            -- 레벨별(Beginner/Intermediate/Advanced) 작성 지침
   quality_thresholds    jsonb default '{"auto_publish": 8, "staging": 5}',
   auto_schedule         jsonb default '{"enabled": false, "days": [], "hour": 9}',
-  company_context       text
+  company_context       text,
+  business_domain_examples jsonb default '[]'    -- 관리자가 수동 보정한 사업영역 분류 예시 [{title, business_domains}] — 큐레이션 프롬프트의 few-shot 예시로 주입되어 이후 분류에 반영
 );
 
 alter table public.curation_settings
@@ -74,7 +75,8 @@ alter table public.curation_settings
   add column if not exists company_context       text,
   add column if not exists level_prompts         jsonb default '{}',
   add column if not exists quality_thresholds    jsonb default '{"auto_publish": 8, "staging": 5}',
-  add column if not exists auto_schedule         jsonb default '{"enabled": false, "days": [], "hour": 9}';
+  add column if not exists auto_schedule         jsonb default '{"enabled": false, "days": [], "hour": 9}',
+  add column if not exists business_domain_examples jsonb default '[]';
 
 -- ── convention_events ─────────────────────────────────────────────────
 create table if not exists public.convention_events (

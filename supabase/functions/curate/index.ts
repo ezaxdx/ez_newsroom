@@ -701,12 +701,21 @@ Deno.serve(async (req) => {
   const sources = [...sourcesRaw].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
 
   const { data: settings } = await supabase
-    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords")
+    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords, business_domain_examples")
     .limit(1).single();
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> = settings?.category_settings ?? {};
   const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const qualityThresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
   const companyContext: string = settings?.company_context ?? "";
+  // 관리자가 수동 보정한 사업영역 분류 확정 예시 — 프롬프트에 few-shot으로 주입해 비슷한 제목을
+  // 앞으로 더 정확히 분류하도록 유도 (모델 재학습이 아니라 프롬프트에 실제 사례를 계속 누적하는 방식)
+  const domainExamples: { title: string; business_domains: string[] }[] = Array.isArray(settings?.business_domain_examples)
+    ? settings.business_domain_examples : [];
+  const domainExamplesHint = domainExamples.length
+    ? `\n\n【사업영역 분류 확정 예시 — 관리자가 직접 검수함, 비슷한 유형의 제목은 이 사례를 참고해 분류하세요】\n` +
+      domainExamples.slice(0, 30).map((e) => `- "${e.title}" → ${JSON.stringify(e.business_domains)}`).join("\n")
+    : "";
+  const companyContextWithExamples = companyContext + domainExamplesHint;
 
   // 관심 키워드: 언론사 전체피드(keyword_filter=true)에서 관련 기사만 통과시킴
   // curation_settings.focus_keywords 우선, 없으면 기본값(회사 검색어)
@@ -811,7 +820,7 @@ Deno.serve(async (req) => {
         return;
       }
       if (vdKey) venueDateSeen.add(vdKey);
-      const generated = await generateArticle(apiKey, articleText, url, setting.persona, setting.audience, setting.keywords, catLevelPrompts, companyContext);
+      const generated = await generateArticle(apiKey, articleText, url, setting.persona, setting.audience, setting.keywords, catLevelPrompts, companyContextWithExamples);
       if (!generated) { results.failed++; stat.failed++; runErrors.push({ source: source.source_name, url, error: "generateArticle 실패" }); return; }
       const score = generated.quality_score ?? 5;
       scoreDist[score] = (scoreDist[score] ?? 0) + 1;
