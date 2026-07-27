@@ -76,7 +76,9 @@ const DOMAINS: { label: string; color: string; keywords: string[] }[] = [
     label: "MEeT(의료 전시)",
     color: "#ef4444",
     keywords: [
-      "MEeT", "Medical Emerging Technology", "의료기술", "디지털헬스",
+      // "MEeT" 단독 키워드는 제외 — 정규화("meet")가 MICE Tech 자사 제품명
+      // "O2Meet" 안에 그대로 포함되어 무관한 기사를 대량으로 오분류시킴
+      "Medical Emerging Technology", "의료기술", "디지털헬스",
       "의료기기", "헬스케어", "바이오", "메디컬 테크", "의료 컨퍼런스",
       "의료 전시", "글로벌 바이어", "투자 매칭", "의료", "healthcare",
       "헬스테크", "의료 AI", "바이오테크", "디지털 의료",
@@ -223,13 +225,16 @@ function NewsTab({ news, sources }: { news: NewsItem[]; sources: RssSource[] }) 
     const articles: Record<string, NewsItem[]> = {};
     const unclassifiedItems: NewsItem[] = [];
     for (const n of published) {
-      // 본문·시사점까지 포함 — 제목·요약에만 의존하면 본문에서만 언급된 사업영역이 미분류로 빠짐
+      // 본문(content_long)까지 포함 — 제목·요약에만 의존하면 본문에서만 언급된 사업영역이 미분류로 빠짐.
+      // implications(시사점)는 제외 — AI가 모든 기사를 "MICE·관광에 어떻게 도움될지"로 억지로
+      // 연결하도록 작성되어 있어(예: 조선업 기사에도 "MICE·관광 산업에 기회" 식 보일러플레이트),
+      // 포함 시 무관한 기사가 대량으로 오분류됨 (실측: 시사점 포함 시 미분류 16건 → 제외 시 56건,
+      // 후자가 실제에 더 가까움).
       const text = [
         n.title,
         n.summary_short ?? "",
         n.category ?? "",
         n.content_long ?? "",
-        n.implications ?? "",
       ].join(" ");
       const domains = getDomains(text);
       if (domains.length === 0) unclassifiedItems.push(n);
@@ -1598,7 +1603,8 @@ export default function QualityDashboard({ news, events, sources }: Props) {
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📊 사업영역 커버리지</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li>발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 키워드와 얼마나 겹치는지 비율로 표시합니다.</li>
-          <li>매칭 범위는 제목·요약·카테고리 + <strong style={{ color: "var(--on-surface)" }}>본문·시사점</strong>까지 포함하며, 띄어쓰기 차이(&ldquo;스마트 관광&rdquo; / &ldquo;스마트관광&rdquo;)는 자동으로 같게 처리합니다.</li>
+          <li>매칭 범위는 제목·요약·카테고리 + <strong style={{ color: "var(--on-surface)" }}>본문(상세분석)</strong>까지 포함하며, 띄어쓰기 차이(&ldquo;스마트 관광&rdquo; / &ldquo;스마트관광&rdquo;)는 자동으로 같게 처리합니다.</li>
+          <li>시사점(implications)은 매칭에서 제외 — AI가 모든 기사를 MICE·관광 업계 관점으로 억지 연결해 쓰기 때문에, 포함하면 무관한 기사까지 대량 오분류됩니다.</li>
           <li>건수/퍼센트에 마우스를 올리면 해당 도메인의 기사 목록(최대 8건)을 미리볼 수 있습니다.</li>
           <li><strong style={{ color: "var(--on-surface)" }}>미분류</strong> — 어느 도메인 키워드에도 매칭되지 않는 기사. 비율이 높으면 큐레이션 설정의 강조 키워드를 점검하거나 도메인 키워드 확장을 검토하세요.</li>
           <li>하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 &gt; 100% 가능).</li>
