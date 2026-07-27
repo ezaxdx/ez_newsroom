@@ -39,7 +39,7 @@ const DOMAINS: { label: string; color: string }[] = [
 ];
 
 // ── 도메인 툴팁 (viewport 경계 자동 감지) ──────────────────────────
-function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color: string; label: string }) {
+function DomainTooltip({ articles, color, label, onShowAll }: { articles: NewsItem[]; color: string; label: string; onShowAll: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [flipUp, setFlipUp] = useState(false);
 
@@ -104,13 +104,61 @@ function DomainTooltip({ articles, color, label }: { articles: NewsItem[]; color
           </div>
         ))}
         {articles.length > 8 && (
-          <p style={{
-            margin: 0, padding: "6px 12px",
-            fontSize: "0.65rem", color: "var(--on-surface-variant)",
-          }}>
-            외 {articles.length - 8}건 더 있음
-          </p>
+          <button
+            onClick={onShowAll}
+            style={{
+              display: "block", width: "100%", textAlign: "left",
+              margin: 0, padding: "6px 12px", borderRadius: 0,
+              fontSize: "0.65rem", fontWeight: 600, color,
+              border: "none", background: "transparent", cursor: "pointer",
+            }}
+          >
+            외 {articles.length - 8}건 더 있음 — 전체보기
+          </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+// ── 도메인 전체 기사 목록 모달 (호버 미리보기의 "전체보기") ──────────────
+function DomainListModal({ label, color, articles, onClose }: { label: string; color: string; articles: NewsItem[]; onClose: () => void }) {
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 100,
+        background: "rgba(26,28,29,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 24,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: "min(560px, 100%)", maxHeight: "80vh",
+          display: "flex", flexDirection: "column",
+          background: "var(--surface-container-lowest)", borderRadius: 12,
+          boxShadow: "0 20px 60px rgba(26,28,29,0.25)", overflow: "hidden",
+        }}
+      >
+        <div style={{
+          display: "flex", justifyContent: "space-between", alignItems: "center",
+          padding: "14px 18px", borderBottom: "1px solid var(--surface-container-high)", flexShrink: 0,
+        }}>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: "0.9rem", color }}>{label} · {articles.length}건</p>
+          <button onClick={onClose} style={{ background: "transparent", border: "none", cursor: "pointer", color: "var(--on-surface-variant)", display: "flex" }}>
+            <X size={16} />
+          </button>
+        </div>
+        <div style={{ overflowY: "auto", padding: "4px 18px" }}>
+          {articles.map((a) => (
+            <div key={a.id} style={{ padding: "10px 0", borderBottom: "1px solid var(--surface-container-high)" }}>
+              <p style={{ margin: 0, fontSize: "0.82rem", color: "var(--on-surface)", lineHeight: 1.4 }}>{a.title}</p>
+              <p style={{ margin: "2px 0 6px", fontSize: "0.68rem", color: "var(--on-surface-variant)" }}>{a.category}</p>
+              <DomainEditor item={a} />
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -451,6 +499,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
   }, [news]);
 
   const [hoveredDomain, setHoveredDomain] = useState<string | null>(null);
+  const [modalDomain, setModalDomain] = useState<{ label: string; color: string } | null>(null);
 
   // 이슈 목록
   const issueItems = useMemo(() => {
@@ -534,7 +583,12 @@ function NewsTab({ news }: { news: NewsItem[] }) {
                   >
                     {cnt}건 ({pct}%)
                     {isHovered && domainArticles.length > 0 && (
-                      <DomainTooltip articles={domainArticles} color={d.color} label={d.label} />
+                      <DomainTooltip
+                        articles={domainArticles}
+                        color={d.color}
+                        label={d.label}
+                        onShowAll={() => { setModalDomain({ label: d.label, color: d.color }); setHoveredDomain(null); }}
+                      />
                     )}
                   </span>
                 </div>
@@ -793,6 +847,15 @@ function NewsTab({ news }: { news: NewsItem[] }) {
           </p>
         )}
       </div>
+
+      {modalDomain && (
+        <DomainListModal
+          label={modalDomain.label}
+          color={modalDomain.color}
+          articles={domainCoverage.articles[modalDomain.label] ?? []}
+          onClose={() => setModalDomain(null)}
+        />
+      )}
     </div>
   );
 }
