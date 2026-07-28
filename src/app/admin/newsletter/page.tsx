@@ -66,10 +66,23 @@ export default function NewsletterPage() {
   const [issues, setIssues] = useState<Issue[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const HISTORY_STATUSES = ["sent", "partial", "sending", "failed", "draft"] as const;
+  const HISTORY_STATUS_LABELS: Record<string, string> = { sent: "발송완료", partial: "일부발송", sending: "발송중", failed: "실패", draft: "임시저장" };
   const [historyStatusFilter, setHistoryStatusFilter] = useState<Set<string>>(new Set(HISTORY_STATUSES));
   const [historyDateFrom, setHistoryDateFrom] = useState<string>(""); // "YYYY-MM-DD" or ""
   const [historyDateTo, setHistoryDateTo] = useState<string>("");
   const [historyShowAll, setHistoryShowAll] = useState(false); // 날짜 미지정 시 기본 "최근 2주"만 보여줌 → 더보기로 해제
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const statusDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (statusDropdownRef.current && !statusDropdownRef.current.contains(e.target as Node)) {
+        setStatusDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   // ── 이력 탭 - 실패 로그 ──
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
@@ -1542,33 +1555,53 @@ export default function NewsletterPage() {
             ) : (
               <>
                 <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 8, alignItems: "center" }}>
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {HISTORY_STATUSES.map((s) => {
-                      const label = { sent: "발송완료", partial: "일부발송", sending: "발송중", failed: "실패", draft: "임시저장" }[s];
-                      const checked = historyStatusFilter.has(s);
-                      return (
-                        <label key={s} style={{
-                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer",
-                          padding: "4px 9px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
-                          background: checked ? "var(--surface-container-high)" : "transparent",
-                          color: checked ? "var(--on-surface)" : "var(--on-surface-variant)",
-                        }}>
-                          <input
-                            type="checkbox"
-                            checked={checked}
-                            onChange={() => {
-                              setHistoryStatusFilter((prev) => {
-                                const next = new Set(prev);
-                                next.has(s) ? next.delete(s) : next.add(s);
-                                return next;
-                              });
-                            }}
-                            style={{ width: 12, height: 12, cursor: "pointer" }}
-                          />
-                          {label}
-                        </label>
-                      );
-                    })}
+                  <div ref={statusDropdownRef} style={{ position: "relative" }}>
+                    <button
+                      onClick={() => setStatusDropdownOpen((o) => !o)}
+                      style={{
+                        padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                        fontSize: 13, background: "var(--surface-container)", color: "var(--on-surface)",
+                        cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                      }}
+                    >
+                      {historyStatusFilter.size === HISTORY_STATUSES.length
+                        ? "전체 상태"
+                        : historyStatusFilter.size === 0
+                          ? "상태 선택 안 함"
+                          : HISTORY_STATUSES.filter((s) => historyStatusFilter.has(s)).map((s) => HISTORY_STATUS_LABELS[s]).join(", ")}
+                      <span style={{ fontSize: 10, color: "var(--on-surface-variant)" }}>▾</span>
+                    </button>
+                    {statusDropdownOpen && (
+                      <div style={{
+                        position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, minWidth: 140,
+                        background: "var(--surface-container)", border: "1px solid var(--surface-container-highest)",
+                        borderRadius: 8, padding: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                      }}>
+                        {HISTORY_STATUSES.map((s) => {
+                          const checked = historyStatusFilter.has(s);
+                          return (
+                            <label key={s} style={{
+                              display: "flex", alignItems: "center", gap: 8, padding: "5px 8px",
+                              fontSize: 13, cursor: "pointer", borderRadius: 5, whiteSpace: "nowrap",
+                            }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => {
+                                  setHistoryStatusFilter((prev) => {
+                                    const next = new Set(prev);
+                                    next.has(s) ? next.delete(s) : next.add(s);
+                                    return next;
+                                  });
+                                }}
+                                style={{ width: 13, height: 13, cursor: "pointer" }}
+                              />
+                              {HISTORY_STATUS_LABELS[s]}
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                   <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                     <input
