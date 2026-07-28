@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
+import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
 
 export const maxDuration = 60;
 
@@ -318,9 +319,19 @@ export async function POST(req: NextRequest) {
       }));
   }
 
+  // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시 (기존엔 미리보기/발송 경로에 빠져있던 부분)
+  const descMap = await fillEventDescriptions(
+    featuredRaw.map(e => ({
+      id: e.id, event_name: e.event_name, description: e.description,
+      website: e.website, industry: null, category: null, organizer: null,
+    })),
+    supabase,
+    process.env.GOOGLE_AI_API_KEY
+  );
+
   const featuredEvents: EventCard[] = featuredRaw.map(e => ({
     name: e.event_name, start_date: e.start_date, end_date: e.end_date,
-    venue: e.venue, image_url: e.image_url, website: e.website, description: e.description,
+    venue: e.venue, image_url: e.image_url, website: e.website, description: descMap[e.id] ?? null,
   }));
 
   const featuredIds = new Set(featuredRaw.map(e => e.id));
