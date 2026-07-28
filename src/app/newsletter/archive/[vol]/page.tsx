@@ -14,13 +14,14 @@ async function fetchIssue(vol: number): Promise<{ html_content: string; sent_at:
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
   try {
     const supabase = createAdminClient();
+    // 목록 페이지와 동일한 기준(total_sent > 0) — "일부발송"이어도 실제 전달된 발행분은 그대로 노출
     const { data } = await supabase
       .from("newsletter_issues")
       .select("html_content, sent_at")
       .eq("vol_number", vol)
-      .eq("status", "sent")
+      .gt("total_sent", 0)
       .not("html_content", "is", null)
-      .order("sent_at", { ascending: false })
+      .order("total_sent", { ascending: false })
       .limit(1)
       .maybeSingle();
     return data ?? null;

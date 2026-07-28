@@ -12,17 +12,20 @@ async function fetchIssues(): Promise<ArchiveIssue[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return [];
   try {
     const supabase = createAdminClient();
+    // status='sent'만 보면 시간예산 초과로 마지막 몇 명을 못 채운 "일부발송"(partial) 호가 다 빠짐 —
+    // 실제로는 대다수 수신자에게 이미 전달된 정상 발행분이라 total_sent > 0 기준으로 완화
     const { data } = await supabase
       .from("newsletter_issues")
-      .select("vol_number, editorial_text, sent_at")
-      .eq("status", "sent")
+      .select("vol_number, editorial_text, sent_at, total_sent")
+      .gt("total_sent", 0)
+      .not("html_content", "is", null) // 상세 페이지에서 렌더링할 HTML이 저장돼 있는 호만 (없으면 404)
       .order("vol_number", { ascending: false })
-      .order("sent_at", { ascending: false })
+      .order("total_sent", { ascending: false })
       .limit(300);
-    // 재발송 등으로 같은 vol_number가 여러 행일 수 있어 — 가장 최근 발송분만 남김
+    // 같은 vol_number가 여러 행(재발송 등)일 수 있어 — total_sent가 가장 큰(가장 널리 전달된) 행만 남김
     const seen = new Set<number>();
     const deduped: ArchiveIssue[] = [];
-    for (const row of (data ?? []) as ArchiveIssue[]) {
+    for (const row of (data ?? []) as (ArchiveIssue & { total_sent: number })[]) {
       if (seen.has(row.vol_number)) continue;
       seen.add(row.vol_number);
       deduped.push(row);
