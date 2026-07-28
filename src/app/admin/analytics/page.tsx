@@ -426,7 +426,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
-        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="홈 화면 전체 체류 · 데이터 수집 중" />
+        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="홈 화면 전체 체류 · 2026-07-21부터 수집" />
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
@@ -518,7 +518,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>아카이브 카테고리별 기사 반응</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          아카이브 방문 = 상단 카테고리를 눌러 아카이브 페이지를 연 횟수 · 기사·원문 클릭은 경로(홈·아카이브) 무관 합산 · 평균 체류(초)는 데이터 수집 중
+          아카이브 방문 = 상단 카테고리를 눌러 아카이브 페이지를 연 횟수 · 기사·원문 클릭은 경로(홈·아카이브) 무관 합산 · 평균 체류(초)는 2026-05-28부터 수집
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
