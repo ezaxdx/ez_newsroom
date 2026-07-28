@@ -537,7 +537,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>아카이브 카테고리별 기사 반응</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          아카이브 방문 = 상단 카테고리를 눌러 아카이브 페이지를 연 횟수 · 기사·원문 클릭은 경로(홈·아카이브) 무관 합산 · 평균 체류(초)는 2026-05-28부터 수집
+          아카이브 방문 = 상단 카테고리를 눌러 아카이브 페이지를 연 횟수 · 기사·원문 클릭은 경로(홈·아카이브) 무관 합산
         </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -545,7 +545,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
               <tr style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
                 {["카테고리", "아카이브 방문", "기사 클릭", "원문 클릭", "평균 체류(초)"].map((h) => (
                   <th key={h} className="text-left pb-3 pr-4 text-[0.7rem] font-semibold tracking-wide uppercase"
-                    style={{ color: "var(--on-surface-variant)" }}>{h}</th>
+                    style={{ color: "var(--on-surface-variant)" }}>
+                    {h}
+                    {h === "평균 체류(초)" && (
+                      <span className="block normal-case font-normal" style={{ fontSize: 10, opacity: 0.6, letterSpacing: 0 }}>
+                        2026-05-28부터 수집
+                      </span>
+                    )}
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -574,12 +581,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       {/* ── 뉴스레터 지난호 ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-          style={{ color: "var(--on-surface-variant)" }}>뉴스레터 지난호</p>
-        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          목록 조회수 = 뉴스룸 푸터의 지난호 보기 방문 · Vol별 조회수 = 개별 호 상세 열람
+          style={{ color: "var(--on-surface-variant)" }}>
+          뉴스레터 지난호
+          <span className="normal-case font-normal ml-1.5" style={{ fontSize: 10, opacity: 0.6, letterSpacing: 0 }}>
+            (2026-07-30부터 수집)
+          </span>
         </p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          * 이 지표는 2026-07-30부터 수집
+          목록 조회수 = 뉴스룸 푸터의 지난호 보기 방문 · Vol별 조회수 = 개별 호 상세 열람
         </p>
         <div className="flex items-center gap-8 mb-5">
           <div>
