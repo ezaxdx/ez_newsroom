@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Rss, Mail } from "lucide-react";
 
 const NAV_LINKS = [
@@ -44,6 +45,13 @@ export default function Footer() {
             Navigation
           </p>
           <nav className="flex flex-col gap-2.5">
+            <Link
+              href="/newsletter/archive"
+              className="text-sm transition-colors hover:text-black"
+              style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
+            >
+              지난호 보기
+            </Link>
             {NAV_LINKS.map((item) => (
               <a
                 key={item.label}
