@@ -559,11 +559,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
           목록 조회수 = /newsletter/archive 방문 · Vol별 조회수 = 개별 호 상세 열람
         </p>
-        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          * 목록·Vol별 조회수는 2026-07-28부터 수집. 그 이전 방문·조회는 포함되지 않습니다.
-        </p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          * "그 중 이메일 유입"은 2026-07-30 발송분부터 정확히 집계됩니다 (7/28 Vol.15는 UTM 적용 전 발송분이라 이메일 유입이 잡히지 않음)
+          * 이 지표는 2026-07-30부터 수집됩니다. 그 이전 방문·조회는 포함되지 않습니다.
         </p>
         <div className="flex items-center gap-8 mb-5">
           <div>
@@ -750,8 +747,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — /newsletter/archive 목록 페이지를 연 횟수. "그 중 이메일 유입"은 뉴스레터 본문 링크(UTM 포함)로 들어온 것만 구분 — 나머지는 사이트 Footer 등에서 직접 들어온 것</li>
           <li><strong style={{ color: "var(--on-surface)" }}>Vol별 조회수</strong> — 목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수. 어떤 지난호가 인기 있는지 확인 가능</li>
-          <li>목록·Vol별 조회수는 2026-07-28부터 수집 시작 — 그 이전 시점 데이터는 없음</li>
-          <li>"그 중 이메일 유입"은 2026-07-30 발송분부터 정확히 잡힘 (7/28 Vol.15는 UTM 적용 전 발송)</li>
+          <li>2026-07-30부터 수집 시작 — 그 이전 시점 데이터는 없음</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 인기 검색어</p>
