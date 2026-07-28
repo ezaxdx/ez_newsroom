@@ -18,6 +18,8 @@ export type EventCard = {
 
 // 발송 시점에 수신자 id로 치환되는 자리표시자 (gmail-sender.ts 참고)
 export const UNSUBSCRIBE_ID_PLACEHOLDER = "__EZ_UNSUB_ID__";
+// 발송 시점에 해당 호(issue) id로 치환되는 자리표시자 — 오픈 트래킹 픽셀용
+export const ISSUE_ID_PLACEHOLDER = "__EZ_ISSUE_ID__";
 
 export type NewsletterData = {
   vol_number: number;
@@ -334,6 +336,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
           <a href="${site_url}/api/newsletter/unsubscribe?id=${UNSUBSCRIBE_ID_PLACEHOLDER}" style="color:${C.muted};text-decoration:underline;font-family:${FONT_PRET};">수신거부</a>
         </p>
         <p style="margin:0;font-size:11px;font-weight:300;color:#000000;font-family:${FONT_PRET};">Copyright © AXDX All Rights Reserved.</p>
+        <img src="${site_url}/api/newsletter/track-open?issue=${ISSUE_ID_PLACEHOLDER}&sub=${UNSUBSCRIBE_ID_PLACEHOLDER}" width="1" height="1" alt="" style="display:none;width:1px;height:1px;">
       </td>
     </tr>
 

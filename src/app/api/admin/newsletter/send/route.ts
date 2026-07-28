@@ -100,7 +100,7 @@ export async function POST(req: NextRequest) {
     let processed = recipients.length;
     try {
       const sendRes = await sendNewsletterViaGmail({
-        fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients, siteUrl: prodUrl,
+        fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients, siteUrl: prodUrl, issueId,
         timeBudgetMs: TIME_BUDGET_MS,
         onBatchComplete: async (batchResults) => {
           const batchSent = batchResults.filter(r => r.status === "success").length;
@@ -424,7 +424,7 @@ export async function POST(req: NextRequest) {
   let processed2 = recipients2.length;
   try {
     const sendRes2 = await sendNewsletterViaGmail({
-      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2, siteUrl: prod_url,
+      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2, siteUrl: prod_url, issueId: issueId2,
       timeBudgetMs: TIME_BUDGET_MS,
       onBatchComplete: async (batchResults) => {
         const batchSent = batchResults.filter(r => r.status === "success").length;

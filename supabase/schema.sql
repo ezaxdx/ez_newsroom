@@ -252,7 +252,8 @@ create table if not exists public.newsletter_send_logs (
   email         text not null,
   status        text not null,  -- success|failed
   error_message text,
-  sent_at       timestamptz default now()
+  sent_at       timestamptz default now(),
+  opened_at     timestamptz  -- 최초 열람 시각만 기록 (트래킹 픽셀, 재오픈은 갱신 안 함)
 );
 
 -- ── newsletter_cron_settings ──────────────────────────────────────────

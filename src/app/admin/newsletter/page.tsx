@@ -23,6 +23,7 @@ type Issue = {
   html_content: string | null;
   sent_at: string | null;
   created_at: string;
+  opened_count: number;
 };
 
 type SendLog = { id: string; email: string; status: string; error_message: string | null; sent_at: string };
@@ -1526,6 +1527,7 @@ export default function NewsletterPage() {
                         <th style={{ ...thStyle, textAlign: "center" }}>발송</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>성공</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>실패</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>오픈</th>
                         <th style={thStyle}>상태</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>재발송</th>
                       </tr>
@@ -1533,7 +1535,7 @@ export default function NewsletterPage() {
                     <tbody>
                       {issues.length === 0 ? (
                         <tr>
-                          <td colSpan={7} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+                          <td colSpan={8} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
                             발송 이력이 없습니다.
                           </td>
                         </tr>
@@ -1579,6 +1581,11 @@ export default function NewsletterPage() {
                                   {issue.total_failed}
                                 </button>
                               ) : <span>0</span>}
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: "center" }} title="트래킹 픽셀 최초 오픈 기준 — 이미지 자동로드 꺼둔 경우 등은 반영 안 됨">
+                              {issue.total_sent > 0
+                                ? `${issue.opened_count} (${Math.round((issue.opened_count / issue.total_sent) * 100)}%)`
+                                : "-"}
                             </td>
                             <td style={tdStyle}>
                               <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4,

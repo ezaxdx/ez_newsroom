@@ -122,6 +122,7 @@ export async function POST(req: NextRequest) {
     html: issue.html_content!,
     recipients,
     siteUrl,
+    issueId: issue_id,
     timeBudgetMs: 40_000, // Vercel 60초 강제종료 방지
 
     onBatchComplete: async (batchResults) => {

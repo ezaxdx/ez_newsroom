@@ -134,6 +134,8 @@ export async function sendNewsletterViaGmail(params: {
   recipients: (string | { email: string; id: string })[];
   /** 수신거부 확인 페이지의 기준 URL (예: https://뉴스룸.com) — 없으면 개인화 링크 미삽입 */
   siteUrl?: string;
+  /** 오픈 트래킹 픽셀에 심을 이 호(issue)의 id — 없으면 오픈 트래킹 미삽입 */
+  issueId?: string;
   /** 전체 시간 예산(ms) — 초과 시 남은 수신자는 처리하지 않고 반환 (Vercel 강제종료 방지) */
   timeBudgetMs?: number;
   onBatchComplete?: (results: SendResult[]) => Promise<void>;
@@ -159,7 +161,8 @@ export async function sendNewsletterViaGmail(params: {
         try {
           // 수신거부 링크에 수신자별 id를 심어서 "누가 눌렀는지" 식별 가능하게 함
           const unsubscribeUrl = id && params.siteUrl ? `${params.siteUrl}/api/newsletter/unsubscribe?id=${id}` : undefined;
-          const personalizedHtml = id ? params.html.replaceAll("__EZ_UNSUB_ID__", id) : params.html;
+          let personalizedHtml = id ? params.html.replaceAll("__EZ_UNSUB_ID__", id) : params.html;
+          if (params.issueId) personalizedHtml = personalizedHtml.replaceAll("__EZ_ISSUE_ID__", params.issueId);
           const raw = makeRawMessage({
             from: `"${params.fromName}" <${params.fromEmail}>`,
             to,
