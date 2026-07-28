@@ -34,7 +34,7 @@ type SendLog = { id: string; email: string; status: string; error_message: strin
 type EventForImage = { id: string; event_name: string; start_date: string; end_date: string | null; venue: string | null; image_url: string | null; website: string | null; is_published: boolean };
 type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
-type Tab = "send" | "history" | "subscribers" | "gmail";
+type Tab = "send" | "history" | "stats" | "subscribers" | "gmail";
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -152,7 +152,7 @@ export default function NewsletterPage() {
   }, []);
 
   useEffect(() => {
-    if (tab === "history") fetchHistory();
+    if (tab === "history" || tab === "stats") fetchHistory();
   }, [tab]);
 
   async function fetchSubscribers() {
@@ -821,6 +821,7 @@ export default function NewsletterPage() {
       <div style={{ display: "flex", gap: 4, marginBottom: 0, borderBottom: "1px solid var(--surface-container-highest)" }}>
         <button style={tabStyle("send")} onClick={() => setTab("send")}>발송</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>
+        <button style={tabStyle("stats")} onClick={() => setTab("stats")}>뉴스레터 애널리틱스</button>
         <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button
           style={tabStyle("gmail")}
@@ -1633,9 +1634,6 @@ export default function NewsletterPage() {
                     {filteredIssues.length}건 표시 중 (전체 {issues.length}건)
                   </span>
                 </div>
-                <p style={{ fontSize: 12, color: "var(--on-surface-variant)", marginTop: 0, marginBottom: 12 }}>
-                  * 오픈 트래킹은 7월 30일 발송분부터 집계됩니다. 그 이전 호는 &quot;-&quot;로 표시됩니다.
-                </p>
                 <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
@@ -1645,7 +1643,6 @@ export default function NewsletterPage() {
                         <th style={{ ...thStyle, textAlign: "center" }}>발송</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>성공</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>실패</th>
-                        <th style={{ ...thStyle, textAlign: "center" }}>오픈</th>
                         <th style={thStyle}>상태</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>재발송</th>
                       </tr>
@@ -1653,7 +1650,7 @@ export default function NewsletterPage() {
                     <tbody>
                       {filteredIssues.length === 0 ? (
                         <tr>
-                          <td colSpan={8} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+                          <td colSpan={7} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
                             {issues.length === 0 ? "발송 이력이 없습니다." : "조건에 맞는 이력이 없습니다."}
                           </td>
                         </tr>
@@ -1699,11 +1696,6 @@ export default function NewsletterPage() {
                                   {issue.total_failed}
                                 </button>
                               ) : <span>0</span>}
-                            </td>
-                            <td style={{ ...tdStyle, textAlign: "center" }} title="트래킹 픽셀 최초 오픈 기준 — 이미지 자동로드 꺼둔 경우 등은 반영 안 됨">
-                              {new Date(issue.sent_at ?? issue.created_at) < OPEN_TRACKING_SINCE || issue.total_sent === 0
-                                ? "-"
-                                : `${issue.opened_count} (${Math.round((issue.opened_count / issue.total_sent) * 100)}%)`}
                             </td>
                             <td style={tdStyle}>
                               <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4,
@@ -1948,6 +1940,81 @@ export default function NewsletterPage() {
                 )}
               </>
             )}
+          </div>
+        )}
+
+        {/* ── 뉴스레터 애널리틱스 ── */}
+        {tab === "stats" && (
+          <div>
+            {historyLoading ? (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--on-surface-variant)", fontSize: 14 }}>
+                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
+                불러오는 중...
+              </div>
+            ) : (() => {
+              const tracked = issues.filter((i) => new Date(i.sent_at ?? i.created_at) >= OPEN_TRACKING_SINCE);
+              const totalSent = tracked.reduce((s, i) => s + i.total_sent, 0);
+              const totalOpened = tracked.reduce((s, i) => s + i.opened_count, 0);
+              const openRate = totalSent ? Math.round((totalOpened / totalSent) * 100) : 0;
+
+              const totalSubs = subscribers.length;
+              const unsubbed = subscribers.filter((s) => s.unsubscribed_at);
+              const unsubRate = totalSubs ? Math.round((unsubbed.length / totalSubs) * 100) : 0;
+              const recentUnsub = [...unsubbed].sort((a, b) =>
+                (b.unsubscribed_at ?? "").localeCompare(a.unsubscribed_at ?? "")
+              ).slice(0, 10);
+
+              return (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+                    <div style={cardStyle}>
+                      <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                        발송 대비 오픈율 <span style={{ fontWeight: 400 }}>(2026-07-30부터 집계)</span>
+                      </p>
+                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{openRate}%</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--on-surface-variant)" }}>
+                        {totalOpened.toLocaleString()} / {totalSent.toLocaleString()}명 오픈
+                      </p>
+                    </div>
+                    <div style={cardStyle}>
+                      <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                        수신거부 현황
+                      </p>
+                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{unsubRate}%</p>
+                      <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--on-surface-variant)" }}>
+                        {unsubbed.length.toLocaleString()} / {totalSubs.toLocaleString()}명 · 발송 대상에서는 제외되지 않고 집계만 됨
+                      </p>
+                    </div>
+                  </div>
+
+                  {recentUnsub.length > 0 && (
+                    <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+                      <p style={{ margin: 0, padding: "14px 16px 8px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                        최근 수신거부 (최대 10건)
+                      </p>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "var(--surface-container-high)" }}>
+                            <th style={thStyle}>이메일</th>
+                            <th style={thStyle}>이름</th>
+                            <th style={thStyle}>수신거부일</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentUnsub.map((s) => (
+                            <tr key={s.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                              <td style={tdStyle}>{s.email}</td>
+                              <td style={tdStyle}>{s.name ?? "-"}</td>
+                              <td style={tdStyle}>{new Date(s.unsubscribed_at!).toLocaleDateString("ko-KR")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
         )}
       </div>
