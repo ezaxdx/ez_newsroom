@@ -65,8 +65,11 @@ export default function NewsletterPage() {
   // ── History tab state ──
   const [issues, setIssues] = useState<Issue[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | Issue["status"]>("all");
-  const [historyMonthFilter, setHistoryMonthFilter] = useState<string>("all"); // "YYYY-MM" or "all"
+  const HISTORY_STATUSES = ["sent", "partial", "sending", "failed", "draft"] as const;
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<Set<string>>(new Set(HISTORY_STATUSES));
+  const [historyDateFrom, setHistoryDateFrom] = useState<string>(""); // "YYYY-MM-DD" or ""
+  const [historyDateTo, setHistoryDateTo] = useState<string>("");
+  const [historyShowAll, setHistoryShowAll] = useState(false); // 날짜 미지정 시 기본 "최근 2주"만 보여줌 → 더보기로 해제
 
   // ── 이력 탭 - 실패 로그 ──
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
@@ -778,15 +781,20 @@ export default function NewsletterPage() {
     marginBottom: "16px",
   };
 
-  // ── 이력 탭 필터 (계속 쌓이는 목록이라 상태/월별로 좁혀볼 수 있게) ──
-  const issueMonths = Array.from(new Set(
-    issues.map((i) => (i.sent_at ?? i.created_at).slice(0, 7))
-  )).sort((a, b) => b.localeCompare(a));
+  // ── 이력 탭 필터 (계속 쌓이는 목록이라 상태 다중선택/날짜범위로 좁혀볼 수 있게) ──
+  // 명시적 날짜 필터가 없으면 기본으로 최근 2주만 — "더보기"로 전체 확장
+  const twoWeeksAgoStr = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const effectiveDateFrom = historyDateFrom || (historyShowAll ? "" : twoWeeksAgoStr);
   const filteredIssues = issues.filter((i) => {
-    if (historyStatusFilter !== "all" && i.status !== historyStatusFilter) return false;
-    if (historyMonthFilter !== "all" && (i.sent_at ?? i.created_at).slice(0, 7) !== historyMonthFilter) return false;
+    // 상태를 전부 해제했으면 "아무것도 안 보임"보다 "필터 없음"으로 취급
+    if (historyStatusFilter.size > 0 && !historyStatusFilter.has(i.status)) return false;
+    const d = (i.sent_at ?? i.created_at).slice(0, 10);
+    if (effectiveDateFrom && d < effectiveDateFrom) return false;
+    if (historyDateTo && d > historyDateTo) return false;
     return true;
   });
+  const hiddenByDefaultRange = !historyDateFrom && !historyShowAll
+    && issues.some((i) => (i.sent_at ?? i.created_at).slice(0, 10) < twoWeeksAgoStr);
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 900 }}>
@@ -1533,33 +1541,65 @@ export default function NewsletterPage() {
               </div>
             ) : (
               <>
-                <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
-                  <select
-                    value={historyStatusFilter}
-                    onChange={(e) => setHistoryStatusFilter(e.target.value as typeof historyStatusFilter)}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 13, background: "var(--surface-container)", color: "var(--on-surface)" }}
-                  >
-                    <option value="all">전체 상태</option>
-                    <option value="sent">발송완료</option>
-                    <option value="partial">일부발송</option>
-                    <option value="sending">발송중</option>
-                    <option value="failed">실패</option>
-                    <option value="draft">임시저장</option>
-                  </select>
-                  <select
-                    value={historyMonthFilter}
-                    onChange={(e) => setHistoryMonthFilter(e.target.value)}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 13, background: "var(--surface-container)", color: "var(--on-surface)" }}
-                  >
-                    <option value="all">전체 기간</option>
-                    {issueMonths.map((m) => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                  </select>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 14, marginBottom: 8, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                    {HISTORY_STATUSES.map((s) => {
+                      const label = { sent: "발송완료", partial: "일부발송", sending: "발송중", failed: "실패", draft: "임시저장" }[s];
+                      const checked = historyStatusFilter.has(s);
+                      return (
+                        <label key={s} style={{
+                          display: "flex", alignItems: "center", gap: 4, fontSize: 12, cursor: "pointer",
+                          padding: "4px 9px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                          background: checked ? "var(--surface-container-high)" : "transparent",
+                          color: checked ? "var(--on-surface)" : "var(--on-surface-variant)",
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={checked}
+                            onChange={() => {
+                              setHistoryStatusFilter((prev) => {
+                                const next = new Set(prev);
+                                next.has(s) ? next.delete(s) : next.add(s);
+                                return next;
+                              });
+                            }}
+                            style={{ width: 12, height: 12, cursor: "pointer" }}
+                          />
+                          {label}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input
+                      type="date"
+                      value={historyDateFrom}
+                      onChange={(e) => setHistoryDateFrom(e.target.value)}
+                      style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 12, background: "var(--surface-container)", color: "var(--on-surface)" }}
+                    />
+                    <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
+                    <input
+                      type="date"
+                      value={historyDateTo}
+                      onChange={(e) => setHistoryDateTo(e.target.value)}
+                      style={{ padding: "5px 8px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 12, background: "var(--surface-container)", color: "var(--on-surface)" }}
+                    />
+                    {(historyDateFrom || historyDateTo) && (
+                      <button
+                        onClick={() => { setHistoryDateFrom(""); setHistoryDateTo(""); }}
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary)", textDecoration: "underline" }}
+                      >
+                        초기화
+                      </button>
+                    )}
+                  </div>
                   <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
                     {filteredIssues.length}건 표시 중 (전체 {issues.length}건)
                   </span>
                 </div>
+                <p style={{ fontSize: 12, color: "var(--on-surface-variant)", marginTop: 0, marginBottom: 12 }}>
+                  * 오픈 트래킹은 7월 30일 발송분부터 집계됩니다. 그 이전 호는 &quot;-&quot;로 표시됩니다.
+                </p>
                 <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
@@ -1807,9 +1847,17 @@ export default function NewsletterPage() {
                     </tbody>
                   </table>
                 </div>
-                <p style={{ fontSize: 12, color: "var(--on-surface-variant)", marginTop: 6 }}>
-                  * 오픈 트래킹은 7월 30일 발송분부터 집계됩니다. 그 이전 호는 &quot;-&quot;로 표시됩니다.
-                </p>
+                {hiddenByDefaultRange && (
+                  <div style={{ textAlign: "center", marginTop: 10 }}>
+                    <button
+                      onClick={() => setHistoryShowAll(true)}
+                      style={{ padding: "6px 16px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                        background: "var(--surface-container)", color: "var(--on-surface)", fontSize: 13, cursor: "pointer" }}
+                    >
+                      더보기 (전체 {issues.length}건)
+                    </button>
+                  </div>
+                )}
 
                 {selectedIssue && (
                   <div style={{ marginTop: 12, background: "var(--surface-container)", borderRadius: 8, padding: 16 }}>
