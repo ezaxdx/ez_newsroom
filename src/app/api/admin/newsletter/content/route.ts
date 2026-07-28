@@ -57,8 +57,8 @@ export async function GET() {
   endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
   const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
-  // Pick 후보는 근거리(45일 이내)만 쓰므로 조회 자체를 그 범위로 제한 (더 먼 미래 행사는 애초에 불필요)
-  const NEAR_TERM_DAYS = 45;
+  // Pick 후보는 근거리(30일 이내)만 쓰므로 조회 자체를 그 범위로 제한 (더 먼 미래 행사는 애초에 불필요)
+  const NEAR_TERM_DAYS = 30;
   const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   const { data: eventsPool } = await supabase

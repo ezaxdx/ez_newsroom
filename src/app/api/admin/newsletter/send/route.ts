@@ -208,9 +208,9 @@ export async function POST(req: NextRequest) {
   endOfWeek.setUTCDate(endOfWeek.getUTCDate() + (dayOfWeek === 0 ? 0 : 7 - dayOfWeek));
   const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
 
-  // 추천행사(Pick)는 "이번 달~다음 달 초" 근거리 행사만 소개 — 발송 시점 기준 45일 이내.
+  // 추천행사(Pick)는 "이번 달~다음 달 초" 근거리 행사만 소개 — 발송 시점 기준 30일 이내.
   // Pick 후보는 이 범위만 쓰므로 조회 자체를 여기서 제한 (더 먼 미래 행사는 애초에 불필요)
-  const NEAR_TERM_DAYS = 45;
+  const NEAR_TERM_DAYS = 30;
   const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
 
   const { data: eventsPool } = await supabase.from("convention_events")
