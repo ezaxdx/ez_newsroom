@@ -1573,9 +1573,9 @@ export default function NewsletterPage() {
                     </button>
                     {statusDropdownOpen && (
                       <div style={{
-                        position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 20, minWidth: 140,
-                        background: "var(--surface-container)", border: "1px solid var(--surface-container-highest)",
-                        borderRadius: 8, padding: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+                        position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 1000, minWidth: 140,
+                        background: "#ffffff", border: "1px solid #d0d0d0", opacity: 1,
+                        borderRadius: 8, padding: 6, boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                       }}>
                         {HISTORY_STATUSES.map((s) => {
                           const checked = historyStatusFilter.has(s);
@@ -1583,6 +1583,7 @@ export default function NewsletterPage() {
                             <label key={s} style={{
                               display: "flex", alignItems: "center", gap: 8, padding: "5px 8px",
                               fontSize: 13, cursor: "pointer", borderRadius: 5, whiteSpace: "nowrap",
+                              color: "#1a1a1a", background: "#ffffff",
                             }}>
                               <input
                                 type="checkbox"
