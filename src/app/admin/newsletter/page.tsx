@@ -812,8 +812,8 @@ export default function NewsletterPage() {
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 900 }}>
-      <h1 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
-        ✉️ 뉴스레터 관리
+      <h1 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2" style={{ marginBottom: 24 }}>
+        뉴스레터 관리
         <HelpTrigger onClick={() => setHelpOpen(true)} />
       </h1>
 
