@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, X, Sparkles, Save, Loader2, ChevronLeft, ChevronRight, Check, ToggleLeft, ToggleRight } from "lucide-react";
-import HelpPanel from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
 
 type Preset = { label: string; prompt: string };
 
@@ -65,6 +65,7 @@ function calcScheduleWindow(days: number[]): number {
 }
 
 export default function SettingsPage() {
+  const [helpOpen, setHelpOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -228,7 +229,7 @@ export default function SettingsPage() {
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold tracking-tight m-0">큐레이션 설정</h2>
+          <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">큐레이션 설정 <HelpTrigger onClick={() => setHelpOpen(true)} /></h2>
           <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
             카테고리 추가/삭제 후 저장하면 뉴스룸 전체에 반영됩니다
           </p>
@@ -686,7 +687,7 @@ export default function SettingsPage() {
         </>
       )}
 
-      <HelpPanel title="큐레이션 설정 가이드">
+      <HelpPanel title="큐레이션 설정 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
         <p style={{ marginBottom: 12 }}>
           AI 큐레이션의 전체 동작 방식을 설정합니다. 저장 후 다음 큐레이션 실행부터 반영됩니다.
         </p>

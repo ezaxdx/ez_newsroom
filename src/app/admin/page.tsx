@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import CurationBoard from "@/components/admin/CurationBoard";
-import HelpPanel from "@/components/admin/HelpPanel";
+import { HelpProvider, HelpPanelConnected } from "@/components/admin/HelpPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +81,7 @@ export default async function AdminPage() {
   ]);
 
   return (
+    <HelpProvider>
     <div className="p-8 max-w-4xl">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
@@ -164,7 +165,7 @@ export default async function AdminPage() {
         )}
       </div>
 
-      <HelpPanel title="큐레이션 보드 가이드">
+      <HelpPanelConnected title="큐레이션 보드 가이드">
         <p style={{ marginBottom: 12 }}>
           뉴스룸의 핵심 운영 화면입니다. 수집된 기사 전체를 확인하고 발행·반려를 직접 처리합니다.
         </p>
@@ -199,7 +200,8 @@ export default async function AdminPage() {
           <li>예) 목요일 큐레이션 실행 후 → 목요일 오전 9시 이전 기사는 전부 아카이브로 이동</li>
           <li>아카이브 기사는 [재발행] 버튼으로 오늘 날짜 기준 메인에 다시 올릴 수 있음</li>
         </ul>
-      </HelpPanel>
+      </HelpPanelConnected>
     </div>
+    </HelpProvider>
   );
 }

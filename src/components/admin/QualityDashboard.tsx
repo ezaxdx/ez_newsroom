@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Check, Sparkles, X, RefreshCw } from "lucide-react";
 import { NewsItem } from "@/lib/types";
-import HelpPanel from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
 
 type EventRow = {
   id: string;
@@ -1746,6 +1746,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────
 export default function QualityDashboard({ news, events }: Props) {
   const [tab, setTab] = useState<"news" | "events">("news");
+  const [helpOpen, setHelpOpen] = useState(false);
 
   return (
     <div style={{ padding: 32, maxWidth: 1200 }}>
@@ -1756,8 +1757,9 @@ export default function QualityDashboard({ news, events }: Props) {
           Data Quality
         </p>
         <h2 style={{ margin: "4px 0 0", fontSize: "1.5rem", fontWeight: 700,
-          letterSpacing: "-0.02em", color: "var(--on-surface)" }}>
+          letterSpacing: "-0.02em", color: "var(--on-surface)", display: "flex", alignItems: "center", gap: 8 }}>
           정합성 관리
+          <HelpTrigger onClick={() => setHelpOpen(true)} />
         </h2>
       </div>
 
@@ -1788,7 +1790,7 @@ export default function QualityDashboard({ news, events }: Props) {
 
       {tab === "news" ? <NewsTab news={news} /> : <EventsTab initialEvents={events} />}
 
-      <HelpPanel title="정합성 관리 가이드">
+      <HelpPanel title="정합성 관리 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
         <p style={{ marginBottom: 12 }}>
           뉴스 DB와 행사 데이터의 품질을 점검하고 관리합니다. 수치가 높을수록 콘텐츠 노출 품질에 직접 영향을 줍니다.
         </p>

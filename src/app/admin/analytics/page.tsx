@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import HelpPanel from "@/components/admin/HelpPanel";
+import { HelpProvider, HelpTriggerConnected, HelpPanelConnected } from "@/components/admin/HelpPanel";
 import DateRangePicker from "./DateRangePicker";
 
 /* ── 빈 데이터 기본값 ── */
@@ -159,6 +159,8 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
     const siteHost = getSiteHost();
     const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
+    // "총 접속 수"는 홈 첫 진입 기준 — 아카이브 방문은 아카이브 카테고리별 기사 반응에서 별도로 집계되므로 여기선 제외
+    const homeViewCount = entryLogs.length;
     const refMap: Record<string, number> = {};
     let previewCount = 0;
     for (const log of entryLogs) {
@@ -268,7 +270,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .slice(0, 10);
 
     return {
-      totals: { view: viewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
+      totals: { view: homeViewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
       exploreFunnel,
       deeplinkFunnel,
       referrers,
@@ -381,11 +383,12 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const maxSearch    = Math.max(1, ...topSearches.map((s) => s.count));
 
   return (
+    <HelpProvider>
     <div className="p-8 max-w-5xl flex flex-col gap-8">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold tracking-tight m-0">애널리틱스</h2>
+          <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">애널리틱스 <HelpTriggerConnected /></h2>
           <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
             사용자 여정 · 유입 경로 · 카테고리 성과
           </p>
@@ -489,7 +492,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       {/* ── 카테고리별 성과 ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-          style={{ color: "var(--on-surface-variant)" }}>카테고리별 기사 반응</p>
+          style={{ color: "var(--on-surface-variant)" }}>아카이브 카테고리별 기사 반응</p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
           아카이브 방문 = 상단 카테고리를 눌러 아카이브 페이지를 연 횟수 · 기사·원문 클릭은 경로(홈·아카이브) 무관 합산 · 평균 체류(초)는 데이터 수집 중
         </p>
@@ -629,14 +632,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         )}
       </section>
 
-      <HelpPanel title="애널리틱스 가이드">
+      <HelpPanelConnected title="애널리틱스 가이드">
         <p style={{ marginBottom: 16 }}>
           뉴스룸 독자의 행동 데이터를 자동 수집·분석합니다. 별도 설정 없이 방문자 발생 시 즉시 기록됩니다.
         </p>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>1. KPI 카드</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>총 접속 수</strong> — 메인 페이지(뉴스룸 홈) 방문 횟수. 새로고침·재방문 포함</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>총 접속 수</strong> — 메인 페이지(뉴스룸 홈) 방문 횟수. 새로고침·재방문 포함, 아카이브 카테고리 페이지 방문은 별도 집계(4. 아카이브 카테고리별 기사 반응)이므로 제외</li>
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 모달 내 "VIEW ORIGINAL SOURCE" 클릭 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>전체 전환율</strong> — 메인 접속 대비 원문 클릭 비율 (접속 → 원문 클릭)</li>
@@ -664,7 +667,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 카테고리별 기사 반응</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 아카이브 카테고리별 기사 반응</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>아카이브 방문</strong> — 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지(/category/AI 등)를 연 횟수</li>
           <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
@@ -691,7 +694,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             </ul>
           </li>
         </ul>
-      </HelpPanel>
+      </HelpPanelConnected>
     </div>
+    </HelpProvider>
   );
 }

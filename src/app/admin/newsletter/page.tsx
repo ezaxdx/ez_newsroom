@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
-import HelpPanel from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
@@ -71,6 +71,7 @@ export default function NewsletterPage() {
   const [historyDateFrom, setHistoryDateFrom] = useState<string>(""); // "YYYY-MM-DD" or ""
   const [historyDateTo, setHistoryDateTo] = useState<string>("");
   const [historyShowAll, setHistoryShowAll] = useState(false); // 날짜 미지정 시 기본 "최근 2주"만 보여줌 → 더보기로 해제
+  const [helpOpen, setHelpOpen] = useState(false);
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
   const statusDropdownRef = useRef<HTMLDivElement>(null);
 
@@ -811,8 +812,9 @@ export default function NewsletterPage() {
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 900 }}>
-      <h1 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 24 }}>
+      <h1 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 24, display: "flex", alignItems: "center", gap: 8 }}>
         ✉️ 뉴스레터 관리
+        <HelpTrigger onClick={() => setHelpOpen(true)} />
       </h1>
 
       {/* Tabs */}
@@ -1951,7 +1953,7 @@ export default function NewsletterPage() {
       </div>
 
         {/* ── 매뉴얼 (모달) ── */}
-        <HelpPanel title="뉴스레터 관리 매뉴얼">
+        <HelpPanel title="뉴스레터 관리 매뉴얼" open={helpOpen} onOpenChange={setHelpOpen}>
           <div style={{ fontSize: 14, lineHeight: 1.75, color: "var(--on-surface)" }}>
 
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>

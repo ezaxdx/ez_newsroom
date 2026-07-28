@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { Mail, CheckCircle, XCircle, Loader2, ExternalLink } from "lucide-react";
-import HelpPanel from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
 
 export default function GmailPage() {
+  const [helpOpen, setHelpOpen] = useState(false);
   const [status, setStatus] = useState<"loading" | "connected" | "disconnected">("loading");
   const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
@@ -31,7 +32,7 @@ export default function GmailPage() {
     <div style={{ maxWidth: 600, margin: "60px auto", padding: "0 24px", fontFamily: "var(--font-sans, sans-serif)" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 32 }}>
         <Mail size={24} />
-        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0 }}>Gmail 뉴스레터 연동</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 600, margin: 0, display: "flex", alignItems: "center", gap: 8 }}>Gmail 뉴스레터 연동 <HelpTrigger onClick={() => setHelpOpen(true)} /></h1>
       </div>
 
       {/* 상태 카드 */}
@@ -106,7 +107,7 @@ export default function GmailPage() {
         </ol>
       </div>
 
-      <HelpPanel title="Gmail 연동 가이드">
+      <HelpPanel title="Gmail 연동 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
         <p style={{ marginBottom: 12 }}>
           Gmail로 수신된 뉴스레터를 자동으로 읽어 큐레이션 소스로 활용합니다.
           OAuth2 인증은 1회 설정으로 지속 유지됩니다.

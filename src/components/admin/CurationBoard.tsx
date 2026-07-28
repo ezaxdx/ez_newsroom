@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import { calcLastScheduledRun } from "@/lib/schedule";
+import { HelpTriggerConnected } from "@/components/admin/HelpPanel";
 
 type Tab = "live" | "staging" | "archive";
 
@@ -316,7 +317,7 @@ export default function CurationBoard({
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold tracking-tight m-0">큐레이션 보드</h2>
+          <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">큐레이션 보드 <HelpTriggerConnected /></h2>
           <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
             드래그로 순서를 조정하고 발행 상태를 관리합니다
           </p>

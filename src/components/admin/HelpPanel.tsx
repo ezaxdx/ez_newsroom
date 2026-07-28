@@ -1,68 +1,80 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { createContext, useContext, useEffect, useState } from "react";
 import { X, BookOpen } from "lucide-react";
+
+// 페이지(서버 컴포넌트 포함)가 제목 옆 트리거와 본문 드로어를 서로 다른 위치에 렌더링해도
+// 같은 열림/닫힘 상태를 공유할 수 있게 하는 헬퍼 — Provider로 감싸고 아래 두 컴포넌트를 원하는 위치에 배치
+const HelpCtx = createContext<{ open: boolean; setOpen: (v: boolean) => void } | null>(null);
+
+export function HelpProvider({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  return <HelpCtx.Provider value={{ open, setOpen }}>{children}</HelpCtx.Provider>;
+}
+
+export function HelpTriggerConnected() {
+  const ctx = useContext(HelpCtx);
+  if (!ctx) return null;
+  return <HelpTrigger onClick={() => ctx.setOpen(true)} />;
+}
+
+export function HelpPanelConnected({ title, children }: { title: string; children: React.ReactNode }) {
+  const ctx = useContext(HelpCtx);
+  if (!ctx) return null;
+  return <HelpPanel title={title} open={ctx.open} onOpenChange={ctx.setOpen}>{children}</HelpPanel>;
+}
+
+/** 제목 옆에 작게 붙이는 도움말 트리거 — HelpPanel의 open 상태와 함께 페이지에서 직접 배치 */
+export function HelpTrigger({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      title="도움말 보기"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        width: 20,
+        height: 20,
+        borderRadius: "50%",
+        background: "var(--surface-container-high)",
+        color: "var(--on-surface-variant)",
+        border: "1px solid var(--surface-container-highest)",
+        cursor: "pointer",
+        fontSize: 11,
+        fontWeight: 700,
+        lineHeight: 1,
+        flexShrink: 0,
+      }}
+    >
+      ?
+    </button>
+  );
+}
 
 interface HelpPanelProps {
   title: string;
   children: React.ReactNode;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
-export default function HelpPanel({ title, children }: HelpPanelProps) {
-  const [open, setOpen] = useState(false);
-
+export default function HelpPanel({ title, children, open, onOpenChange }: HelpPanelProps) {
   // ESC 키로 닫기
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key === "Escape") onOpenChange(false);
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, []);
+  }, [onOpenChange]);
 
   return (
     <>
-      {/* ── 플로팅 버튼 ── */}
-      <button
-        onClick={() => setOpen(true)}
-        title="도움말 보기"
-        style={{
-          position: "fixed",
-          bottom: 28,
-          right: 28,
-          width: 44,
-          height: 44,
-          borderRadius: "50%",
-          background: "#1a1c1d",
-          color: "#ffffff",
-          border: "none",
-          cursor: "pointer",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: 18,
-          fontWeight: 800,
-          boxShadow: "0 4px 16px rgba(0,0,0,0.25)",
-          zIndex: 500,
-          transition: "transform 0.15s, box-shadow 0.15s",
-          lineHeight: 1,
-        }}
-        onMouseEnter={e => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1.08)";
-          (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 6px 20px rgba(0,0,0,0.35)";
-        }}
-        onMouseLeave={e => {
-          (e.currentTarget as HTMLButtonElement).style.transform = "scale(1)";
-          (e.currentTarget as HTMLButtonElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.25)";
-        }}
-      >
-        ?
-      </button>
-
       {/* ── 딤 배경 ── */}
       {open && (
         <div
-          onClick={() => setOpen(false)}
+          onClick={() => onOpenChange(false)}
           style={{
             position: "fixed",
             inset: 0,
@@ -110,7 +122,7 @@ export default function HelpPanel({ title, children }: HelpPanelProps) {
             </span>
           </div>
           <button
-            onClick={() => setOpen(false)}
+            onClick={() => onOpenChange(false)}
             style={{
               width: 28,
               height: 28,

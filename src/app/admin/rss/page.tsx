@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Mail, Search, Pencil, Check, X as XIcon } from "lucide-react";
-import HelpPanel from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
 import { RssSource, ApiConfig, GmailConfig } from "@/lib/types";
 
 const EMPTY_API_CONFIG: ApiConfig = {
@@ -83,6 +83,7 @@ function weightLabel(w: number): string {
 }
 
 export default function RssPage() {
+  const [helpOpen, setHelpOpen] = useState(false);
   const [sources, setSources] = useState<RssSource[]>([]);
   const [categories, setCategories] = useState<string[]>(["AI", "MICE", "TOURISM"]);
   const [loading, setLoading] = useState(true);
@@ -195,7 +196,7 @@ export default function RssPage() {
     <div className="p-8 max-w-3xl">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h2 className="text-xl font-bold tracking-tight m-0">RSS 소스 매니저</h2>
+          <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">RSS 소스 매니저 <HelpTrigger onClick={() => setHelpOpen(true)} /></h2>
           <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
             RSS 피드와 개별 기사 URL을 함께 관리합니다
           </p>
@@ -623,7 +624,7 @@ export default function RssPage() {
         )}
       </div>
 
-      <HelpPanel title="RSS 소스 매니저 가이드">
+      <HelpPanel title="RSS 소스 매니저 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
         <p style={{ marginBottom: 12 }}>
           콘텐츠 수집 소스를 등록·관리합니다. 등록된 소스는 큐레이션 실행 시 자동으로 수집됩니다.
         </p>

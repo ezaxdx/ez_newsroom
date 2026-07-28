@@ -8,7 +8,7 @@ const NAV = [
   { href: "/admin", label: "큐레이션 보드", icon: LayoutDashboard },
   { href: "/admin/articles/new", label: "기사 작성", icon: PenLine },
   { href: "/admin/analytics", label: "애널리틱스", icon: BarChart2 },
-  { href: "/admin/rss", label: "RSS 소스", icon: Rss },
+  { href: "/admin/rss", label: "RSS 소스 매니저", icon: Rss },
   { href: "/admin/settings", label: "큐레이션 설정", icon: Settings },
   { href: "/admin/quality", label: "정합성 관리", icon: ShieldCheck },
   { href: "/admin/newsletter", label: "뉴스레터", icon: Mail },

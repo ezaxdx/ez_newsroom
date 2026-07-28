@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { Loader2, Sparkles, PenLine, ExternalLink, CheckCircle2 } from "lucide-react";
-import HelpPanel from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
 
 type Tab = "ai" | "manual";
 
@@ -275,6 +275,7 @@ function Fields({
 /* ── Main page ── */
 export default function NewArticlePage() {
   const router = useRouter();
+  const [helpOpen, setHelpOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("ai");
   const [fields, setFields] = useState<ArticleFields>({ ...EMPTY });
   const [categories, setCategories] = useState<string[]>(["AI", "MICE", "TOURISM"]);
@@ -373,7 +374,7 @@ export default function NewArticlePage() {
           style={{ color: "var(--on-surface-variant)" }}>
           Editorial Control
         </p>
-        <h1 className="text-2xl font-bold tracking-tight m-0">기사 작성</h1>
+        <h1 className="text-2xl font-bold tracking-tight m-0 flex items-center gap-2">기사 작성 <HelpTrigger onClick={() => setHelpOpen(true)} /></h1>
       </div>
 
       {/* Tabs */}
@@ -541,7 +542,7 @@ export default function NewArticlePage() {
         )}
       </div>
 
-      <HelpPanel title="기사 작성 가이드">
+      <HelpPanel title="기사 작성 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
         <p style={{ marginBottom: 12 }}>
           AI 자동 생성 또는 직접 작성으로 기사를 개별 등록합니다.
         </p>
