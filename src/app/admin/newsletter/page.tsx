@@ -2,6 +2,10 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
+import HelpPanel from "@/components/admin/HelpPanel";
+
+// 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
+const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
 
 type Subscriber = {
   id: string;
@@ -30,7 +34,7 @@ type SendLog = { id: string; email: string; status: string; error_message: strin
 type EventForImage = { id: string; event_name: string; start_date: string; end_date: string | null; venue: string | null; image_url: string | null; website: string | null; is_published: boolean };
 type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
-type Tab = "send" | "subscribers" | "history" | "manual" | "gmail";
+type Tab = "send" | "history" | "subscribers" | "gmail";
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -61,6 +65,8 @@ export default function NewsletterPage() {
   // ── History tab state ──
   const [issues, setIssues] = useState<Issue[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyStatusFilter, setHistoryStatusFilter] = useState<"all" | Issue["status"]>("all");
+  const [historyMonthFilter, setHistoryMonthFilter] = useState<string>("all"); // "YYYY-MM" or "all"
 
   // ── 이력 탭 - 실패 로그 ──
   const [selectedIssue, setSelectedIssue] = useState<Issue | null>(null);
@@ -772,6 +778,16 @@ export default function NewsletterPage() {
     marginBottom: "16px",
   };
 
+  // ── 이력 탭 필터 (계속 쌓이는 목록이라 상태/월별로 좁혀볼 수 있게) ──
+  const issueMonths = Array.from(new Set(
+    issues.map((i) => (i.sent_at ?? i.created_at).slice(0, 7))
+  )).sort((a, b) => b.localeCompare(a));
+  const filteredIssues = issues.filter((i) => {
+    if (historyStatusFilter !== "all" && i.status !== historyStatusFilter) return false;
+    if (historyMonthFilter !== "all" && (i.sent_at ?? i.created_at).slice(0, 7) !== historyMonthFilter) return false;
+    return true;
+  });
+
   return (
     <div style={{ padding: "28px 32px", maxWidth: 900 }}>
       <h1 style={{ fontSize: "1.25rem", fontWeight: 700, marginBottom: 24 }}>
@@ -781,9 +797,8 @@ export default function NewsletterPage() {
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 0, borderBottom: "1px solid var(--surface-container-highest)" }}>
         <button style={tabStyle("send")} onClick={() => setTab("send")}>발송</button>
-        <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>
-        <button style={tabStyle("manual")} onClick={() => setTab("manual")}>📋 매뉴얼</button>
+        <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button
           style={tabStyle("gmail")}
           onClick={() => { setTab("gmail"); if (gmailStatus === "loading") fetchGmailStatus(); }}
@@ -1518,6 +1533,33 @@ export default function NewsletterPage() {
               </div>
             ) : (
               <>
+                <div style={{ display: "flex", gap: 10, marginBottom: 12, alignItems: "center" }}>
+                  <select
+                    value={historyStatusFilter}
+                    onChange={(e) => setHistoryStatusFilter(e.target.value as typeof historyStatusFilter)}
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 13, background: "var(--surface-container)", color: "var(--on-surface)" }}
+                  >
+                    <option value="all">전체 상태</option>
+                    <option value="sent">발송완료</option>
+                    <option value="partial">일부발송</option>
+                    <option value="sending">발송중</option>
+                    <option value="failed">실패</option>
+                    <option value="draft">임시저장</option>
+                  </select>
+                  <select
+                    value={historyMonthFilter}
+                    onChange={(e) => setHistoryMonthFilter(e.target.value)}
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 13, background: "var(--surface-container)", color: "var(--on-surface)" }}
+                  >
+                    <option value="all">전체 기간</option>
+                    {issueMonths.map((m) => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
+                  <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
+                    {filteredIssues.length}건 표시 중 (전체 {issues.length}건)
+                  </span>
+                </div>
                 <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
@@ -1533,14 +1575,14 @@ export default function NewsletterPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {issues.length === 0 ? (
+                      {filteredIssues.length === 0 ? (
                         <tr>
                           <td colSpan={8} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
-                            발송 이력이 없습니다.
+                            {issues.length === 0 ? "발송 이력이 없습니다." : "조건에 맞는 이력이 없습니다."}
                           </td>
                         </tr>
                       ) : (
-                        issues.map((issue) => {
+                        filteredIssues.map((issue) => {
                           const s = issue.status;
                           const statusBg    = s === "sent" ? "#D4EDDA" : s === "partial" ? "#FFF3CD" : s === "sending" ? "#D1ECF1" : s === "failed" ? "#F8D7DA" : "var(--surface-container-highest)";
                           const statusColor = s === "sent" ? "#155724" : s === "partial" ? "#856404" : s === "sending" ? "#0c5460" : s === "failed" ? "#721C24" : "var(--on-surface-variant)";
@@ -1583,9 +1625,9 @@ export default function NewsletterPage() {
                               ) : <span>0</span>}
                             </td>
                             <td style={{ ...tdStyle, textAlign: "center" }} title="트래킹 픽셀 최초 오픈 기준 — 이미지 자동로드 꺼둔 경우 등은 반영 안 됨">
-                              {issue.total_sent > 0
-                                ? `${issue.opened_count} (${Math.round((issue.opened_count / issue.total_sent) * 100)}%)`
-                                : "-"}
+                              {new Date(issue.sent_at ?? issue.created_at) < OPEN_TRACKING_SINCE || issue.total_sent === 0
+                                ? "-"
+                                : `${issue.opened_count} (${Math.round((issue.opened_count / issue.total_sent) * 100)}%)`}
                             </td>
                             <td style={tdStyle}>
                               <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4,
@@ -1765,6 +1807,9 @@ export default function NewsletterPage() {
                     </tbody>
                   </table>
                 </div>
+                <p style={{ fontSize: 12, color: "var(--on-surface-variant)", marginTop: 6 }}>
+                  * 오픈 트래킹은 7월 30일 발송분부터 집계됩니다. 그 이전 호는 &quot;-&quot;로 표시됩니다.
+                </p>
 
                 {selectedIssue && (
                   <div style={{ marginTop: 12, background: "var(--surface-container)", borderRadius: 8, padding: 16 }}>
@@ -1823,8 +1868,8 @@ export default function NewsletterPage() {
         )}
       </div>
 
-        {/* ── MANUAL TAB ── */}
-        {tab === "manual" && (
+        {/* ── 매뉴얼 (모달) ── */}
+        <HelpPanel title="뉴스레터 관리 매뉴얼">
           <div style={{ fontSize: 14, lineHeight: 1.75, color: "var(--on-surface)" }}>
 
             <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
@@ -1916,7 +1961,7 @@ export default function NewsletterPage() {
             </Section>
 
           </div>
-        )}
+        </HelpPanel>
 
         {/* ── GMAIL TAB ── */}
         {tab === "gmail" && (
