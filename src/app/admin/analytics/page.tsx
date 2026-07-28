@@ -451,9 +451,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
           <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
             style={{ color: "var(--on-surface-variant)" }}>유입 경로 (Referrer)</p>
-          <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-            직접 클릭해 들어온 경로 기준 · 북마크·재방문·주소 직접입력은 &lsquo;직접 접속&rsquo;에 포함
-          </p>
           {referrers.length === 0 && (
             <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
               유입 데이터가 없습니다.
@@ -468,6 +465,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                     {r.source === "봇/크롤러(자동수집)" && (
                       <span className="text-xs ml-1.5" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
                         (사람 아님 · 카톡 미리보기·모니터링 등)
+                      </span>
+                    )}
+                    {r.source === "직접 접속" && (
+                      <span className="text-xs ml-1.5" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+                        * 뉴스룸 URL을 통해 들어온 모든 경로
                       </span>
                     )}
                   </span>
