@@ -573,7 +573,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           목록 조회수 = /newsletter/archive 방문 · Vol별 조회수 = 개별 호 상세 열람
         </p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          * 이 지표는 2026-07-30부터 수집됩니다. 그 이전 방문·조회는 포함되지 않습니다.
+          * 이 지표는 2026-07-30부터 수집
         </p>
         <div className="flex items-center gap-8 mb-5">
           <div>
