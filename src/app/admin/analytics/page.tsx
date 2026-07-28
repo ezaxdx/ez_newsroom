@@ -576,7 +576,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>뉴스레터 지난호</p>
         <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          목록 조회수 = /newsletter/archive 방문 · Vol별 조회수 = 개별 호 상세 열람
+          목록 조회수 = 뉴스룸 푸터의 지난호 보기 방문 · Vol별 조회수 = 개별 호 상세 열람
         </p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
           * 이 지표는 2026-07-30부터 수집
