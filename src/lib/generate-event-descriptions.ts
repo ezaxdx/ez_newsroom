@@ -78,10 +78,14 @@ JSON 배열로만 출력 (다른 설명 없이): ["소개1", "소개2", ...]`;
     if (!jsonMatch) return result;
     const descriptions: string[] = JSON.parse(jsonMatch[0]);
 
+    // 프롬프트로 "명사형 종결" 규칙을 명시해도 AI가 종종 어김 (예: "~을 만나다") — 종결어미 검증으로 한 번 더 거름.
+    // 한국어 동사 원형/서술형 종결어미는 거의 항상 "다"로 끝나고, 명사가 "다"로 끝나는 경우는 극히 드묾.
+    const endsLikeVerb = (s: string) => /다\s*$/.test(s.trim());
+
     await Promise.all(
       stillNeedsDesc.map(async (e, i) => {
         const desc = descriptions[i];
-        if (!desc) return;
+        if (!desc || endsLikeVerb(desc)) return; // 규칙 위반 시 저장하지 않음 — null로 남겨 다음 실행에서 재시도
         result[e.id] = desc;
         await supabase.from("convention_events").update({ description: desc }).eq("id", e.id);
       })
