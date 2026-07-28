@@ -332,7 +332,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
         <p style="margin:0 0 10px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
           <a href="${withUTM(site_url, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">EZ 뉴스룸 바로가기</a>
           &nbsp;·&nbsp;
-          <a href="${site_url}/newsletter/archive" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">지난호 보기</a>
+          <a href="${withUTM(`${site_url}/newsletter/archive`, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">지난호 보기</a>
         </p>
         <p style="margin:0 0 10px;font-size:11px;font-weight:300;color:${C.muted};font-family:${FONT_PRET};">
           <a href="${site_url}/api/newsletter/unsubscribe?id=${UNSUBSCRIBE_ID_PLACEHOLDER}" style="color:${C.muted};text-decoration:underline;font-family:${FONT_PRET};">수신거부</a>

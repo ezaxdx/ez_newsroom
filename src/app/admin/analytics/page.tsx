@@ -24,6 +24,7 @@ const EMPTY = {
   topEvents:    [] as { name: string; venue: string | null; clicks: number }[],
   avgReadSec:   0,
   newsletterListViews: 0,
+  newsletterListViewsFromEmail: 0,
   topNewsletterIssues: [] as { vol: number; count: number }[],
 };
 
@@ -128,7 +129,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent, category").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
       applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
-      applyDate(db.from("user_logs").select("newsletter_vol").eq("event_type", "newsletter_archive_view").limit(5000), from, to),
+      applyDate(db.from("user_logs").select("newsletter_vol, utm_source").eq("event_type", "newsletter_archive_view").limit(5000), from, to),
     ]);
 
     const viewCount     = view    ?? 0;
@@ -274,10 +275,13 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .slice(0, 10);
 
     // ── 뉴스레터 지난호 (목록 조회 + Vol별 조회 랭킹) ──
-    const newsletterLogs = newsletterArchiveLogs ?? [];
-    const newsletterListViews = newsletterLogs.filter((l: { newsletter_vol: number | null }) => l.newsletter_vol == null).length;
+    // utm_source는 이메일 "지난호 보기" 링크에만 붙어있음(withUTM) — 있으면 이메일 유입, 없으면 사이트 내(Footer 등) 유입
+    const newsletterLogs = (newsletterArchiveLogs ?? []) as { newsletter_vol: number | null; utm_source: string | null }[];
+    const newsletterListLogs = newsletterLogs.filter((l) => l.newsletter_vol == null);
+    const newsletterListViews = newsletterListLogs.length;
+    const newsletterListViewsFromEmail = newsletterListLogs.filter((l) => !!l.utm_source).length;
     const volMap: Record<number, number> = {};
-    for (const l of newsletterLogs as { newsletter_vol: number | null }[]) {
+    for (const l of newsletterLogs) {
       if (l.newsletter_vol == null) continue;
       volMap[l.newsletter_vol] = (volMap[l.newsletter_vol] ?? 0) + 1;
     }
@@ -297,6 +301,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       topArticles,
       topSearches,
       newsletterListViews,
+      newsletterListViewsFromEmail,
       topNewsletterIssues,
       topEvents,
       avgReadSec,
@@ -388,7 +393,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const effectiveFrom = isAll ? null : hasRange ? (from ?? null) : defaultRange.from;
   const effectiveTo   = isAll ? null : hasRange ? (to ?? null)   : defaultRange.to;
   const [data, navCategories] = await Promise.all([fetchAnalytics(effectiveFrom, effectiveTo), fetchNavCategories()]);
-  const { totals, exploreFunnel, deeplinkFunnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec, newsletterListViews, topNewsletterIssues } = data;
+  const { totals, exploreFunnel, deeplinkFunnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec, newsletterListViews, newsletterListViewsFromEmail, topNewsletterIssues } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
@@ -551,13 +556,25 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
           style={{ color: "var(--on-surface-variant)" }}>뉴스레터 지난호</p>
-        <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
           목록 조회수 = /newsletter/archive 방문 · Vol별 조회수 = 개별 호 상세 열람
         </p>
-        <div className="flex items-center gap-6 mb-5">
+        <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+          * 이 지표는 2026-07-28부터 수집을 시작했습니다. 그 이전 방문·조회는 포함되지 않습니다.
+        </p>
+        <div className="flex items-center gap-8 mb-5">
           <div>
             <p className="text-[0.68rem] m-0 mb-0.5" style={{ color: "var(--on-surface-variant)" }}>지난호 목록 조회수</p>
             <p className="text-2xl font-bold m-0">{newsletterListViews.toLocaleString()}</p>
+          </div>
+          <div>
+            <p className="text-[0.68rem] m-0 mb-0.5" style={{ color: "var(--on-surface-variant)" }}>그 중 이메일 유입</p>
+            <p className="text-2xl font-bold m-0">
+              {newsletterListViewsFromEmail.toLocaleString()}
+              <span className="text-sm font-normal ml-1" style={{ color: "var(--on-surface-variant)" }}>
+                ({newsletterListViews ? Math.round((newsletterListViewsFromEmail / newsletterListViews) * 100) : 0}%)
+              </span>
+            </p>
           </div>
         </div>
         {topNewsletterIssues.length === 0 ? (
@@ -728,8 +745,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>5. 뉴스레터 지난호</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — 뉴스레터 안 "지난호 보기" 링크로 /newsletter/archive 목록 페이지를 연 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — /newsletter/archive 목록 페이지를 연 횟수. "그 중 이메일 유입"은 뉴스레터 본문 링크(UTM 포함)로 들어온 것만 구분 — 나머지는 사이트 Footer 등에서 직접 들어온 것</li>
           <li><strong style={{ color: "var(--on-surface)" }}>Vol별 조회수</strong> — 목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수. 어떤 지난호가 인기 있는지 확인 가능</li>
+          <li>2026-07-28부터 수집 시작 — 그 이전 시점 데이터는 없음</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 인기 검색어</p>
