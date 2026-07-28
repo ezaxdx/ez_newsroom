@@ -427,7 +427,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
-        <StatCard label="평균 체류시간" value={`${avgReadSec}초`} sub="홈 화면 전체 체류 · 2026-07-21부터 수집" />
+        <StatCard label="평균 체류시간(2026-07-21부터 수집)" value={`${avgReadSec}초`} sub="홈 화면 전체 체류" />
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
