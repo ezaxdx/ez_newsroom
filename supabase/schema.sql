@@ -222,11 +222,12 @@ create table if not exists public.curation_logs (
 
 -- ── newsletter_subscribers ────────────────────────────────────────────
 create table if not exists public.newsletter_subscribers (
-  id         uuid primary key default gen_random_uuid(),
-  email      text not null unique,
-  name       text,
-  is_active  boolean default true,
-  created_at timestamptz default now()
+  id               uuid primary key default gen_random_uuid(),
+  email            text not null unique,
+  name             text,
+  is_active        boolean default true,
+  created_at       timestamptz default now(),
+  unsubscribed_at  timestamptz  -- 본인이 메일 내 "수신거부" 링크로 직접 해지한 시각 (관리자가 수동 비활성화한 경우는 null)
 );
 
 -- ── newsletter_issues ─────────────────────────────────────────────────

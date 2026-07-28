@@ -16,6 +16,9 @@ export type EventCard = {
   description?: string | null;
 };
 
+// 발송 시점에 수신자 id로 치환되는 자리표시자 (gmail-sender.ts 참고)
+export const UNSUBSCRIBE_ID_PLACEHOLDER = "__EZ_UNSUB_ID__";
+
 export type NewsletterData = {
   vol_number: number;
   send_date: string;
@@ -323,9 +326,12 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <tr>
       <td style="background:${C.white};border-top:1px solid ${C.border};padding:28px 32px 40px;text-align:center;">
         <img src="${site_url}/images/ez-letter-logo.png" width="80" alt="EZ Letter"
-             style="display:inline-block;max-width:80px;height:auto;margin-bottom:14px;">
-        <p style="margin:0 0 8px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
+             style="display:inline-block;max-width:80px;height:auto;margin-bottom:4px;">
+        <p style="margin:0 0 10px;font-size:16px;font-weight:500;color:${C.dark};font-family:${FONT_NOTO};">
           <a href="${withUTM(site_url, vol)}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">EZ 뉴스룸 바로가기</a>
+        </p>
+        <p style="margin:0 0 10px;font-size:11px;font-weight:300;color:${C.muted};font-family:${FONT_PRET};">
+          <a href="${site_url}/api/newsletter/unsubscribe?id=${UNSUBSCRIBE_ID_PLACEHOLDER}" style="color:${C.muted};text-decoration:underline;font-family:${FONT_PRET};">수신거부</a>
         </p>
         <p style="margin:0;font-size:11px;font-weight:300;color:#000000;font-family:${FONT_PRET};">Copyright © AXDX All Rights Reserved.</p>
       </td>

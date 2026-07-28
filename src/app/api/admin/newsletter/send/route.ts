@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   // ── 미리보기에서 생성된 HTML 캐시로 바로 발송 ──────────
   if (!dry_run && body.cached_html) {
     const { data: subscribers } = await supabase
-      .from("newsletter_subscribers").select("email").eq("is_active", true);
+      .from("newsletter_subscribers").select("id, email").eq("is_active", true);
     if (!subscribers || subscribers.length === 0)
       return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
 
@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
       .replace(/https?:\/\/localhost:\d+/g, prodUrl);
 
     const allRecipients = subscribers.map(s => s.email);
+    const idByEmail = new Map(subscribers.map(s => [s.email, s.id as string]));
 
     // 같은 vol_number 이슈가 이미 있으면 재사용 (재발송 시 중복 방지)
     const { data: existingIssue } = await supabase
@@ -84,7 +85,7 @@ export async function POST(req: NextRequest) {
       .eq("status", "success");
     const alreadySent = new Set((sentLogs ?? []).map((l: { email: string }) => l.email));
     const remaining = allRecipients.filter(e => !alreadySent.has(e));
-    const recipients = remaining.slice(0, BATCH_LIMIT);
+    const recipients = remaining.slice(0, BATCH_LIMIT).map(email => ({ email, id: idByEmail.get(email)! }));
 
     // newsletter_issues.total_sent 는 수동 수정될 수 있으므로 실제 로그 기준으로 초기화
     const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
@@ -99,7 +100,7 @@ export async function POST(req: NextRequest) {
     let processed = recipients.length;
     try {
       const sendRes = await sendNewsletterViaGmail({
-        fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients,
+        fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients, siteUrl: prodUrl,
         timeBudgetMs: TIME_BUDGET_MS,
         onBatchComplete: async (batchResults) => {
           const batchSent = batchResults.filter(r => r.status === "success").length;
@@ -361,12 +362,13 @@ export async function POST(req: NextRequest) {
 
   // ── 실제 발송 ──
   const { data: subscribers } = await supabase
-    .from("newsletter_subscribers").select("email").eq("is_active", true);
+    .from("newsletter_subscribers").select("id, email").eq("is_active", true);
   if (!subscribers || subscribers.length === 0)
     return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
 
   const subject      = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
   const allRecipients2 = subscribers.map(s => s.email);
+  const idByEmail2 = new Map(subscribers.map(s => [s.email, s.id as string]));
 
   // 같은 vol_number 이슈 재사용 (캐시 경로와 동일한 중복방지 로직)
   const { data: existingIssue2 } = await supabase
@@ -409,7 +411,7 @@ export async function POST(req: NextRequest) {
     .eq("status", "success");
   const alreadySent2 = new Set((sentLogs2 ?? []).map((l: { email: string }) => l.email));
   const remaining2 = allRecipients2.filter(e => !alreadySent2.has(e));
-  const recipients2 = remaining2.slice(0, BATCH_LIMIT);
+  const recipients2 = remaining2.slice(0, BATCH_LIMIT).map(email => ({ email, id: idByEmail2.get(email)! }));
 
   if (remaining2.length === 0) {
     await supabase.from("newsletter_issues").update({ status: "sent", total_sent: alreadySent2.size }).eq("id", issueId2);
@@ -422,7 +424,7 @@ export async function POST(req: NextRequest) {
   let processed2 = recipients2.length;
   try {
     const sendRes2 = await sendNewsletterViaGmail({
-      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2,
+      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2, siteUrl: prod_url,
       timeBudgetMs: TIME_BUDGET_MS,
       onBatchComplete: async (batchResults) => {
         const batchSent = batchResults.filter(r => r.status === "success").length;

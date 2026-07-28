@@ -110,12 +110,18 @@ export async function POST(req: NextRequest) {
   let total_sent = existingSuccessLogs?.length ?? 0;
   let total_failed = issue.total_failed ?? 0;
 
+  const { data: subs } = await supabase
+    .from("newsletter_subscribers").select("id, email").in("email", emails);
+  const recipients = (subs ?? []).map(s => ({ id: s.id as string, email: s.email as string }));
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+
   await sendNewsletterViaGmail({
     fromName: "EZ Letter",
     fromEmail,
     subject,
     html: issue.html_content!,
-    recipients: emails,
+    recipients,
+    siteUrl,
     timeBudgetMs: 40_000, // Vercel 60초 강제종료 방지
 
     onBatchComplete: async (batchResults) => {

@@ -9,6 +9,7 @@ type Subscriber = {
   name: string | null;
   is_active: boolean;
   created_at: string;
+  unsubscribed_at: string | null;
 };
 
 type Issue = {
@@ -1433,13 +1434,14 @@ export default function NewsletterPage() {
                       <th style={thStyle}>이메일</th>
                       <th style={{ ...thStyle, textAlign: "center" }}>활성</th>
                       <th style={thStyle}>추가일</th>
+                      <th style={thStyle}>수신거부일</th>
                       <th style={{ ...thStyle, textAlign: "center" }}>삭제</th>
                     </tr>
                   </thead>
                   <tbody>
                     {subscribers.length === 0 ? (
                       <tr>
-                        <td colSpan={6} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+                        <td colSpan={7} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
                           등록된 수신자가 없습니다.
                         </td>
                       </tr>
@@ -1480,6 +1482,11 @@ export default function NewsletterPage() {
                           </td>
                           <td style={tdStyle}>
                             {new Date(sub.created_at).toLocaleDateString("ko-KR")}
+                          </td>
+                          <td style={tdStyle}>
+                            {sub.unsubscribed_at
+                              ? <span style={{ color: "#c0392b" }}>{new Date(sub.unsubscribed_at).toLocaleDateString("ko-KR")} (본인 신청)</span>
+                              : "-"}
                           </td>
                           <td style={{ ...tdStyle, textAlign: "center" }}>
                             <button

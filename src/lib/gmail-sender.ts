@@ -60,6 +60,9 @@ export function makeRawMessage(params: {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
   const adminEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
   const unsubMailto = `mailto:${adminEmail}?subject=%EB%AC%B8%EC%9D%98%ED%95%98%EA%B8%B0`;
+  // 메일 클라이언트가 헤더에 있는 링크를 스캔 단계에서 미리 열어보는 경우가 있어(보안 스캐너 프리페치),
+  // GET만으로 즉시 수신거부되지 않고 확인 페이지를 거치도록 설계함 — 그래서 List-Unsubscribe-Post(원클릭)는 넣지 않음
+  const unsubHeaderParts = [`<${unsubMailto}>`, ...(params.unsubscribeUrl ? [`<${params.unsubscribeUrl}>`] : [])];
   const domain = adminEmail.split("@")[1] ?? "gmail.com";
 
   // plain text: HTML 태그 제거 후 간단한 fallback
@@ -80,7 +83,7 @@ export function makeRawMessage(params: {
     `Subject: =?UTF-8?B?${Buffer.from(params.subject).toString("base64")}?=`,
     `Date: ${new Date().toUTCString()}`,
     `Message-ID: ${messageId}`,
-    `List-Unsubscribe: <${unsubMailto}>`,
+    `List-Unsubscribe: ${unsubHeaderParts.join(", ")}`,
     `List-ID: EZ Letter <ez-letter.${domain}>`,
     "Precedence: bulk",
     "MIME-Version: 1.0",
@@ -127,13 +130,17 @@ export async function sendNewsletterViaGmail(params: {
   fromEmail: string;
   subject: string;
   html: string;
-  recipients: string[];
+  /** 문자열(이메일만)도 허용 — id가 없으면 개인화 수신거부 링크는 생성되지 않음(기존 재발송 경로 호환용) */
+  recipients: (string | { email: string; id: string })[];
+  /** 수신거부 확인 페이지의 기준 URL (예: https://뉴스룸.com) — 없으면 개인화 링크 미삽입 */
+  siteUrl?: string;
   /** 전체 시간 예산(ms) — 초과 시 남은 수신자는 처리하지 않고 반환 (Vercel 강제종료 방지) */
   timeBudgetMs?: number;
   onBatchComplete?: (results: SendResult[]) => Promise<void>;
 }): Promise<{ results: SendResult[]; total_sent: number; total_failed: number; processed: number }> {
   const gmail = await getGmailClient();
   const started = Date.now();
+  const recipients = params.recipients.map(r => typeof r === "string" ? { email: r, id: null as string | null } : r);
 
   const results: SendResult[] = [];
   let total_sent = 0;
@@ -141,20 +148,24 @@ export async function sendNewsletterViaGmail(params: {
 
   // 5명씩 병렬 발송 + 배치 간 200ms 대기 (Gmail API 레이트 리밋 대응)
   const BATCH_SIZE = 5;
-  for (let i = 0; i < params.recipients.length; i += BATCH_SIZE) {
+  for (let i = 0; i < recipients.length; i += BATCH_SIZE) {
     // 시간 예산 초과 → 즉시 중단, 미처리분은 다음 회차에서 발송 (로그 기반 중복 방지)
     if (params.timeBudgetMs && Date.now() - started > params.timeBudgetMs) break;
 
-    const batch = params.recipients.slice(i, i + BATCH_SIZE);
+    const batch = recipients.slice(i, i + BATCH_SIZE);
     if (i > 0) await new Promise(r => setTimeout(r, 200));
     const batchResults = await Promise.all(
-      batch.map(async (to) => {
+      batch.map(async ({ email: to, id }) => {
         try {
+          // 수신거부 링크에 수신자별 id를 심어서 "누가 눌렀는지" 식별 가능하게 함
+          const unsubscribeUrl = id && params.siteUrl ? `${params.siteUrl}/api/newsletter/unsubscribe?id=${id}` : undefined;
+          const personalizedHtml = id ? params.html.replaceAll("__EZ_UNSUB_ID__", id) : params.html;
           const raw = makeRawMessage({
             from: `"${params.fromName}" <${params.fromEmail}>`,
             to,
             subject: params.subject,
-            html: params.html,
+            html: personalizedHtml,
+            unsubscribeUrl,
           });
           await withTimeout(
             gmail.users.messages.send({ userId: "me", requestBody: { raw } }),

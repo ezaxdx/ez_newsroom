@@ -168,7 +168,7 @@ export async function GET(req: NextRequest) {
   });
 
   // 수신자
-  const { data: subscribers } = await supabase.from("newsletter_subscribers").select("email").eq("is_active", true);
+  const { data: subscribers } = await supabase.from("newsletter_subscribers").select("id, email").eq("is_active", true);
   if (!subscribers || subscribers.length === 0) {
     return NextResponse.json({ skipped: true, reason: "no active subscribers" });
   }
@@ -185,7 +185,8 @@ export async function GET(req: NextRequest) {
       fromEmail,
       subject,
       html,
-      recipients: subscribers.map(s => s.email),
+      recipients: subscribers.map(s => ({ id: s.id as string, email: s.email as string })),
+      siteUrl: site_url,
     });
     for (const r of results) {
       if (r.status === "success") total_sent++;
