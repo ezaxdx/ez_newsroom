@@ -22,11 +22,11 @@ export async function GET(req: NextRequest) {
 
   const supabase = createAdminClient();
   const { data: sub } = await supabase
-    .from("newsletter_subscribers").select("email, is_active").eq("id", id).single();
+    .from("newsletter_subscribers").select("email, unsubscribed_at").eq("id", id).single();
 
   if (!sub) return page("잘못된 요청", `<p style="color:#7A6E5F;">해당 구독 정보를 찾을 수 없습니다.</p>`);
 
-  if (!sub.is_active) {
+  if (sub.unsubscribed_at) {
     return page("이미 수신거부됨", `<p style="font-size:15px;color:#423C25;">${sub.email}<br>이미 수신거부 처리된 이메일입니다.</p>`);
   }
 
@@ -54,9 +54,10 @@ export async function POST(req: NextRequest) {
   if (!id) return page("잘못된 요청", `<p style="color:#7A6E5F;">유효하지 않은 요청입니다.</p>`);
 
   const supabase = createAdminClient();
+  // 전사 발송 특성상 수신거부해도 실제 발송은 계속되어야 함 — is_active는 건드리지 않고 수신거부 의사만 기록(집계용)
   const { data: sub, error } = await supabase
     .from("newsletter_subscribers")
-    .update({ is_active: false, unsubscribed_at: new Date().toISOString() })
+    .update({ unsubscribed_at: new Date().toISOString() })
     .eq("id", id)
     .select("email")
     .single();

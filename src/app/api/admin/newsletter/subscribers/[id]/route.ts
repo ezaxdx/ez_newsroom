@@ -23,10 +23,10 @@ export async function PATCH(
   }
 
   const supabase = createAdminClient();
-  // 관리자가 다시 활성화하면 "본인 수신거부" 기록은 더 이상 유효하지 않으므로 초기화
+  // is_active는 관리자가 발송 대상에서 빼는 별개의 스위치 — 수신거부(unsubscribed_at)는 집계용 기록이라 여기서 건드리지 않음
   const { data, error } = await supabase
     .from("newsletter_subscribers")
-    .update({ is_active: body.is_active, ...(body.is_active ? { unsubscribed_at: null } : {}) })
+    .update({ is_active: body.is_active })
     .eq("id", id)
     .select()
     .single();
