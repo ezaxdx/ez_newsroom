@@ -436,8 +436,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           style={{ color: "var(--on-surface-variant)" }}>
           인게이지먼트 퍼널
         </p>
+        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+          방문자가 접속 → 기사 클릭 → 원문 클릭까지 얼마나 이어지는지 보여주는 단계별 전환 지표
+        </p>
+        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+          딥링크(뉴스레터 개별 기사 클릭 등 ?news=)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까움 — 탐색형(직접 클릭) 여정과 분리 집계
+        </p>
         <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          딥링크(뉴스레터 등 ?news=)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까움 — 탐색형(직접 클릭) 여정과 분리 집계
+          ※ &ldquo;탐색형&rdquo; = 뉴스레터가 아닌 유입이라는 뜻이 아니라, 홈으로 들어와서 직접 기사를 고른 사람들 전체 (뉴스레터의 &ldquo;EZ 뉴스룸 바로가기&rdquo;처럼 홈으로 연결되는 링크도 포함, 개별 기사 딥링크만 제외)
         </p>
         <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-2 gap-8" : ""}>
           <FunnelBlock title="탐색형 (직접 클릭)" steps={exploreFunnel} />
@@ -718,7 +724,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>2. 인게이지먼트 퍼널</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>탐색형</strong> — 홈에 들어와 직접 기사를 클릭한 여정. <strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 전환율이 실제 콘텐츠 매력도를 반영</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>탐색형</strong> — 홈에 들어와 직접 기사를 클릭한 여정. <strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 전환율이 실제 콘텐츠 매력도를 반영. &ldquo;뉴스레터가 아닌 유입&rdquo;이라는 뜻이 아님 — 뉴스레터의 &ldquo;EZ 뉴스룸 바로가기&rdquo;처럼 홈으로 연결되는 링크도 여기 포함되고, 개별 기사 딥링크(?news=)만 아래 딥링크 여정으로 따로 빠짐</li>
           <li><strong style={{ color: "var(--on-surface)" }}>딥링크</strong> — 뉴스레터 등 &lsquo;?news=&rsquo; 링크로 들어와 도착 즉시 모달이 자동으로 열린 여정. &ldquo;기사 클릭&rdquo;은 항상 100%에 가까우므로 이 단계 전환율은 의미 없고, <strong style={{ color: "var(--on-surface)" }}>원문 클릭률</strong>만 유의미 (열람 후 실제로 더 알아봤는지)</li>
           <li>둘을 분리하는 이유 — 딥링크 유입이 늘면 탐색형과 섞인 하나의 퍼널은 "기사 클릭률"이 왜곡되어 실제 콘텐츠 매력도를 잘못 읽게 됨</li>
         </ul>
