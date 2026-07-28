@@ -164,6 +164,7 @@ create table if not exists public.user_logs (
   entry_path   text,
   user_agent   text,
   via_deeplink boolean default false,
+  newsletter_vol integer,  -- 뉴스레터 지난호 조회 로그 전용 — null이면 지난호 목록 페이지, 값이 있으면 해당 Vol 상세 페이지
   created_at   timestamptz default now()
 );
 
@@ -172,13 +173,14 @@ alter table public.user_logs
   add column if not exists category     text,
   add column if not exists read_sec     numeric,
   add column if not exists search_query text,
-  add column if not exists via_deeplink boolean default false;
+  add column if not exists via_deeplink boolean default false,
+  add column if not exists newsletter_vol integer;
 
--- event_type check 제약 갱신 (read_time·search·category_view·session_time 추가 지원)
+-- event_type check 제약 갱신 (read_time·search·category_view·session_time·newsletter_archive_view 추가 지원)
 alter table public.user_logs drop constraint if exists user_logs_event_type_check;
 alter table public.user_logs
   add constraint user_logs_event_type_check
-  check (event_type in ('view','detail_view','outbound_click','event_click','read_time','search','category_view','session_time'));
+  check (event_type in ('view','detail_view','outbound_click','event_click','read_time','search','category_view','session_time','newsletter_archive_view'));
 
 -- ── gmail_tokens ──────────────────────────────────────────────────────
 create table if not exists public.gmail_tokens (

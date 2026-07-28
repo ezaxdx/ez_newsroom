@@ -3,7 +3,7 @@ import { createClient } from "@/lib/supabase/client";
 // category_view: 홈 피드에 해당 카테고리 콘텐츠가 노출된 페이지 로드 1회당 카테고리 수만큼 기록.
 // "view"(총 접속 수 KPI 집계 대상)와 분리해 총 접속 수 지표가 부풀려지지 않게 함.
 // session_time: 뉴스룸 홈에 진입한 순간부터 이탈할 때까지의 전체 체류시간 (read_time은 인사이트 모달 열람 시간만 측정 — 둘은 별개 지표)
-export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search" | "category_view" | "session_time";
+export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search" | "category_view" | "session_time" | "newsletter_archive_view";
 
 type LogPayload = {
   event_type: EventType;
@@ -14,6 +14,8 @@ type LogPayload = {
   search_query?: string;
   // 뉴스레터 등 딥링크(?news=id)로 자동 오픈된 것인지 — 탐색형(직접 클릭) 여정과 구분해 퍼널 집계
   via_deeplink?: boolean;
+  // newsletter_archive_view 전용 — 없으면 지난호 목록 페이지, 있으면 해당 Vol 상세 페이지
+  newsletter_vol?: number;
 };
 
 function getUtmParams() {
@@ -67,6 +69,7 @@ export async function logEvent(payload: LogPayload) {
       read_sec:      payload.read_sec     ?? null,
       search_query:  payload.search_query ?? null,
       via_deeplink:  payload.via_deeplink ?? false,
+      newsletter_vol: payload.newsletter_vol ?? null,
       referrer: typeof document !== "undefined" ? document.referrer || null : null,
       entry_path: typeof window !== "undefined" ? window.location.pathname : null,
       user_agent: typeof navigator !== "undefined" ? navigator.userAgent : null,

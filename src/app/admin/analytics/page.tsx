@@ -23,6 +23,8 @@ const EMPTY = {
   topSearches:  [] as { query: string; count: number }[],
   topEvents:    [] as { name: string; venue: string | null; clicks: number }[],
   avgReadSec:   0,
+  newsletterListViews: 0,
+  topNewsletterIssues: [] as { vol: number; count: number }[],
 };
 
 // 유입경로 라벨: "직접 클릭해 들어온 경로"임을 명확히 — 재방문·북마크는 '직접 접속'으로 잡히는 한계 반영
@@ -105,6 +107,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       { data: sourceLogs },    // 유입 경로 판별용 — view 전체(category로 홈 진입/아카이브 이동 구분)
       { data: searchLogs },    // 검색어
       { data: eventClickLogs },// event_click with event_id → 인기 행사 집계
+      { data: newsletterArchiveLogs }, // newsletter_archive_view — 지난호 목록/상세 조회
     ] = await Promise.all([
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "view"), from, to),
       applyDate(db.from("user_logs").select("*", { count: "exact", head: true }).eq("event_type", "detail_view"), from, to),
@@ -125,6 +128,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent, category").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
       applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
+      applyDate(db.from("user_logs").select("newsletter_vol").eq("event_type", "newsletter_archive_view").limit(5000), from, to),
     ]);
 
     const viewCount     = view    ?? 0;
@@ -269,6 +273,19 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
+    // ── 뉴스레터 지난호 (목록 조회 + Vol별 조회 랭킹) ──
+    const newsletterLogs = newsletterArchiveLogs ?? [];
+    const newsletterListViews = newsletterLogs.filter((l: { newsletter_vol: number | null }) => l.newsletter_vol == null).length;
+    const volMap: Record<number, number> = {};
+    for (const l of newsletterLogs as { newsletter_vol: number | null }[]) {
+      if (l.newsletter_vol == null) continue;
+      volMap[l.newsletter_vol] = (volMap[l.newsletter_vol] ?? 0) + 1;
+    }
+    const topNewsletterIssues = Object.entries(volMap)
+      .map(([vol, count]) => ({ vol: Number(vol), count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
     return {
       totals: { view: homeViewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
       exploreFunnel,
@@ -279,6 +296,8 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       categories,
       topArticles,
       topSearches,
+      newsletterListViews,
+      topNewsletterIssues,
       topEvents,
       avgReadSec,
     };
@@ -369,7 +388,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
   const effectiveFrom = isAll ? null : hasRange ? (from ?? null) : defaultRange.from;
   const effectiveTo   = isAll ? null : hasRange ? (to ?? null)   : defaultRange.to;
   const [data, navCategories] = await Promise.all([fetchAnalytics(effectiveFrom, effectiveTo), fetchNavCategories()]);
-  const { totals, exploreFunnel, deeplinkFunnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec } = data;
+  const { totals, exploreFunnel, deeplinkFunnel, referrers, previewCount, utmCampaigns, topArticles, topSearches, topEvents, avgReadSec, newsletterListViews, topNewsletterIssues } = data;
 
   // 카테고리 성과: navCategories 전체를 기준으로 항상 표시 (데이터 없으면 0)
   const categories = navCategories.map((cat) => {
@@ -528,6 +547,39 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         </div>
       </section>
 
+      {/* ── 뉴스레터 지난호 ── */}
+      <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
+        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
+          style={{ color: "var(--on-surface-variant)" }}>뉴스레터 지난호</p>
+        <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+          목록 조회수 = /newsletter/archive 방문 · Vol별 조회수 = 개별 호 상세 열람
+        </p>
+        <div className="flex items-center gap-6 mb-5">
+          <div>
+            <p className="text-[0.68rem] m-0 mb-0.5" style={{ color: "var(--on-surface-variant)" }}>지난호 목록 조회수</p>
+            <p className="text-2xl font-bold m-0">{newsletterListViews.toLocaleString()}</p>
+          </div>
+        </div>
+        {topNewsletterIssues.length === 0 ? (
+          <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
+            아직 지난호 상세 조회 데이터가 없습니다.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            {topNewsletterIssues.map((iss, idx) => (
+              <div key={iss.vol} className="flex items-center justify-between py-2"
+                style={{ borderBottom: "1px solid var(--surface-container-highest)" }}>
+                <span className="text-sm font-medium">
+                  <span className="text-[0.65rem] font-bold mr-2" style={{ color: "var(--on-surface-variant)" }}>#{idx + 1}</span>
+                  Vol.{iss.vol}
+                </span>
+                <span className="text-sm font-semibold">{iss.count.toLocaleString()}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
       {/* ── 인기 검색어 ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
         <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
@@ -674,13 +726,19 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>5. 인기 검색어</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>5. 뉴스레터 지난호</p>
+        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
+          <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — 뉴스레터 안 "지난호 보기" 링크로 /newsletter/archive 목록 페이지를 연 횟수</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>Vol별 조회수</strong> — 목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수. 어떤 지난호가 인기 있는지 확인 가능</li>
+        </ul>
+
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 인기 검색어</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
           <li>뉴스룸 상단 검색창에서 실행된 검색어를 빈도순으로 집계</li>
           <li>독자가 관심 갖는 키워드 파악 및 콘텐츠 기획에 활용</li>
         </ul>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 행사 클릭 · 평균 체류시간</p>
+        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>7. 행사 클릭 · 평균 체류시간</p>
         <ul style={{ paddingLeft: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
           <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초). 탭이 백그라운드에 있는 동안은 카운트 제외</li>
