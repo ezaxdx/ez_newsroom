@@ -464,8 +464,11 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         {/* UTM 캠페인 */}
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-5 m-0"
+          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
             style={{ color: "var(--on-surface-variant)" }}>UTM 캠페인</p>
+          <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
+            뉴스레터 클릭 후 뉴스기사 모달 진입
+          </p>
           {utmCampaigns.length === 0 && (
             <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
               UTM 데이터가 없습니다.
