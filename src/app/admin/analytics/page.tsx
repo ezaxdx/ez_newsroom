@@ -1,5 +1,6 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { HelpProvider, HelpTriggerConnected, HelpPanelConnected } from "@/components/admin/HelpPanel";
+import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import DateRangePicker from "./DateRangePicker";
 
 /* ── 빈 데이터 기본값 ── */
@@ -432,19 +433,23 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
       {/* ── 인게이지먼트 퍼널 (탐색형 vs 딥링크 분리) ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-        <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-          style={{ color: "var(--on-surface-variant)" }}>
-          인게이지먼트 퍼널
-        </p>
-        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          방문자가 접속 → 기사 클릭 → 원문 클릭까지 얼마나 이어지는지 보여주는 단계별 전환 지표
-        </p>
-        <p className="text-[0.68rem] mb-1 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          딥링크(뉴스레터 개별 기사 클릭 등 ?news=)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까움 — 탐색형(직접 클릭) 여정과 분리 집계
-        </p>
-        <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-          ※ &ldquo;탐색형&rdquo; = 뉴스레터가 아닌 유입이라는 뜻이 아니라, 홈으로 들어와서 직접 기사를 고른 사람들 전체 (뉴스레터의 &ldquo;EZ 뉴스룸 바로가기&rdquo;처럼 홈으로 연결되는 링크도 포함, 개별 기사 딥링크만 제외)
-        </p>
+        <div className="flex items-center gap-2 mb-5">
+          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
+            style={{ color: "var(--on-surface-variant)" }}>
+            인게이지먼트 퍼널
+          </p>
+          <SectionInfoModal title="인게이지먼트 퍼널이란?">
+            <p className="m-0 mb-3">
+              방문자가 접속 → 기사 클릭 → 원문 클릭까지 얼마나 이어지는지 보여주는 단계별 전환 지표입니다.
+            </p>
+            <p className="m-0 mb-3">
+              딥링크(뉴스레터 개별 기사 클릭 등 <code>?news=</code>)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까워요. 그래서 실제로 홈에서 직접 기사를 골라 클릭한 &ldquo;탐색형&rdquo; 여정과 분리해서 집계합니다 — 안 그러면 자동으로 열린 것과 진짜 클릭한 것이 섞여서 전환율이 왜곡돼요.
+            </p>
+            <p className="m-0">
+              ※ &ldquo;탐색형&rdquo;은 &ldquo;뉴스레터가 아닌 유입&rdquo;이라는 뜻이 아니에요. 홈으로 들어와서 직접 기사를 고른 사람들 전체를 뜻하고, 뉴스레터의 &ldquo;EZ 뉴스룸 바로가기&rdquo;처럼 홈으로 연결되는 링크도 여기 포함돼요. 오직 개별 기사 딥링크(모달 자동 오픈)만 따로 빠지는 거예요.
+            </p>
+          </SectionInfoModal>
+        </div>
         <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-2 gap-8" : ""}>
           <FunnelBlock title="탐색형 (직접 클릭)" steps={exploreFunnel} />
           {deeplinkFunnel[0].count > 0 && <FunnelBlock title="딥링크 (자동 오픈)" steps={deeplinkFunnel} />}
