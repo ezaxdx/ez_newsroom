@@ -735,9 +735,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>2. 인게이지먼트 퍼널</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>탐색형</strong> — 홈에 들어와 직접 기사를 클릭한 여정. <strong style={{ color: "var(--on-surface)" }}>메인 접속</strong> → <strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> → <strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> 전환율이 실제 콘텐츠 매력도를 반영. &ldquo;뉴스레터가 아닌 유입&rdquo;이라는 뜻이 아님 — 뉴스레터의 &ldquo;EZ 뉴스룸 바로가기&rdquo;처럼 홈으로 연결되는 링크도 여기 포함되고, 개별 기사 딥링크(?news=)만 아래 딥링크 여정으로 따로 빠짐</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>딥링크</strong> — 뉴스레터 등 &lsquo;?news=&rsquo; 링크로 들어와 도착 즉시 모달이 자동으로 열린 여정. &ldquo;기사 클릭&rdquo;은 항상 100%에 가까우므로 이 단계 전환율은 의미 없고, <strong style={{ color: "var(--on-surface)" }}>원문 클릭률</strong>만 유의미 (열람 후 실제로 더 알아봤는지)</li>
-          <li>둘을 분리하는 이유 — 딥링크 유입이 늘면 탐색형과 섞인 하나의 퍼널은 "기사 클릭률"이 왜곡되어 실제 콘텐츠 매력도를 잘못 읽게 됨</li>
+          <li>탐색형/딥링크 여정 구분 및 상세 설명은 해당 섹션 제목 옆 <strong style={{ color: "var(--on-surface)" }}>ⓘ 아이콘</strong>을 참고하세요</li>
         </ul>
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>3. 트래픽 소스</p>
@@ -764,7 +762,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>5. 뉴스레터 지난호</p>
         <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — /newsletter/archive 목록 페이지를 연 횟수. "그 중 이메일 유입"은 뉴스레터 본문 링크(UTM 포함)로 들어온 것만 구분 — 나머지는 사이트 Footer 등에서 직접 들어온 것</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — 뉴스룸 푸터의 &ldquo;지난호 보기&rdquo; 방문 횟수. "그 중 이메일 유입"은 뉴스레터 본문 링크(UTM 포함)로 들어온 것만 구분 — 나머지는 사이트 Footer 등에서 직접 들어온 것</li>
           <li><strong style={{ color: "var(--on-surface)" }}>Vol별 조회수</strong> — 목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수. 어떤 지난호가 인기 있는지 확인 가능</li>
           <li>2026-07-30부터 수집 시작 — 그 이전 시점 데이터는 없음</li>
         </ul>
@@ -778,8 +776,8 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>7. 행사 클릭 · 평균 체류시간</p>
         <ul style={{ paddingLeft: 16 }}>
           <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초). 탭이 백그라운드에 있는 동안은 카운트 제외</li>
-          <li>카테고리별 성과 표의 "평균 체류(초)"는 이것과 다름 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계</li>
+          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초). 탭이 백그라운드에 있는 동안은 카운트 제외. 2026-07-21부터 수집</li>
+          <li>카테고리별 성과 표의 "평균 체류(초)"는 이것과 다름 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계 (2026-05-28부터 수집)</li>
           <li style={{ marginTop: 6 }}><strong style={{ color: "var(--on-surface)" }}>어떻게 측정하나</strong>
             <ul style={{ paddingLeft: 16, marginTop: 4 }}>
               <li>홈 화면 진입 시점에 타이머 시작, 탭이 백그라운드로 전환되면(Page Visibility API) 자동으로 일시정지 — 딴 짓하는 시간은 제외</li>
