@@ -281,20 +281,26 @@ export function generateNewsletterHTML(data: NewsletterData): string {
       </td>
     </tr>
 
-    <!-- ── EDITORIAL (베이지 박스, 이벤트 시 봉투 뚜껑 장식 추가) ── -->
-    ${editorialFlapSrc ? `
+    <!-- ── EDITORIAL (베이지 박스, 이벤트 시 박스 안쪽 상단에 봉투 뚜껑 장식) ── -->
     <tr>
-      <td style="background:${C.white};padding:0 20px;line-height:0;font-size:0;">
-        <img src="${editorialFlapSrc}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;">
-      </td>
-    </tr>` : ""}
-    <tr>
-      <td style="background:${C.white};padding:${editorialFlapSrc ? "0 20px 24px" : "24px 20px"};">
+      <td style="background:${C.white};padding:24px 20px;">
         <table cellpadding="0" cellspacing="0" width="100%">
           <tr>
-            <td style="background:#F5EDE3;border-radius:15px;padding:24px 28px;">
-              <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-              <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
+            <td style="background:#F5EDE3;border-radius:15px;padding:0;">
+              <table cellpadding="0" cellspacing="0" width="100%">
+                ${editorialFlapSrc ? `
+                <tr>
+                  <td style="padding:0;line-height:0;font-size:0;">
+                    <img src="${editorialFlapSrc}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border-radius:15px 15px 0 0;">
+                  </td>
+                </tr>` : ""}
+                <tr>
+                  <td style="padding:24px 28px;">
+                    <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
         </table>
