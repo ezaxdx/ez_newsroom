@@ -1243,7 +1243,7 @@ export default function NewsletterPage() {
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "100%", background: "none", border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 600, color: "var(--on-surface)", padding: 0,
+                  fontSize: 13, fontWeight: 600, color: "var(--on-surface)", padding: 0,
                 }}
               >
                 <span>🖼️ EZ Letter Pick 이미지 관리</span>
@@ -1358,7 +1358,7 @@ export default function NewsletterPage() {
                 style={{
                   display: "flex", alignItems: "center", justifyContent: "space-between",
                   width: "100%", background: "none", border: "none", cursor: "pointer",
-                  fontSize: 14, fontWeight: 600, color: "var(--on-surface)", padding: 0,
+                  fontSize: 13, fontWeight: 600, color: "var(--on-surface)", padding: 0,
                 }}
               >
                 <span>⚙️ 자동 발송 설정</span>
