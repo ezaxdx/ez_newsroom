@@ -11,7 +11,7 @@ const NAV = [
   { href: "/admin/rss", label: "RSS 소스 매니저", icon: Rss },
   { href: "/admin/settings", label: "큐레이션 설정", icon: Settings },
   { href: "/admin/quality", label: "정합성 관리", icon: ShieldCheck },
-  { href: "/admin/newsletter", label: "뉴스레터", icon: Mail },
+  { href: "/admin/newsletter", label: "뉴스레터 관리", icon: Mail },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
