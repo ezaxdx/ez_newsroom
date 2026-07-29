@@ -888,7 +888,7 @@ export default function NewsletterPage() {
       <div style={{ display: "flex", gap: 4, marginBottom: 0, borderBottom: "1px solid var(--surface-container-highest)" }}>
         <button style={tabStyle("send")} onClick={() => setTab("send")}>발송</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>
-        <button style={tabStyle("stats")} onClick={() => setTab("stats")}>뉴스레터 애널리틱스</button>
+        <button style={tabStyle("stats")} onClick={() => setTab("stats")}>애널리틱스</button>
         <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button
           style={tabStyle("gmail")}
