@@ -46,6 +46,12 @@ export default function NewsletterPage() {
   const [skipEzpmp, setSkipEzpmp] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
+  const [subjectOverride, setSubjectOverride] = useState(""); // 비워두면 기본 제목([EZ Letter] Vol.N · 날짜) 그대로 발송
+  const [headerImages, setHeaderImages] = useState<{ label: string; url: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
+  const [headerImageUrl, setHeaderImageUrl] = useState("/images/ez-letter-header.png");
+  const [newHeaderLabel, setNewHeaderLabel] = useState("");
+  const [newHeaderUrl, setNewHeaderUrl] = useState("");
+  const [addingHeaderImage, setAddingHeaderImage] = useState(false);
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendElapsed, setSendElapsed] = useState(0);
@@ -149,7 +155,38 @@ export default function NewsletterPage() {
     fetchGmailStatus();
     prefetchEditorialContext();
     fetchSendProgress();
+    fetchHeaderImages();
   }, []);
+
+  async function fetchHeaderImages() {
+    try {
+      const res = await fetch("/api/admin/newsletter/header-images");
+      const json = await res.json();
+      if (json.data) setHeaderImages(json.data);
+    } catch {
+      // 기본값 유지
+    }
+  }
+
+  async function handleAddHeaderImage() {
+    if (!newHeaderLabel.trim() || !newHeaderUrl.trim()) return;
+    setAddingHeaderImage(true);
+    try {
+      const res = await fetch("/api/admin/newsletter/header-images", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: newHeaderLabel.trim(), url: newHeaderUrl.trim() }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setHeaderImages(json.data);
+        setNewHeaderLabel("");
+        setNewHeaderUrl("");
+      }
+    } finally {
+      setAddingHeaderImage(false);
+    }
+  }
 
   useEffect(() => {
     if (tab === "history" || tab === "stats") fetchHistory();
@@ -291,7 +328,7 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editorial_text: editorialText, dry_run: true, skip_ezpmp: skipEzpmp }),
+        body: JSON.stringify({ editorial_text: editorialText, dry_run: true, skip_ezpmp: skipEzpmp, header_image_url: headerImageUrl }),
       });
       const json = await res.json();
       if (res.ok && json.html) {
@@ -335,6 +372,7 @@ export default function NewsletterPage() {
           editorial_text: editorialText,
           dry_run: false,
           skip_ezpmp: skipEzpmp,
+          ...(subjectOverride.trim() ? { subject_override: subjectOverride.trim() } : {}),
           ...(previewHtml && previewMeta ? {
             cached_html: previewHtml,
             cached_vol: previewMeta.vol_number,
@@ -883,6 +921,68 @@ export default function NewsletterPage() {
                   boxSizing: "border-box",
                 }}
               />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--on-surface-variant)" }}>
+                제목 (비워두면 기본 제목으로 발송)
+              </p>
+              <input
+                type="text"
+                value={subjectOverride}
+                onChange={(e) => setSubjectOverride(e.target.value)}
+                placeholder={previewMeta ? `[EZ Letter] Vol.${String(previewMeta.vol_number).padStart(2, "0")} · ${previewMeta.send_date}` : "[EZ Letter] Vol.NN · 발송일"}
+                style={{
+                  width: "100%", padding: "8px 12px", borderRadius: 6,
+                  border: "1px solid var(--surface-container-highest)",
+                  background: "var(--surface-container-low)", color: "var(--on-surface)",
+                  fontSize: 14, boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--on-surface-variant)" }}>
+                헤더 이미지
+              </p>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <select
+                  value={headerImageUrl}
+                  onChange={(e) => { setHeaderImageUrl(e.target.value); setPreviewHtml(null); }}
+                  style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                    background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13 }}
+                >
+                  {headerImages.map((h) => (
+                    <option key={h.label} value={h.url}>{h.label}</option>
+                  ))}
+                </select>
+              </div>
+              <details>
+                <summary style={{ fontSize: 12, color: "var(--on-surface-variant)", cursor: "pointer" }}>+ 새 헤더 이미지 추가</summary>
+                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                  <input
+                    type="text" placeholder="이름 (예: 8/4 이벤트)"
+                    value={newHeaderLabel} onChange={(e) => setNewHeaderLabel(e.target.value)}
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, width: 160 }}
+                  />
+                  <input
+                    type="text" placeholder="이미지 URL (예: /images/ez-letter-header-event.png)"
+                    value={newHeaderUrl} onChange={(e) => setNewHeaderUrl(e.target.value)}
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, flex: 1, minWidth: 200 }}
+                  />
+                  <button
+                    onClick={handleAddHeaderImage}
+                    disabled={addingHeaderImage || !newHeaderLabel.trim() || !newHeaderUrl.trim()}
+                    style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--primary)",
+                      background: "transparent", color: "var(--primary)", fontWeight: 600, fontSize: 13,
+                      cursor: addingHeaderImage ? "not-allowed" : "pointer" }}
+                  >
+                    {addingHeaderImage ? "추가 중..." : "추가"}
+                  </button>
+                </div>
+              </details>
             </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, fontSize: 13, cursor: "pointer", userSelect: "none", width: "fit-content" }}>

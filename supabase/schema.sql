@@ -75,7 +75,8 @@ create table if not exists public.curation_settings (
   auto_schedule         jsonb default '{"enabled": false, "days": [], "hour": 9}',
   company_context       text,
   business_domain_examples jsonb default '[]',   -- 관리자가 수동 보정한 사업영역 분류 예시 [{title, business_domains}] — 큐레이션 프롬프트의 few-shot 예시로 주입되어 이후 분류에 반영
-  content_quality_notes jsonb default '[]'        -- 콘텐츠 품질 감사에서 발견되어 실제로 수정된 문제 유형 누적 — 큐레이션 프롬프트에 "이런 실수 반복하지 말 것"으로 주입
+  content_quality_notes jsonb default '[]',       -- 콘텐츠 품질 감사에서 발견되어 실제로 수정된 문제 유형 누적 — 큐레이션 프롬프트에 "이런 실수 반복하지 말 것"으로 주입
+  newsletter_header_images jsonb default '[]'     -- 뉴스레터 헤더 배경 이미지 후보 [{label, url}] — "기본" 하나는 코드에 항상 고정 포함, 여기엔 이벤트용 등 추가분만 저장
 );
 
 alter table public.curation_settings
@@ -86,7 +87,8 @@ alter table public.curation_settings
   add column if not exists quality_thresholds    jsonb default '{"auto_publish": 8, "staging": 5}',
   add column if not exists auto_schedule         jsonb default '{"enabled": false, "days": [], "hour": 9}',
   add column if not exists business_domain_examples jsonb default '[]',
-  add column if not exists content_quality_notes jsonb default '[]';
+  add column if not exists content_quality_notes jsonb default '[]',
+  add column if not exists newsletter_header_images jsonb default '[]';
 
 -- ── convention_events ─────────────────────────────────────────────────
 create table if not exists public.convention_events (

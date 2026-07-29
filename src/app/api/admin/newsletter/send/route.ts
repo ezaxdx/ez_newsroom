@@ -18,6 +18,7 @@ export async function POST(req: NextRequest) {
   let body: {
     editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean; reuse_prev_pick?: boolean;
     cached_html?: string; cached_vol?: number; cached_send_date?: string; cached_featured_ids?: string[];
+    subject_override?: string; header_image_url?: string;
   };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
@@ -25,6 +26,8 @@ export async function POST(req: NextRequest) {
   const editorial_text = body.editorial_text ?? "";
   const dry_run = body.dry_run === true;
   const skip_ezpmp = body.skip_ezpmp === true;
+  const subject_override = body.subject_override?.trim() || null;
+  const header_image_url = body.header_image_url || undefined;
   const supabase = createAdminClient();
 
   // ── 미리보기에서 생성된 HTML 캐시로 바로 발송 ──────────
@@ -36,7 +39,7 @@ export async function POST(req: NextRequest) {
 
     const vol_number = body.cached_vol ?? 1;
     const send_date  = body.cached_send_date ?? new Date().toISOString().split("T")[0];
-    const subject    = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+    const subject    = subject_override || `[EZ Letter] Vol.${vol_number} · ${send_date}`;
 
     // 미리보기 HTML 후처리: localhost → prod URL (프록시 유지 — 이메일 클라이언트 호환성)
     const prodUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
@@ -352,7 +355,7 @@ export async function POST(req: NextRequest) {
     vol_number, send_date, editorial_text,
     mice_news: miceNews, tourism_news: tourismNews, ai_news: aiNews, ezpmp_news: skip_ezpmp ? [] : ezpmpNews,
     featured_events: featuredEvents, upcoming_events: upcomingEvents,
-    site_url, is_email: !dry_run,
+    site_url, is_email: !dry_run, header_image_url,
   });
 
   // ── 미리보기 반환 ──
@@ -366,7 +369,7 @@ export async function POST(req: NextRequest) {
   if (!subscribers || subscribers.length === 0)
     return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
 
-  const subject      = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+  const subject      = subject_override || `[EZ Letter] Vol.${vol_number} · ${send_date}`;
   const allRecipients2 = subscribers.map(s => s.email);
   const idByEmail2 = new Map(subscribers.map(s => [s.email, s.id as string]));
 

@@ -33,6 +33,7 @@ export type NewsletterData = {
   upcoming_events: EventCard[];  // 이번 주 행사만
   site_url: string;
   is_email?: boolean; // true이면 이미지 프록시 우회 (실제 발송용)
+  header_image_url?: string; // 헤더 배경 이미지 — 절대 URL 또는 "/images/.."처럼 site_url 기준 상대경로. 없으면 기본 헤더 사용
 };
 
 // ── 팔레트 ─────────────────────────────────────────────────
@@ -222,7 +223,11 @@ function newsSection(label: string, items: NewsCard[], vol: number, site_url: st
 export function generateNewsletterHTML(data: NewsletterData): string {
   const { vol_number: vol, send_date, editorial_text,
           mice_news, tourism_news, ai_news, ezpmp_news,
-          featured_events, upcoming_events, site_url, is_email = false } = data;
+          featured_events, upcoming_events, site_url, is_email = false, header_image_url } = data;
+
+  const headerImageSrc = header_image_url
+    ? (header_image_url.startsWith("http") ? header_image_url : `${site_url}${header_image_url}`)
+    : `${site_url}/images/ez-letter-header.png`;
 
   // Pick 4개 → 2행
   const picks = featured_events.slice(0, 4);
@@ -256,9 +261,9 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <!-- ── HEADER (배경 이미지 + Vol./Date 오버레이) ── -->
     <!-- background="" : 이메일 클라이언트 대응 / CSS background-image: 브라우저 미리보기 대응 -->
     <tr>
-      <td background="${site_url}/images/ez-letter-header.png"
+      <td background="${headerImageSrc}"
           bgcolor="${C.bg}"
-          style="background-color:${C.bg};background-image:url('${site_url}/images/ez-letter-header.png');background-size:100% 100%;background-repeat:no-repeat;"
+          style="background-color:${C.bg};background-image:url('${headerImageSrc}');background-size:100% 100%;background-repeat:no-repeat;"
           height="440" align="center" valign="top">
         <table width="100%" cellpadding="0" cellspacing="0" border="0">
           <tr>
