@@ -1231,6 +1231,13 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   // 비공개 시 키워드 추가 팝업
   const [keywordPrompt, setKeywordPrompt] = useState<{ id: string; eventName: string } | null>(null);
   const [promptKeyword, setPromptKeyword] = useState("");
+  // 행사 추가
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newEvent, setNewEvent] = useState({
+    event_name: "", venue: "", start_date: "", end_date: "", organizer: "", category: "", website: "",
+  });
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [addEventError, setAddEventError] = useState<string | null>(null);
   // 인라인 편집
   type EditField = "event_name" | "organizer" | "start_date" | "end_date" | "venue";
   const [editingCell, setEditingCell] = useState<{ id: string; field: EditField } | null>(null);
@@ -1401,6 +1408,34 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   function cancelEdit() {
     setEditingCell(null);
     setEditValue("");
+  }
+
+  async function addEvent() {
+    if (!newEvent.event_name.trim() || !newEvent.venue.trim() || !newEvent.start_date) {
+      setAddEventError("행사명, 센터, 시작일은 필수입니다.");
+      return;
+    }
+    setAddingEvent(true);
+    setAddEventError(null);
+    try {
+      const res = await fetch("/api/admin/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newEvent),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddEventError(json.error || "추가 실패");
+        return;
+      }
+      setEvents((prev) => [json.data, ...prev]);
+      setShowAddModal(false);
+      setNewEvent({ event_name: "", venue: "", start_date: "", end_date: "", organizer: "", category: "", website: "" });
+    } catch {
+      setAddEventError("추가 실패");
+    } finally {
+      setAddingEvent(false);
+    }
   }
 
   function EditableCell({ id, field, value, type = "text" }: {
@@ -1575,8 +1610,72 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         ))}
       </div>
 
+      {/* 행사 추가 모달 */}
+      {showAddModal && (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ background: "var(--surface-container-lowest)", borderRadius: 12, padding: 24, width: 440, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 15 }}>행사 추가</p>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+              여기서 추가한 행사는 자동으로 <b>공개</b> 상태가 되어 뉴스룸 행사 목록과 다음 뉴스레터에 동일하게 반영됩니다.
+            </p>
+            {([
+              { key: "event_name", label: "행사명 *", type: "text" },
+              { key: "venue", label: "센터 *", type: "text" },
+              { key: "start_date", label: "시작일 *", type: "date" },
+              { key: "end_date", label: "종료일", type: "date" },
+              { key: "organizer", label: "주최기관", type: "text" },
+              { key: "category", label: "카테고리", type: "text" },
+              { key: "website", label: "홈페이지 URL", type: "text" },
+            ] as const).map(({ key, label, type }) => (
+              <div key={key} style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--on-surface-variant)", marginBottom: 4 }}>{label}</label>
+                <input
+                  type={type}
+                  value={newEvent[key]}
+                  onChange={(e) => setNewEvent((prev) => ({ ...prev, [key]: e.target.value }))}
+                  style={{
+                    width: "100%", height: 32, padding: "0 10px", borderRadius: 6, fontSize: 13,
+                    border: "1px solid var(--surface-container-highest)",
+                    background: "var(--surface-container-low)",
+                    color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            ))}
+            {addEventError && <p style={{ margin: "4px 0 10px", fontSize: 12, color: "#ef4444" }}>{addEventError}</p>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+              <button
+                onClick={() => { setShowAddModal(false); setAddEventError(null); }}
+                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}
+              >
+                취소
+              </button>
+              <button
+                onClick={addEvent}
+                disabled={addingEvent}
+                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: addingEvent ? 0.6 : 1 }}
+              >
+                {addingEvent ? "추가 중..." : "추가"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 필터 */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <button
+          onClick={() => setShowAddModal(true)}
+          style={{
+            padding: "6px 14px", borderRadius: 8, fontSize: "0.8rem", fontWeight: 700,
+            border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer",
+          }}
+        >
+          + 행사 추가
+        </button>
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}

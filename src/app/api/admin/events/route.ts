@@ -25,6 +25,39 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ data });
 }
 
+export async function POST(req: NextRequest) {
+  const unauth = await requireAdmin();
+  if (unauth) return unauth;
+
+  const body = await req.json();
+  const { event_name, venue, start_date, end_date, organizer, category, website } = body;
+  if (!event_name?.trim() || !venue?.trim() || !start_date) {
+    return NextResponse.json({ error: "행사명, 센터, 시작일은 필수입니다." }, { status: 400 });
+  }
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("convention_events")
+    .insert({
+      event_name: event_name.trim(),
+      venue: venue.trim(),
+      start_date,
+      end_date: end_date || null,
+      organizer: organizer?.trim() || null,
+      category: category?.trim() || null,
+      website: website?.trim() || null,
+      source: "manual",
+      is_published: true,
+      is_ezpmp_pick: false,
+      is_concurrent: false,
+    })
+    .select("id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, image_url, is_published, is_ezpmp_pick, source, created_at")
+    .single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ data });
+}
+
 export async function PATCH(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
