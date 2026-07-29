@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
 import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import SectionInfoModal from "@/components/admin/SectionInfoModal";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
@@ -54,6 +55,7 @@ export default function NewsletterPage() {
   const [newHeaderFlapFile, setNewHeaderFlapFile] = useState<File | null>(null);
   const [addingHeaderImage, setAddingHeaderImage] = useState(false);
   const [addHeaderImageError, setAddHeaderImageError] = useState<string | null>(null);
+  const [showImageSettings, setShowImageSettings] = useState(false); // 매일 쓰는 설정이 아니라 기본은 접어둠
   const selectedHeaderImage = headerImages.find((h) => h.label === headerImageLabel) ?? headerImages[0];
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -950,6 +952,20 @@ export default function NewsletterPage() {
               />
             </div>
 
+            <button
+              onClick={() => setShowImageSettings((v) => !v)}
+              style={{
+                display: "flex", alignItems: "center", gap: 6, marginBottom: showImageSettings ? 12 : 16,
+                background: "none", border: "none", cursor: "pointer", padding: 0,
+                fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)",
+              }}
+            >
+              <span style={{ display: "inline-block", transform: showImageSettings ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>▸</span>
+              제목 / 헤더 이미지 설정 (선택)
+            </button>
+
+            {showImageSettings && (
+            <>
             <div style={{ marginBottom: 16 }}>
               <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 6, color: "var(--on-surface-variant)" }}>
                 제목 (비워두면 기본 제목으로 발송)
@@ -988,11 +1004,30 @@ export default function NewsletterPage() {
                 border: "1px solid var(--surface-container-highest)", borderRadius: 8,
                 padding: 14, background: "var(--surface-container-low)", maxWidth: 460,
               }}>
-                <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>
-                  + 새 헤더 이미지 추가
-                </p>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+                  <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>
+                    + 새 헤더 이미지 추가
+                  </p>
+                  <SectionInfoModal title="이미지 커스터마이징 안내">
+                    <p style={{ margin: "0 0 10px" }}>
+                      <b>제목</b> — 발송 이메일의 제목(subject). 비워두면 기본 제목([EZ Letter] Vol.NN · 발송일) 그대로 나가요.
+                    </p>
+                    <p style={{ margin: "0 0 4px" }}>
+                      <b>헤더 이미지</b> — 뉴스레터 맨 위에 나오는 배경 이미지 전체. 로고·태그라인 등이 전부 이 이미지 한 장 안에 포함돼 있어서, 로고만 따로 바꾸는 기능은 없고 이미지 전체를 새로 만들어 교체해야 해요.
+                    </p>
+                    <p style={{ margin: "0 0 10px", color: "#666" }}>
+                      권장 사이즈: 600×440px (레티나 대비 1200×880px), PNG/JPG
+                    </p>
+                    <p style={{ margin: "0 0 4px" }}>
+                      <b>인사말 장식 이미지</b> — 인사말(에디토리얼) 박스 위쪽에 얹히는 장식 그림(예: 삼각형 모양). 선택사항이라 안 넣으면 장식 없이 기본 박스만 나가요.
+                    </p>
+                    <p style={{ margin: 0, color: "#666" }}>
+                      권장 사이즈: 폭 560~600px, 투명 배경 PNG. 그림 좌우에 흰 여백을 많이 두고 내보내면 실제 박스 폭보다 좁아 보이니, 여백을 최소화해서 그림이 폭 전체에 가깝게 차도록 내보내주세요.
+                    </p>
+                  </SectionInfoModal>
+                </div>
                 <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-                  이벤트 등 특별한 발송용 이미지를 등록해두면 위 드롭다운에서 선택해 쓸 수 있어요. 각 이미지의 용도·권장 사이즈는 오른쪽 아래 도움말(?)에 자세히 있어요.
+                  이벤트 등 특별한 발송용 이미지를 등록해두면 위 드롭다운에서 선택해 쓸 수 있어요.
                 </p>
                 <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <input
@@ -1051,6 +1086,8 @@ export default function NewsletterPage() {
                 </div>
               </div>
             </div>
+            </>
+            )}
 
             <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, fontSize: 13, cursor: "pointer", userSelect: "none", width: "fit-content" }}>
               <input
@@ -2222,13 +2259,8 @@ export default function NewsletterPage() {
             </Section>
 
             <Section title="STEP 4 · 이미지 커스터마이징 (제목/헤더/인사말 카드)">
-              <Item text="제목 — 발송 이메일의 제목(subject). 비워두면 기본 제목([EZ Letter] Vol.NN · 발송일) 그대로 나갑니다" />
-              <Item text="헤더 이미지 — 뉴스레터 맨 위에 나오는 배경 이미지 전체. 로고·태그라인 등이 전부 이 이미지 한 장 안에 포함돼 있어서, 로고만 따로 바꾸는 기능은 없고 이미지 전체를 새로 만들어 교체해야 합니다" />
-              <Indent><b>헤더 이미지 사이즈:</b> 600×440px (레티나 대비 1200×880px 권장), PNG/JPG</Indent>
-              <Item text="인사말 장식 이미지 — 인사말(에디토리얼) 박스 위쪽에 얹히는 장식 그림 (예: 삼각형 모양). 선택사항이라 안 넣으면 장식 없이 기본 박스만 나갑니다" />
-              <Indent><b>장식 이미지 사이즈:</b> 폭 560~600px, 투명 배경 PNG 권장. 그림 좌우에 흰 여백을 많이 두고 내보내면 실제 박스 폭보다 좁아 보이니, 여백을 최소화해서 그림이 폭 전체에 가깝게 차도록 내보내세요</Indent>
-              <Item text="발송 탭에서 '+ 새 헤더 이미지 추가'로 이름 붙여서 파일 업로드하면, 그 다음부터 드롭다운에서 골라 쓸 수 있습니다 (여러 개 등록해두고 이벤트마다 다르게 선택 가능)" />
-              <Note>업로드한 파일은 Supabase Storage에 저장되고 공개 URL이 자동 발급됩니다 — 별도 서버/코드 작업 없이 계속 추가할 수 있습니다.</Note>
+              <Item text="발송 탭 '제목 / 헤더 이미지 설정' 토글을 펼치면 나옵니다 (매일 쓰는 설정이 아니라 기본은 접혀있음)" />
+              <Item text="자세한 설명·권장 사이즈는 '+ 새 헤더 이미지 추가' 옆 ⓘ 아이콘 참고" />
             </Section>
 
             <Section title="STEP 5 · 미리보기 확인">
