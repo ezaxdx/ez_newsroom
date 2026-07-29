@@ -984,29 +984,55 @@ export default function NewsletterPage() {
                   ))}
                 </select>
               </div>
-              <details>
-                <summary style={{ fontSize: 12, color: "var(--on-surface-variant)", cursor: "pointer" }}>+ 새 헤더 이미지 추가</summary>
-                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, maxWidth: 420 }}>
+              <div style={{
+                border: "1px solid var(--surface-container-highest)", borderRadius: 8,
+                padding: 14, background: "var(--surface-container-low)", maxWidth: 460,
+              }}>
+                <p style={{ margin: "0 0 4px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>
+                  + 새 헤더 이미지 추가
+                </p>
+                <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+                  이벤트 등 특별한 발송용 이미지를 등록해두면 위 드롭다운에서 선택해 쓸 수 있어요. 각 이미지의 용도·권장 사이즈는 오른쪽 아래 도움말(?)에 자세히 있어요.
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                   <input
                     type="text" placeholder="이름 (예: 8/4 이벤트)"
                     value={newHeaderLabel} onChange={(e) => setNewHeaderLabel(e.target.value)}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
-                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13 }}
+                    style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                      background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontSize: 13 }}
                   />
-                  <label style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-                    헤더 이미지 파일 (PNG/JPG, 600×440 권장)
+                  <label style={{
+                    display: "block", padding: "10px 12px", borderRadius: 6,
+                    border: `1px dashed ${newHeaderFile ? "var(--primary)" : "var(--surface-container-highest)"}`,
+                    background: "var(--surface-container-lowest)", cursor: "pointer",
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface)" }}>
+                      📎 헤더 이미지 {newHeaderFile ? `선택됨: ${newHeaderFile.name}` : "선택하기"}
+                    </span>
+                    <span style={{ display: "block", marginTop: 2, fontSize: 11, color: "var(--on-surface-variant)" }}>
+                      PNG/JPG, 600×440px 권장 (뉴스레터 맨 위 배경 전체 — 로고 포함)
+                    </span>
                     <input
                       type="file" accept="image/png,image/jpeg,image/webp"
                       onChange={(e) => setNewHeaderFile(e.target.files?.[0] ?? null)}
-                      style={{ display: "block", marginTop: 4, fontSize: 12 }}
+                      style={{ display: "none" }}
                     />
                   </label>
-                  <label style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-                    인사말 장식 이미지 파일 (선택, PNG 권장)
+                  <label style={{
+                    display: "block", padding: "10px 12px", borderRadius: 6,
+                    border: `1px dashed ${newHeaderFlapFile ? "var(--primary)" : "var(--surface-container-highest)"}`,
+                    background: "var(--surface-container-lowest)", cursor: "pointer",
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface)" }}>
+                      📎 인사말 장식 이미지 {newHeaderFlapFile ? `선택됨: ${newHeaderFlapFile.name}` : "선택하기 (선택사항)"}
+                    </span>
+                    <span style={{ display: "block", marginTop: 2, fontSize: 11, color: "var(--on-surface-variant)" }}>
+                      투명 배경 PNG, 폭 560~600px 권장 (인사말 박스 위에 얹히는 장식 — 좌우 여백 최소화해서 내보내기)
+                    </span>
                     <input
                       type="file" accept="image/png,image/jpeg,image/webp"
                       onChange={(e) => setNewHeaderFlapFile(e.target.files?.[0] ?? null)}
-                      style={{ display: "block", marginTop: 4, fontSize: 12 }}
+                      style={{ display: "none" }}
                     />
                   </label>
                   {addHeaderImageError && (
@@ -1015,14 +1041,15 @@ export default function NewsletterPage() {
                   <button
                     onClick={handleAddHeaderImage}
                     disabled={addingHeaderImage || !newHeaderLabel.trim() || !newHeaderFile}
-                    style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--primary)",
-                      background: "transparent", color: "var(--primary)", fontWeight: 600, fontSize: 13,
+                    style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--primary)",
+                      background: addingHeaderImage ? "var(--surface-container-highest)" : "var(--primary)",
+                      color: addingHeaderImage ? "var(--on-surface-variant)" : "#fff", fontWeight: 600, fontSize: 13,
                       cursor: addingHeaderImage ? "not-allowed" : "pointer", width: "fit-content" }}
                   >
                     {addingHeaderImage ? "업로드 중..." : "추가"}
                   </button>
                 </div>
-              </details>
+              </div>
             </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 10, fontSize: 13, cursor: "pointer", userSelect: "none", width: "fit-content" }}>
@@ -2194,19 +2221,29 @@ export default function NewsletterPage() {
               <Note>페이지를 열면 콘텐츠를 백그라운드에서 미리 로드하므로 버튼 클릭 즉시 생성됩니다.</Note>
             </Section>
 
-            <Section title="STEP 4 · 미리보기 확인">
+            <Section title="STEP 4 · 이미지 커스터마이징 (제목/헤더/인사말 카드)">
+              <Item text="제목 — 발송 이메일의 제목(subject). 비워두면 기본 제목([EZ Letter] Vol.NN · 발송일) 그대로 나갑니다" />
+              <Item text="헤더 이미지 — 뉴스레터 맨 위에 나오는 배경 이미지 전체. 로고·태그라인 등이 전부 이 이미지 한 장 안에 포함돼 있어서, 로고만 따로 바꾸는 기능은 없고 이미지 전체를 새로 만들어 교체해야 합니다" />
+              <Indent><b>헤더 이미지 사이즈:</b> 600×440px (레티나 대비 1200×880px 권장), PNG/JPG</Indent>
+              <Item text="인사말 장식 이미지 — 인사말(에디토리얼) 박스 위쪽에 얹히는 장식 그림 (예: 삼각형 모양). 선택사항이라 안 넣으면 장식 없이 기본 박스만 나갑니다" />
+              <Indent><b>장식 이미지 사이즈:</b> 폭 560~600px, 투명 배경 PNG 권장. 그림 좌우에 흰 여백을 많이 두고 내보내면 실제 박스 폭보다 좁아 보이니, 여백을 최소화해서 그림이 폭 전체에 가깝게 차도록 내보내세요</Indent>
+              <Item text="발송 탭에서 '+ 새 헤더 이미지 추가'로 이름 붙여서 파일 업로드하면, 그 다음부터 드롭다운에서 골라 쓸 수 있습니다 (여러 개 등록해두고 이벤트마다 다르게 선택 가능)" />
+              <Note>업로드한 파일은 Supabase Storage에 저장되고 공개 URL이 자동 발급됩니다 — 별도 서버/코드 작업 없이 계속 추가할 수 있습니다.</Note>
+            </Section>
+
+            <Section title="STEP 5 · 미리보기 확인">
               <Item text="'미리보기' 클릭 → 실제 이메일 레이아웃으로 확인" />
               <Item text="뉴스 카드·Pick 행사·Weekly List·인사말 전체 검토" />
               <Note>미리보기는 몇 번을 눌러도 Vol 번호가 올라가지 않습니다. DB에 기록되지 않습니다.</Note>
             </Section>
 
-            <Section title="STEP 5 · 발송">
+            <Section title="STEP 6 · 발송">
               <Item text="'발송' 버튼 클릭 → 활성 수신자 전체에게 발송" />
               <Item text="발송 완료 시 자동으로 기록되며 다음 호 Vol 번호가 자동 증가합니다." />
               <Note>Vol 번호는 실제 발송 완료 건수 + 1로 계산됩니다. 진짜 발송 전까지 Vol.01이 유지됩니다.</Note>
             </Section>
 
-            <Section title="STEP 6 · 발송 후 확인">
+            <Section title="STEP 7 · 발송 후 확인">
               <Item text="'이력' 탭에서 발송 건수·실패 건수 확인" />
               <Item text="실패 건수 클릭 시 실패한 이메일 주소와 오류 메시지 확인 가능" />
             </Section>
