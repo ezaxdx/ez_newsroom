@@ -238,12 +238,14 @@ create table if not exists public.newsletter_subscribers (
 -- 매달 명단을 전체 삭제 후 재업로드하는 운영 방식 때문에 unsubscribed_at 이력이 사라짐 —
 -- 전체 삭제 직전 총원/수신거부 인원을 한 줄 남겨서 기수별 추세를 보존
 create table if not exists public.newsletter_subscriber_snapshots (
-  id                  uuid primary key default gen_random_uuid(),
-  snapshot_date       date default current_date,
-  total_count         integer not null,
-  unsubscribed_count  integer not null,
-  created_at          timestamptz default now()
+  id                   uuid primary key default gen_random_uuid(),
+  snapshot_date        date default current_date,
+  total_count          integer not null,
+  unsubscribed_count   integer not null,
+  unsubscribed_emails  jsonb default '[]',  -- [{email, name, unsubscribed_at}] — 삭제 직전 명단이라 이 시점 아니면 유실됨. UI엔 아직 미노출
+  created_at           timestamptz default now()
 );
+alter table public.newsletter_subscriber_snapshots add column if not exists unsubscribed_emails jsonb default '[]';
 
 -- ── newsletter_issues ─────────────────────────────────────────────────
 create table if not exists public.newsletter_issues (

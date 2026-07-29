@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   const body = await req.json();
-  const { total_count, unsubscribed_count } = body;
+  const { total_count, unsubscribed_count, unsubscribed_emails } = body;
   if (typeof total_count !== "number" || typeof unsubscribed_count !== "number") {
     return NextResponse.json({ error: "total_count, unsubscribed_count 필요" }, { status: 400 });
   }
@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("newsletter_subscriber_snapshots")
-    .insert({ total_count, unsubscribed_count })
+    .insert({ total_count, unsubscribed_count, unsubscribed_emails: unsubscribed_emails ?? [] })
     .select("id, snapshot_date, total_count, unsubscribed_count, created_at")
     .single();
 

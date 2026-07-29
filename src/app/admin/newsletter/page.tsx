@@ -567,6 +567,9 @@ export default function NewsletterPage() {
           body: JSON.stringify({
             total_count: subscribers.length,
             unsubscribed_count: subscribers.filter((s) => s.unsubscribed_at).length,
+            unsubscribed_emails: subscribers
+              .filter((s) => s.unsubscribed_at)
+              .map((s) => ({ email: s.email, name: s.name, unsubscribed_at: s.unsubscribed_at })),
           }),
         }).catch(() => {});
       }
