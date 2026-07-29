@@ -50,9 +50,10 @@ export default function NewsletterPage() {
   const [headerImages, setHeaderImages] = useState<{ label: string; url: string; flap_url?: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
   const [headerImageLabel, setHeaderImageLabel] = useState("기본");
   const [newHeaderLabel, setNewHeaderLabel] = useState("");
-  const [newHeaderUrl, setNewHeaderUrl] = useState("");
-  const [newHeaderFlapUrl, setNewHeaderFlapUrl] = useState("");
+  const [newHeaderFile, setNewHeaderFile] = useState<File | null>(null);
+  const [newHeaderFlapFile, setNewHeaderFlapFile] = useState<File | null>(null);
   const [addingHeaderImage, setAddingHeaderImage] = useState(false);
+  const [addHeaderImageError, setAddHeaderImageError] = useState<string | null>(null);
   const selectedHeaderImage = headerImages.find((h) => h.label === headerImageLabel) ?? headerImages[0];
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
@@ -170,25 +171,39 @@ export default function NewsletterPage() {
     }
   }
 
+  async function uploadImageFile(file: File): Promise<string> {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch("/api/admin/newsletter/upload-image", { method: "POST", body: form });
+    const json = await res.json();
+    if (!res.ok || !json.url) throw new Error(json.error ?? "업로드 실패");
+    return json.url as string;
+  }
+
   async function handleAddHeaderImage() {
-    if (!newHeaderLabel.trim() || !newHeaderUrl.trim()) return;
+    if (!newHeaderLabel.trim() || !newHeaderFile) return;
     setAddingHeaderImage(true);
+    setAddHeaderImageError(null);
     try {
+      const url = await uploadImageFile(newHeaderFile);
+      const flap_url = newHeaderFlapFile ? await uploadImageFile(newHeaderFlapFile) : undefined;
+
       const res = await fetch("/api/admin/newsletter/header-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          label: newHeaderLabel.trim(), url: newHeaderUrl.trim(),
-          ...(newHeaderFlapUrl.trim() ? { flap_url: newHeaderFlapUrl.trim() } : {}),
-        }),
+        body: JSON.stringify({ label: newHeaderLabel.trim(), url, ...(flap_url ? { flap_url } : {}) }),
       });
       const json = await res.json();
       if (json.data) {
         setHeaderImages(json.data);
         setNewHeaderLabel("");
-        setNewHeaderUrl("");
-        setNewHeaderFlapUrl("");
+        setNewHeaderFile(null);
+        setNewHeaderFlapFile(null);
+      } else {
+        setAddHeaderImageError(json.error ?? "추가 실패");
       }
+    } catch (e) {
+      setAddHeaderImageError(e instanceof Error ? e.message : "업로드 실패");
     } finally {
       setAddingHeaderImage(false);
     }
@@ -971,33 +986,40 @@ export default function NewsletterPage() {
               </div>
               <details>
                 <summary style={{ fontSize: 12, color: "var(--on-surface-variant)", cursor: "pointer" }}>+ 새 헤더 이미지 추가</summary>
-                <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 8, maxWidth: 420 }}>
                   <input
                     type="text" placeholder="이름 (예: 8/4 이벤트)"
                     value={newHeaderLabel} onChange={(e) => setNewHeaderLabel(e.target.value)}
                     style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
-                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, width: 160 }}
+                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13 }}
                   />
-                  <input
-                    type="text" placeholder="헤더 이미지 URL (예: /images/ez-letter-header-event.png)"
-                    value={newHeaderUrl} onChange={(e) => setNewHeaderUrl(e.target.value)}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
-                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, flex: 1, minWidth: 200 }}
-                  />
-                  <input
-                    type="text" placeholder="인사말 장식 이미지 URL (선택, 예: /images/ez-letter-event.png)"
-                    value={newHeaderFlapUrl} onChange={(e) => setNewHeaderFlapUrl(e.target.value)}
-                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
-                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, flex: 1, minWidth: 220 }}
-                  />
+                  <label style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
+                    헤더 이미지 파일 (PNG/JPG, 600×440 권장)
+                    <input
+                      type="file" accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => setNewHeaderFile(e.target.files?.[0] ?? null)}
+                      style={{ display: "block", marginTop: 4, fontSize: 12 }}
+                    />
+                  </label>
+                  <label style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
+                    인사말 장식 이미지 파일 (선택, PNG 권장)
+                    <input
+                      type="file" accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => setNewHeaderFlapFile(e.target.files?.[0] ?? null)}
+                      style={{ display: "block", marginTop: 4, fontSize: 12 }}
+                    />
+                  </label>
+                  {addHeaderImageError && (
+                    <p style={{ margin: 0, fontSize: 12, color: "#c0392b" }}>{addHeaderImageError}</p>
+                  )}
                   <button
                     onClick={handleAddHeaderImage}
-                    disabled={addingHeaderImage || !newHeaderLabel.trim() || !newHeaderUrl.trim()}
+                    disabled={addingHeaderImage || !newHeaderLabel.trim() || !newHeaderFile}
                     style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--primary)",
                       background: "transparent", color: "var(--primary)", fontWeight: 600, fontSize: 13,
-                      cursor: addingHeaderImage ? "not-allowed" : "pointer" }}
+                      cursor: addingHeaderImage ? "not-allowed" : "pointer", width: "fit-content" }}
                   >
-                    {addingHeaderImage ? "추가 중..." : "추가"}
+                    {addingHeaderImage ? "업로드 중..." : "추가"}
                   </button>
                 </div>
               </details>
