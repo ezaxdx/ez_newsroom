@@ -64,5 +64,5 @@ export async function POST(req: NextRequest) {
 
   if (error || !sub) return page("처리 실패", `<p style="color:#7A6E5F;">해당 구독 정보를 찾을 수 없습니다.</p>`);
 
-  return page("수신거부 완료", `<p style="font-size:15px;color:#423C25;">${sub.email}<br>의사가 접수되었습니다. 사내 정책상 뉴스레터는 계속 발송됩니다.</p>`);
+  return page("수신거부 완료", `<p style="font-size:15px;color:#423C25;">${sub.email}<br>수신거부 되었습니다. 감사합니다.</p>`);
 }

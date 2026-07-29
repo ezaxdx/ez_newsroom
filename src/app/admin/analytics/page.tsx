@@ -467,7 +467,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         {/* 유입 경로 */}
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
           <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-            style={{ color: "var(--on-surface-variant)" }}>유입 경로 (Referrer)</p>
+            style={{ color: "var(--on-surface-variant)" }}>EZ 뉴스룸 접속 경로</p>
           {referrers.length === 0 && (
             <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
               유입 데이터가 없습니다.
@@ -511,7 +511,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         {/* UTM 캠페인 */}
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
           <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-            style={{ color: "var(--on-surface-variant)" }}>UTM 캠페인</p>
+            style={{ color: "var(--on-surface-variant)" }}>UTM 캠페인(뉴스레터 클릭 유입 호차별 상세)</p>
           <p className="text-[0.68rem] mb-5 m-0" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
             뉴스레터 클릭 후 뉴스기사 모달 진입
           </p>

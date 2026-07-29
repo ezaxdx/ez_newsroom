@@ -1428,7 +1428,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         setAddEventError(json.error || "추가 실패");
         return;
       }
-      setEvents((prev) => [json.data, ...prev]);
+      setEvents((prev) =>
+        [json.data, ...prev].sort((a, b) => a.start_date.localeCompare(b.start_date))
+      );
       setShowAddModal(false);
       setNewEvent({ event_name: "", venue: "", start_date: "", end_date: "", organizer: "", category: "", website: "" });
     } catch {
