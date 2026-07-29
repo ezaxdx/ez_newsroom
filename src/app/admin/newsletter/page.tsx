@@ -107,6 +107,12 @@ export default function NewsletterPage() {
   const [bulkDeactivating, setBulkDeactivating] = useState(false);
   const [bulkActivating, setBulkActivating] = useState(false);
 
+  // ── 수신자 탭 - 명단 기록(전체 삭제 시 스냅샷) ──
+  type SubscriberSnapshot = { id: string; snapshot_date: string; total_count: number; unsubscribed_count: number };
+  const [showSnapshotModal, setShowSnapshotModal] = useState(false);
+  const [snapshots, setSnapshots] = useState<SubscriberSnapshot[]>([]);
+  const [snapshotsLoading, setSnapshotsLoading] = useState(false);
+
   // ── 수신자 탭 - 엑셀 업로드 ──
   const excelFileRef = useRef<HTMLInputElement>(null);
   const [excelUploading, setExcelUploading] = useState(false);
@@ -552,6 +558,18 @@ export default function NewsletterPage() {
     setBulkDeleting(true);
     try {
       const ids = Array.from(selectedSubIds);
+      // 명단 전체 삭제(월별 재업로드 직전)로 판단되면, 삭제 전 총원/수신거부 인원을 스냅샷으로 남김
+      const isFullWipe = ids.length === subscribers.length && subscribers.length > 0;
+      if (isFullWipe) {
+        await fetch("/api/admin/newsletter/subscriber-snapshots", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            total_count: subscribers.length,
+            unsubscribed_count: subscribers.filter((s) => s.unsubscribed_at).length,
+          }),
+        }).catch(() => {});
+      }
       await Promise.all(ids.map((id) => fetch(`/api/admin/newsletter/subscribers/${id}`, { method: "DELETE" })));
       const deletedActive = subscribers.filter((s) => ids.includes(s.id) && s.is_active).length;
       setSubscribers((prev) => prev.filter((s) => !ids.includes(s.id)));
@@ -561,6 +579,18 @@ export default function NewsletterPage() {
       // ignore
     } finally {
       setBulkDeleting(false);
+    }
+  }
+
+  async function openSnapshotModal() {
+    setShowSnapshotModal(true);
+    setSnapshotsLoading(true);
+    try {
+      const res = await fetch("/api/admin/newsletter/subscriber-snapshots");
+      const json = await res.json();
+      setSnapshots(json.data ?? []);
+    } finally {
+      setSnapshotsLoading(false);
     }
   }
 
@@ -1603,6 +1633,17 @@ export default function NewsletterPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>
                 총 <strong>{subscribers.length}명</strong> / 활성 <strong>{subscribers.filter((s) => s.is_active).length}명</strong>
+                <button
+                  onClick={openSnapshotModal}
+                  style={{
+                    marginLeft: 10, padding: "3px 10px", borderRadius: 20, fontSize: 12,
+                    border: "1px solid var(--surface-container-highest)",
+                    background: "var(--surface-container)", color: "var(--on-surface-variant)",
+                    cursor: "pointer", fontWeight: 500,
+                  }}
+                >
+                  지난 명단 기록
+                </button>
               </span>
               {selectedSubIds.size > 0 && (
                 <div style={{ display: "flex", gap: 8 }}>
@@ -2223,6 +2264,58 @@ export default function NewsletterPage() {
           </div>
         )}
       </div>
+
+        {/* ── 지난 명단 기록 (모달) ── */}
+        {showSnapshotModal && (
+          <div style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999,
+            display: "flex", alignItems: "center", justifyContent: "center",
+          }}>
+            <div style={{ background: "var(--surface-container-lowest)", borderRadius: 12, padding: 24, width: 460, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                <p style={{ margin: 0, fontWeight: 700, fontSize: 15 }}>지난 명단 기록</p>
+                <button onClick={() => setShowSnapshotModal(false)}
+                  style={{ background: "none", border: "none", cursor: "pointer", fontSize: 18, color: "var(--on-surface-variant)", lineHeight: 1 }}>×</button>
+              </div>
+              <p style={{ margin: "0 0 14px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+                명단을 전체 삭제하기 직전마다 그 시점의 총원·수신거부 인원을 자동으로 남겨둔 기록입니다. 매달 명단을 통째로 교체해도 이전 기수 현황은 여기서 확인할 수 있습니다.
+              </p>
+              {snapshotsLoading ? (
+                <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--on-surface-variant)", fontSize: 13 }}>
+                  <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} />
+                  불러오는 중...
+                </div>
+              ) : snapshots.length === 0 ? (
+                <p style={{ fontSize: 13, color: "var(--on-surface-variant)", textAlign: "center", padding: "16px 0" }}>
+                  아직 기록이 없습니다. 명단을 전체 삭제하면 그 시점 기록이 여기 남습니다.
+                </p>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: "var(--surface-container-high)" }}>
+                      <th style={thStyle}>날짜</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>총원</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>수신거부</th>
+                      <th style={{ ...thStyle, textAlign: "center" }}>거부율</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {snapshots.map((snap) => (
+                      <tr key={snap.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                        <td style={tdStyle}>{new Date(snap.snapshot_date).toLocaleDateString("ko-KR")}</td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>{snap.total_count.toLocaleString()}</td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>{snap.unsubscribed_count.toLocaleString()}</td>
+                        <td style={{ ...tdStyle, textAlign: "center" }}>
+                          {snap.total_count ? Math.round((snap.unsubscribed_count / snap.total_count) * 100) : 0}%
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ── 매뉴얼 (모달) ── */}
         <HelpPanel title="뉴스레터 관리 매뉴얼" open={helpOpen} onOpenChange={setHelpOpen}>

@@ -234,6 +234,17 @@ create table if not exists public.newsletter_subscribers (
   unsubscribed_at  timestamptz  -- 본인이 메일 내 "수신거부" 링크로 직접 해지한 시각 (관리자가 수동 비활성화한 경우는 null)
 );
 
+-- ── newsletter_subscriber_snapshots ───────────────────────────────────
+-- 매달 명단을 전체 삭제 후 재업로드하는 운영 방식 때문에 unsubscribed_at 이력이 사라짐 —
+-- 전체 삭제 직전 총원/수신거부 인원을 한 줄 남겨서 기수별 추세를 보존
+create table if not exists public.newsletter_subscriber_snapshots (
+  id                  uuid primary key default gen_random_uuid(),
+  snapshot_date       date default current_date,
+  total_count         integer not null,
+  unsubscribed_count  integer not null,
+  created_at          timestamptz default now()
+);
+
 -- ── newsletter_issues ─────────────────────────────────────────────────
 create table if not exists public.newsletter_issues (
   id                 uuid primary key default gen_random_uuid(),
@@ -286,6 +297,7 @@ alter table public.gmail_tokens              enable row level security;
 alter table public.scrape_logs               enable row level security;
 alter table public.curation_logs             enable row level security;
 alter table public.newsletter_subscribers    enable row level security;
+alter table public.newsletter_subscriber_snapshots enable row level security;
 alter table public.newsletter_issues         enable row level security;
 alter table public.newsletter_send_logs      enable row level security;
 alter table public.newsletter_cron_settings  enable row level security;
@@ -305,6 +317,7 @@ drop policy if exists "admin all event_keyword_filters" on public.event_keyword_
 drop policy if exists "admin all scrape_logs"          on public.scrape_logs;
 drop policy if exists "admin all curation_logs"        on public.curation_logs;
 drop policy if exists "admin all newsletter_subscribers" on public.newsletter_subscribers;
+drop policy if exists "admin all newsletter_subscriber_snapshots" on public.newsletter_subscriber_snapshots;
 drop policy if exists "admin all newsletter_issues"    on public.newsletter_issues;
 drop policy if exists "admin all newsletter_send_logs" on public.newsletter_send_logs;
 drop policy if exists "admin all newsletter_cron_settings" on public.newsletter_cron_settings;
@@ -363,6 +376,10 @@ create policy "admin all curation_logs"
 
 create policy "admin all newsletter_subscribers"
   on public.newsletter_subscribers for all
+  using (auth.role() = 'authenticated');
+
+create policy "admin all newsletter_subscriber_snapshots"
+  on public.newsletter_subscriber_snapshots for all
   using (auth.role() = 'authenticated');
 
 create policy "admin all newsletter_issues"
