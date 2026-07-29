@@ -35,7 +35,7 @@ type SendLog = { id: string; email: string; status: string; error_message: strin
 type EventForImage = { id: string; event_name: string; start_date: string; end_date: string | null; venue: string | null; image_url: string | null; website: string | null; is_published: boolean };
 type CronSettings = { enabled: boolean; send_days: number[]; send_hour: number; default_editorial: string | null };
 
-type Tab = "send" | "history" | "stats" | "subscribers" | "gmail";
+type Tab = "send" | "history" | "subscribers" | "gmail";
 
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
@@ -218,7 +218,7 @@ export default function NewsletterPage() {
   }
 
   useEffect(() => {
-    if (tab === "history" || tab === "stats") fetchHistory();
+    if (tab === "history") fetchHistory();
   }, [tab]);
 
   async function fetchSubscribers() {
@@ -918,7 +918,6 @@ export default function NewsletterPage() {
       <div style={{ display: "flex", gap: 4, marginBottom: 0, borderBottom: "1px solid var(--surface-container-highest)" }}>
         <button style={tabStyle("send")} onClick={() => setTab("send")}>발송</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>
-        <button style={tabStyle("stats")} onClick={() => setTab("stats")}>애널리틱스</button>
         <button style={tabStyle("subscribers")} onClick={() => setTab("subscribers")}>수신자</button>
         <button
           style={tabStyle("gmail")}
@@ -1630,6 +1629,56 @@ export default function NewsletterPage() {
               )}
             </div>
 
+            {/* 수신거부 현황 */}
+            {(() => {
+              const totalSubs = subscribers.length;
+              const unsubbed = subscribers.filter((s) => s.unsubscribed_at);
+              const unsubRate = totalSubs ? Math.round((unsubbed.length / totalSubs) * 100) : 0;
+              const recentUnsub = [...unsubbed].sort((a, b) =>
+                (b.unsubscribed_at ?? "").localeCompare(a.unsubscribed_at ?? "")
+              ).slice(0, 10);
+
+              return (
+                <>
+                  <div style={cardStyle}>
+                    <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                      수신거부 현황 (현재 명단 기준)
+                    </p>
+                    <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{unsubRate}%</p>
+                    <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--on-surface-variant)" }}>
+                      {unsubbed.length.toLocaleString()} / {totalSubs.toLocaleString()}명 · 발송 대상에서는 제외되지 않고 집계만 됨
+                    </p>
+                  </div>
+
+                  {recentUnsub.length > 0 && (
+                    <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
+                      <p style={{ margin: 0, padding: "14px 16px 8px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
+                        최근 수신거부 (최대 10건)
+                      </p>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={{ background: "var(--surface-container-high)" }}>
+                            <th style={thStyle}>이메일</th>
+                            <th style={thStyle}>이름</th>
+                            <th style={thStyle}>수신거부일</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {recentUnsub.map((s) => (
+                            <tr key={s.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                              <td style={tdStyle}>{s.email}</td>
+                              <td style={tdStyle}>{s.name ?? "-"}</td>
+                              <td style={tdStyle}>{new Date(s.unsubscribed_at!).toLocaleDateString("ko-KR")}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
+
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
               <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>
                 총 <strong>{subscribers.length}명</strong> / 활성 <strong>{subscribers.filter((s) => s.is_active).length}명</strong>
@@ -2200,69 +2249,6 @@ export default function NewsletterPage() {
           </div>
         )}
 
-        {/* ── 뉴스레터 애널리틱스 ── */}
-        {tab === "stats" && (
-          <div>
-            {historyLoading ? (
-              <div style={{ display: "flex", alignItems: "center", gap: 8, color: "var(--on-surface-variant)", fontSize: 14 }}>
-                <Loader2 size={16} style={{ animation: "spin 1s linear infinite" }} />
-                불러오는 중...
-              </div>
-            ) : (() => {
-              const totalSubs = subscribers.length;
-              const unsubbed = subscribers.filter((s) => s.unsubscribed_at);
-              const unsubRate = totalSubs ? Math.round((unsubbed.length / totalSubs) * 100) : 0;
-              const recentUnsub = [...unsubbed].sort((a, b) =>
-                (b.unsubscribed_at ?? "").localeCompare(a.unsubscribed_at ?? "")
-              ).slice(0, 10);
-
-              return (
-                <>
-                  <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                    발송 호수별 오픈률/오픈수는 '이력' 탭 표에서 확인하세요 (발송 대상자 수가 계속 바뀌어도 호별 지표는 그대로 유지됩니다).
-                  </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 16 }}>
-                    <div style={cardStyle}>
-                      <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
-                        수신거부 현황
-                      </p>
-                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{unsubRate}%</p>
-                      <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--on-surface-variant)" }}>
-                        {unsubbed.length.toLocaleString()} / {totalSubs.toLocaleString()}명 · 발송 대상에서는 제외되지 않고 집계만 됨
-                      </p>
-                    </div>
-                  </div>
-
-                  {recentUnsub.length > 0 && (
-                    <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-                      <p style={{ margin: 0, padding: "14px 16px 8px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
-                        최근 수신거부 (최대 10건)
-                      </p>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                        <thead>
-                          <tr style={{ background: "var(--surface-container-high)" }}>
-                            <th style={thStyle}>이메일</th>
-                            <th style={thStyle}>이름</th>
-                            <th style={thStyle}>수신거부일</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recentUnsub.map((s) => (
-                            <tr key={s.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
-                              <td style={tdStyle}>{s.email}</td>
-                              <td style={tdStyle}>{s.name ?? "-"}</td>
-                              <td style={tdStyle}>{new Date(s.unsubscribed_at!).toLocaleDateString("ko-KR")}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
       </div>
 
         {/* ── 지난 명단 기록 (모달) ── */}
