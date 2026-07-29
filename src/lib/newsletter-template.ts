@@ -284,8 +284,8 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <!-- ── EDITORIAL (베이지 박스, 이벤트 시 봉투 뚜껑 장식 추가) ── -->
     ${editorialFlapSrc ? `
     <tr>
-      <td style="background:${C.white};padding:0;line-height:0;font-size:0;">
-        <img src="${editorialFlapSrc}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;">
+      <td style="background:${C.white};padding:0 20px;line-height:0;font-size:0;">
+        <img src="${editorialFlapSrc}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;">
       </td>
     </tr>` : ""}
     <tr>
