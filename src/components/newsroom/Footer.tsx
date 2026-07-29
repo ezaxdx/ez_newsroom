@@ -6,7 +6,7 @@ const NAV_LINKS = [
   { label: "EZ人의 AI 도구 완전 정복", href: "https://www.notion.so/EZ-AI-27d90afe6d18804085fcd34edbe0bfb4" },
 ];
 const SUPPORT_LINKS = [
-  { label: "ezpmp", href: "https://www.ezpmp.co.kr/EZPMPHOME/99999/index.do" },
+  { label: "Ezpmp Co., Ltd.", href: "https://www.ezpmp.co.kr/EZPMPHOME/99999/index.do" },
   { label: "Seoul Speakers Bureau", href: "https://www.seoulspeakers.co.kr/" },
   { label: "GMEG", href: "http://www.gmeg.kr/kor/" },
 ];

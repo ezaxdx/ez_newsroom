@@ -1847,6 +1847,7 @@ export default function NewsletterPage() {
                         <th style={{ ...thStyle, textAlign: "center" }}>발송</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>성공</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>실패</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>오픈률</th>
                         <th style={thStyle}>상태</th>
                         <th style={{ ...thStyle, textAlign: "center" }}>재발송</th>
                       </tr>
@@ -1854,7 +1855,7 @@ export default function NewsletterPage() {
                     <tbody>
                       {filteredIssues.length === 0 ? (
                         <tr>
-                          <td colSpan={7} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
+                          <td colSpan={8} style={{ padding: "20px", textAlign: "center", color: "var(--on-surface-variant)" }}>
                             {issues.length === 0 ? "발송 이력이 없습니다." : "조건에 맞는 이력이 없습니다."}
                           </td>
                         </tr>
@@ -1900,6 +1901,17 @@ export default function NewsletterPage() {
                                   {issue.total_failed}
                                 </button>
                               ) : <span>0</span>}
+                            </td>
+                            <td style={{ ...tdStyle, textAlign: "center" }}>
+                              {new Date(issue.sent_at ?? issue.created_at) >= OPEN_TRACKING_SINCE ? (
+                                issue.total_sent > 0 ? (
+                                  <span title={`${issue.opened_count} / ${issue.total_sent}명 오픈`}>
+                                    {Math.round((issue.opened_count / issue.total_sent) * 100)}%
+                                  </span>
+                                ) : <span>—</span>
+                              ) : (
+                                <span style={{ color: "var(--on-surface-variant)" }} title="2026-07-30부터 오픈 트래킹 시작">측정 전</span>
+                              )}
                             </td>
                             <td style={tdStyle}>
                               <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 4,
@@ -1949,7 +1961,7 @@ export default function NewsletterPage() {
                           {resendResult[issue.id] && (
                             <tr key={`${issue.id}-result`}
                               style={{ background: resendResult[issue.id].startsWith("✅") ? "#D4EDDA" : "#F8D7DA" }}>
-                              <td colSpan={7} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600,
+                              <td colSpan={8} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600,
                                 color: resendResult[issue.id].startsWith("✅") ? "#155724" : "#721C24" }}>
                                 {resendResult[issue.id]}
                               </td>
@@ -1959,7 +1971,7 @@ export default function NewsletterPage() {
                           {/* 미수신자 패널 */}
                           {isPanelOpen && (
                             <tr key={`${issue.id}-unsent`}>
-                              <td colSpan={7} style={{ padding: "0 0 4px" }}>
+                              <td colSpan={8} style={{ padding: "0 0 4px" }}>
                                 <div style={{
                                   margin: "0 4px 8px",
                                   border: "1px solid var(--surface-container-highest)",
@@ -2156,11 +2168,6 @@ export default function NewsletterPage() {
                 불러오는 중...
               </div>
             ) : (() => {
-              const tracked = issues.filter((i) => new Date(i.sent_at ?? i.created_at) >= OPEN_TRACKING_SINCE);
-              const totalSent = tracked.reduce((s, i) => s + i.total_sent, 0);
-              const totalOpened = tracked.reduce((s, i) => s + i.opened_count, 0);
-              const openRate = totalSent ? Math.round((totalOpened / totalSent) * 100) : 0;
-
               const totalSubs = subscribers.length;
               const unsubbed = subscribers.filter((s) => s.unsubscribed_at);
               const unsubRate = totalSubs ? Math.round((unsubbed.length / totalSubs) * 100) : 0;
@@ -2170,16 +2177,10 @@ export default function NewsletterPage() {
 
               return (
                 <>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
-                    <div style={cardStyle}>
-                      <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
-                        발송 대비 오픈율 <span style={{ fontWeight: 400 }}>(2026-07-30부터 집계)</span>
-                      </p>
-                      <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{openRate}%</p>
-                      <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--on-surface-variant)" }}>
-                        {totalOpened.toLocaleString()} / {totalSent.toLocaleString()}명 오픈
-                      </p>
-                    </div>
+                  <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--on-surface-variant)" }}>
+                    발송 호수별 오픈률/오픈수는 '이력' 탭 표에서 확인하세요 (발송 대상자 수가 계속 바뀌어도 호별 지표는 그대로 유지됩니다).
+                  </p>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 16 }}>
                     <div style={cardStyle}>
                       <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
                         수신거부 현황
