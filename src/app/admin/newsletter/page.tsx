@@ -47,11 +47,13 @@ export default function NewsletterPage() {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
   const [subjectOverride, setSubjectOverride] = useState(""); // 비워두면 기본 제목([EZ Letter] Vol.N · 날짜) 그대로 발송
-  const [headerImages, setHeaderImages] = useState<{ label: string; url: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
-  const [headerImageUrl, setHeaderImageUrl] = useState("/images/ez-letter-header.png");
+  const [headerImages, setHeaderImages] = useState<{ label: string; url: string; flap_url?: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
+  const [headerImageLabel, setHeaderImageLabel] = useState("기본");
   const [newHeaderLabel, setNewHeaderLabel] = useState("");
   const [newHeaderUrl, setNewHeaderUrl] = useState("");
+  const [newHeaderFlapUrl, setNewHeaderFlapUrl] = useState("");
   const [addingHeaderImage, setAddingHeaderImage] = useState(false);
+  const selectedHeaderImage = headerImages.find((h) => h.label === headerImageLabel) ?? headerImages[0];
   const [previewing, setPreviewing] = useState(false);
   const [sending, setSending] = useState(false);
   const [sendElapsed, setSendElapsed] = useState(0);
@@ -175,13 +177,17 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/header-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: newHeaderLabel.trim(), url: newHeaderUrl.trim() }),
+        body: JSON.stringify({
+          label: newHeaderLabel.trim(), url: newHeaderUrl.trim(),
+          ...(newHeaderFlapUrl.trim() ? { flap_url: newHeaderFlapUrl.trim() } : {}),
+        }),
       });
       const json = await res.json();
       if (json.data) {
         setHeaderImages(json.data);
         setNewHeaderLabel("");
         setNewHeaderUrl("");
+        setNewHeaderFlapUrl("");
       }
     } finally {
       setAddingHeaderImage(false);
@@ -328,7 +334,11 @@ export default function NewsletterPage() {
       const res = await fetch("/api/admin/newsletter/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ editorial_text: editorialText, dry_run: true, skip_ezpmp: skipEzpmp, header_image_url: headerImageUrl }),
+        body: JSON.stringify({
+          editorial_text: editorialText, dry_run: true, skip_ezpmp: skipEzpmp,
+          header_image_url: selectedHeaderImage.url,
+          ...(selectedHeaderImage.flap_url ? { editorial_flap_url: selectedHeaderImage.flap_url } : {}),
+        }),
       });
       const json = await res.json();
       if (res.ok && json.html) {
@@ -373,6 +383,8 @@ export default function NewsletterPage() {
           dry_run: false,
           skip_ezpmp: skipEzpmp,
           ...(subjectOverride.trim() ? { subject_override: subjectOverride.trim() } : {}),
+          header_image_url: selectedHeaderImage.url,
+          ...(selectedHeaderImage.flap_url ? { editorial_flap_url: selectedHeaderImage.flap_url } : {}),
           ...(previewHtml && previewMeta ? {
             cached_html: previewHtml,
             cached_vol: previewMeta.vol_number,
@@ -947,13 +959,13 @@ export default function NewsletterPage() {
               </p>
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                 <select
-                  value={headerImageUrl}
-                  onChange={(e) => { setHeaderImageUrl(e.target.value); setPreviewHtml(null); }}
+                  value={headerImageLabel}
+                  onChange={(e) => { setHeaderImageLabel(e.target.value); setPreviewHtml(null); }}
                   style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
                     background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13 }}
                 >
                   {headerImages.map((h) => (
-                    <option key={h.label} value={h.url}>{h.label}</option>
+                    <option key={h.label} value={h.label}>{h.label}</option>
                   ))}
                 </select>
               </div>
@@ -967,10 +979,16 @@ export default function NewsletterPage() {
                       background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, width: 160 }}
                   />
                   <input
-                    type="text" placeholder="이미지 URL (예: /images/ez-letter-header-event.png)"
+                    type="text" placeholder="헤더 이미지 URL (예: /images/ez-letter-header-event.png)"
                     value={newHeaderUrl} onChange={(e) => setNewHeaderUrl(e.target.value)}
                     style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
                       background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, flex: 1, minWidth: 200 }}
+                  />
+                  <input
+                    type="text" placeholder="인사말 장식 이미지 URL (선택, 예: /images/ez-letter-event.png)"
+                    value={newHeaderFlapUrl} onChange={(e) => setNewHeaderFlapUrl(e.target.value)}
+                    style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                      background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13, flex: 1, minWidth: 220 }}
                   />
                   <button
                     onClick={handleAddHeaderImage}

@@ -34,6 +34,7 @@ export type NewsletterData = {
   site_url: string;
   is_email?: boolean; // true이면 이미지 프록시 우회 (실제 발송용)
   header_image_url?: string; // 헤더 배경 이미지 — 절대 URL 또는 "/images/.."처럼 site_url 기준 상대경로. 없으면 기본 헤더 사용
+  editorial_flap_url?: string; // 인사말 박스 위 봉투 뚜껑 장식(이벤트용) — 없으면 장식 없이 기본 박스만
 };
 
 // ── 팔레트 ─────────────────────────────────────────────────
@@ -223,11 +224,14 @@ function newsSection(label: string, items: NewsCard[], vol: number, site_url: st
 export function generateNewsletterHTML(data: NewsletterData): string {
   const { vol_number: vol, send_date, editorial_text,
           mice_news, tourism_news, ai_news, ezpmp_news,
-          featured_events, upcoming_events, site_url, is_email = false, header_image_url } = data;
+          featured_events, upcoming_events, site_url, is_email = false, header_image_url, editorial_flap_url } = data;
 
   const headerImageSrc = header_image_url
     ? (header_image_url.startsWith("http") ? header_image_url : `${site_url}${header_image_url}`)
     : `${site_url}/images/ez-letter-header.png`;
+  const editorialFlapSrc = editorial_flap_url
+    ? (editorial_flap_url.startsWith("http") ? editorial_flap_url : `${site_url}${editorial_flap_url}`)
+    : null;
 
   // Pick 4개 → 2행
   const picks = featured_events.slice(0, 4);
@@ -277,9 +281,15 @@ export function generateNewsletterHTML(data: NewsletterData): string {
       </td>
     </tr>
 
-    <!-- ── EDITORIAL (베이지 박스) ── -->
+    <!-- ── EDITORIAL (베이지 박스, 이벤트 시 봉투 뚜껑 장식 추가) ── -->
+    ${editorialFlapSrc ? `
     <tr>
-      <td style="background:${C.white};padding:24px 20px;">
+      <td style="background:${C.white};padding:0;line-height:0;font-size:0;">
+        <img src="${editorialFlapSrc}" width="600" alt="" style="display:block;width:100%;max-width:600px;height:auto;">
+      </td>
+    </tr>` : ""}
+    <tr>
+      <td style="background:${C.white};padding:${editorialFlapSrc ? "0 20px 24px" : "24px 20px"};">
         <table cellpadding="0" cellspacing="0" width="100%">
           <tr>
             <td style="background:#F5EDE3;border-radius:15px;padding:24px 28px;">

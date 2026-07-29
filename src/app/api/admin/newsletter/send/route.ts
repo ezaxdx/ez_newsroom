@@ -18,7 +18,7 @@ export async function POST(req: NextRequest) {
   let body: {
     editorial_text?: string; dry_run?: boolean; skip_ezpmp?: boolean; reuse_prev_pick?: boolean;
     cached_html?: string; cached_vol?: number; cached_send_date?: string; cached_featured_ids?: string[];
-    subject_override?: string; header_image_url?: string;
+    subject_override?: string; header_image_url?: string; editorial_flap_url?: string;
   };
   try { body = await req.json(); }
   catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
@@ -28,6 +28,7 @@ export async function POST(req: NextRequest) {
   const skip_ezpmp = body.skip_ezpmp === true;
   const subject_override = body.subject_override?.trim() || null;
   const header_image_url = body.header_image_url || undefined;
+  const editorial_flap_url = body.editorial_flap_url || undefined;
   const supabase = createAdminClient();
 
   // ── 미리보기에서 생성된 HTML 캐시로 바로 발송 ──────────
@@ -355,7 +356,7 @@ export async function POST(req: NextRequest) {
     vol_number, send_date, editorial_text,
     mice_news: miceNews, tourism_news: tourismNews, ai_news: aiNews, ezpmp_news: skip_ezpmp ? [] : ezpmpNews,
     featured_events: featuredEvents, upcoming_events: upcomingEvents,
-    site_url, is_email: !dry_run, header_image_url,
+    site_url, is_email: !dry_run, header_image_url, editorial_flap_url,
   });
 
   // ── 미리보기 반환 ──
