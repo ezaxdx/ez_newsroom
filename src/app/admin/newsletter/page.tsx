@@ -1241,13 +1241,13 @@ export default function NewsletterPage() {
                   if (next && imageEvents.length === 0) fetchImageEvents();
                 }}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  display: "flex", alignItems: "center", gap: 6,
                   width: "100%", background: "none", border: "none", cursor: "pointer",
                   fontSize: 13, fontWeight: 600, color: "var(--on-surface)", padding: 0,
                 }}
               >
-                <span>🖼️ EZ Letter Pick 이미지 관리</span>
-                <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{imageEditorOpen ? "▲" : "▼"}</span>
+                <span style={{ display: "inline-block", transform: imageEditorOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>▸</span>
+                <span>EZ Letter Pick 이미지 관리</span>
               </button>
 
               {imageEditorOpen && (
@@ -1356,13 +1356,13 @@ export default function NewsletterPage() {
               <button
                 onClick={() => setCronOpen(o => !o)}
                 style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  display: "flex", alignItems: "center", gap: 6,
                   width: "100%", background: "none", border: "none", cursor: "pointer",
                   fontSize: 13, fontWeight: 600, color: "var(--on-surface)", padding: 0,
                 }}
               >
-                <span>⚙️ 자동 발송 설정</span>
-                <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{cronOpen ? "▲" : "▼"}</span>
+                <span style={{ display: "inline-block", transform: cronOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>▸</span>
+                <span>자동 발송 설정</span>
               </button>
 
               {cronOpen && (
