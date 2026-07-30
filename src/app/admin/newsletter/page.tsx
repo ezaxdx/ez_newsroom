@@ -1998,8 +1998,9 @@ export default function NewsletterPage() {
                             <td style={{ ...tdStyle, textAlign: "center" }}>
                               {new Date(issue.sent_at ?? issue.created_at) >= OPEN_TRACKING_SINCE ? (
                                 issue.total_sent > 0 ? (
-                                  <span title={`${issue.opened_count} / ${issue.total_sent}명 오픈`}>
+                                  <span className="fast-tooltip">
                                     {Math.round((issue.opened_count / issue.total_sent) * 100)}%
+                                    <span className="fast-tooltip-text">{issue.opened_count} / {issue.total_sent}명 오픈</span>
                                   </span>
                                 ) : <span>—</span>
                               ) : (

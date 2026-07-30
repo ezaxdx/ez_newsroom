@@ -94,3 +94,29 @@
     line-height: 1.55;
   }
 }
+
+/* 브라우저 기본 title 툴팁은 표시 지연이 길어 표(오픈률 등)처럼 즉각 반응이 필요한 곳에 사용 */
+.fast-tooltip {
+  position: relative;
+  cursor: default;
+}
+.fast-tooltip .fast-tooltip-text {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: 125%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #1f2937;
+  color: #fff;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  white-space: nowrap;
+  z-index: 20;
+  pointer-events: none;
+}
+.fast-tooltip:hover .fast-tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
