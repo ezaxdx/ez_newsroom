@@ -10,10 +10,9 @@ type Props = {
   slides: Slide[];
   onOpen: (item: NewsItem) => void;
   interval?: number; // kept for prop compatibility, unused
-  fillHeight?: boolean; // 8/4 전(기존 16:9 꽉채움 레이아웃)에는 부모 높이에 맞춰 꽉 채움
 };
 
-export default function HeroCarousel({ slides, onOpen, fillHeight = false }: Props) {
+export default function HeroCarousel({ slides, onOpen }: Props) {
   const items = slides.slice(0, 4);
   if (!items.length) return null;
 
@@ -27,7 +26,6 @@ export default function HeroCarousel({ slides, onOpen, fillHeight = false }: Pro
         display: "grid",
         gridTemplateColumns: `repeat(${cols}, 1fr)`,
         gridTemplateRows: `repeat(${rows}, 1fr)`,
-        height: fillHeight ? "100%" : undefined,
         minHeight: rows === 1 ? 480 : 520,
       }}
     >

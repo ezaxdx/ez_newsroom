@@ -3,8 +3,8 @@ import TopBar from "@/components/newsroom/TopBar";
 import Footer from "@/components/newsroom/Footer";
 import EventsClient, { ConventionEvent } from "@/components/events/EventsClient";
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
-import PopupBanner from "@/components/newsroom/PopupBanner";
-import { fetchActivePopup } from "@/lib/popup";
+import PopupLayer from "@/components/newsroom/PopupLayer";
+import { fetchActivePopups, fetchEventSettings } from "@/lib/popup";
 
 export const dynamic = "force-dynamic";
 
@@ -42,10 +42,11 @@ async function fetchEvents(): Promise<ConventionEvent[]> {
 }
 
 export default async function EventsPage() {
-  const [navCategories, events, popup] = await Promise.all([
+  const [navCategories, events, popups, eventSettings] = await Promise.all([
     fetchNavCategories(),
     fetchEvents(),
-    fetchActivePopup(),
+    fetchActivePopups(),
+    fetchEventSettings(),
   ]);
 
   return (
@@ -55,7 +56,7 @@ export default async function EventsPage() {
         <EventsClient events={events} />
       </main>
       <Footer />
-      {popup && <PopupBanner popup={popup} pageKey="events" />}
+      <PopupLayer popups={popups} event={eventSettings} pageKey="events" />
     </div>
   );
 }

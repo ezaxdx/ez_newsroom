@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const SELECT = "id, title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, created_at";
+const SELECT = "id, title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, created_at";
 
 const VALID_PAGES = new Set(["home", "category", "events", "archive"]);
 function normalizePages(pages: unknown): string[] {
@@ -37,7 +37,7 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   const body = await req.json();
-  const { title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page } = body;
+  const { title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code } = body;
   if (!title?.trim() || !start_date || !end_date) {
     return NextResponse.json({ error: "제목, 게시기간은 필수입니다." }, { status: 400 });
   }
@@ -60,6 +60,7 @@ export async function POST(req: NextRequest) {
       position: VALID_POSITIONS.has(position) ? position : "bottom-right",
       pages: normalizePages(pages),
       random_page: !!random_page,
+      hunt_code: hunt_code?.trim() || null,
     })
     .select(SELECT)
     .single();
@@ -76,7 +77,7 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const ALLOWED = ["title", "start_date", "end_date", "image_url", "link_url", "content", "is_active", "display_type", "position", "pages", "random_page"];
+  const ALLOWED = ["title", "start_date", "end_date", "image_url", "link_url", "content", "is_active", "display_type", "position", "pages", "random_page", "hunt_code"];
   const updates: Record<string, unknown> = {};
   for (const key of ALLOWED) {
     if (key in fields) updates[key] = fields[key];

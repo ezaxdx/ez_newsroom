@@ -18,7 +18,6 @@ type Props = {
   events:         CalendarEvent[];
   carouselInterval?: number;
   deepLinkItem?: NewsItem | null; // ?news=id 로 진입 시 자동으로 열 기사 (뉴스레터 딥링크 등)
-  wideLayout?: boolean; // 8/4부터 적용되는 여백 레이아웃 (그 전엔 기존 16:9 꽉채움 유지)
 };
 
 const LEVELS = ["Total", "Beginner", "Intermediate", "Advanced"] as const;
@@ -32,7 +31,6 @@ export default function NewsroomClient({
   events,
   carouselInterval,
   deepLinkItem,
-  wideLayout = false,
 }: Props) {
   const [activeItem, setActiveItem] = useState<NewsItem | null>(null);
   const [activeViaDeepLink, setActiveViaDeepLink] = useState(false);
@@ -123,14 +121,13 @@ export default function NewsroomClient({
       <div style={{ display: "flex", flexDirection: "column" }}>
 
         {/* ── 2단 메인 그리드 ── */}
-        <div className={wideLayout ? "max-w-[1280px] mx-auto w-full" : undefined}>
+        <div className="max-w-[1280px] mx-auto w-full">
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "1fr 260px",
               borderTop: "1px solid var(--surface-container-high)",
               borderBottom: "1px solid var(--surface-container-high)",
-              height: wideLayout ? undefined : "calc(100vh - 96px)",
             }}
           >
             {/* Col 1: 히어로 2×2 고정 그리드 */}
@@ -138,7 +135,6 @@ export default function NewsroomClient({
               slides={heroSlides}
               onOpen={handleOpen}
               interval={carouselInterval}
-              fillHeight={!wideLayout}
             />
 
             {/* Col 2: 행사 캘린더 */}
@@ -147,7 +143,7 @@ export default function NewsroomClient({
         </div>
 
         {/* ── 카테고리 피드 ── */}
-        <div className={wideLayout ? "max-w-[1280px] mx-auto w-full" : undefined} style={{ padding: "32px 32px 16px" }}>
+        <div className="max-w-[1280px] mx-auto w-full" style={{ padding: "32px 32px 16px" }}>
           {/* 레벨 필터 */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
             <div

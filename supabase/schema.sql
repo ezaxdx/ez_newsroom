@@ -249,6 +249,7 @@ create table if not exists public.newsroom_popups (
   position     text default 'bottom-right' not null, -- 3×3 위치(top/middle/bottom-left/center/right) 또는 random
   pages        jsonb default '["home"]' not null,    -- 노출 페이지: home|category|events|archive
   random_page  boolean default false not null,       -- true면 pages 중 한 곳에만 랜덤 노출(숨은그림찾기용)
+  hunt_code    text,                                 -- 값이 있으면 '찾기 이벤트' 대상 — 클릭 시 링크 대신 이 코드를 보여주고 사라짐
   created_at  timestamptz default now()
 );
 create index if not exists idx_newsroom_popups_period on public.newsroom_popups (start_date, end_date);
@@ -256,6 +257,17 @@ alter table public.newsroom_popups add column if not exists display_type text de
 alter table public.newsroom_popups add column if not exists position text default 'bottom-right' not null;
 alter table public.newsroom_popups add column if not exists pages jsonb default '["home"]' not null;
 alter table public.newsroom_popups add column if not exists random_page boolean default false not null;
+alter table public.newsroom_popups add column if not exists hunt_code text;
+
+-- ── newsroom_event_settings ───────────────────────────────────────────
+-- 숨은 그림(고양이) 찾기 이벤트 전역 설정. 단일 행으로만 사용
+create table if not exists public.newsroom_event_settings (
+  id         uuid primary key default gen_random_uuid(),
+  enabled    boolean default false not null,  -- 꺼두면 진행률·응모 버튼이 아예 노출되지 않음
+  title      text default '숨은 고양이를 찾아라' not null,
+  form_url   text,                            -- 응모 구글폼 주소
+  updated_at timestamptz default now()
+);
 
 -- ── newsletter_subscriber_snapshots ───────────────────────────────────
 -- 매달 명단을 전체 삭제 후 재업로드하는 운영 방식 때문에 unsubscribed_at 이력이 사라짐 —
@@ -324,6 +336,7 @@ alter table public.curation_logs             enable row level security;
 alter table public.newsletter_subscribers    enable row level security;
 alter table public.newsletter_subscriber_snapshots enable row level security;
 alter table public.newsroom_popups           enable row level security;
+alter table public.newsroom_event_settings   enable row level security;
 alter table public.newsletter_issues         enable row level security;
 alter table public.newsletter_send_logs      enable row level security;
 alter table public.newsletter_cron_settings  enable row level security;
@@ -346,6 +359,8 @@ drop policy if exists "admin all newsletter_subscribers" on public.newsletter_su
 drop policy if exists "admin all newsletter_subscriber_snapshots" on public.newsletter_subscriber_snapshots;
 drop policy if exists "public read newsroom_popups" on public.newsroom_popups;
 drop policy if exists "admin all newsroom_popups" on public.newsroom_popups;
+drop policy if exists "public read newsroom_event_settings" on public.newsroom_event_settings;
+drop policy if exists "admin all newsroom_event_settings" on public.newsroom_event_settings;
 drop policy if exists "admin all newsletter_issues"    on public.newsletter_issues;
 drop policy if exists "admin all newsletter_send_logs" on public.newsletter_send_logs;
 drop policy if exists "admin all newsletter_cron_settings" on public.newsletter_cron_settings;
@@ -416,6 +431,14 @@ create policy "public read newsroom_popups"
 
 create policy "admin all newsroom_popups"
   on public.newsroom_popups for all
+  using (auth.role() = 'authenticated');
+
+create policy "public read newsroom_event_settings"
+  on public.newsroom_event_settings for select
+  using (true);
+
+create policy "admin all newsroom_event_settings"
+  on public.newsroom_event_settings for all
   using (auth.role() = 'authenticated');
 
 create policy "admin all newsletter_issues"

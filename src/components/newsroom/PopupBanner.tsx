@@ -12,6 +12,7 @@ export type PopupData = {
   position: string;      // 3×3 위치 또는 random (floating 전용)
   pages: string[];       // 노출 페이지 목록
   random_page: boolean;  // true면 pages 중 한 곳에만 랜덤 노출
+  hunt_code?: string | null; // 값이 있으면 찾기 이벤트 대상 — 클릭 시 링크 대신 코드를 알려주고 사라짐
 };
 
 // "오늘 하루 보지 않기"는 팝업별로 기억 — 다른 팝업으로 교체되면 다시 노출됨
@@ -21,8 +22,17 @@ const todayStr = () => new Date().toISOString().slice(0, 10);
 // 페이지를 옮겨다니며 찾을 수 있으므로 sessionStorage 사용
 const huntKey = (id: string) => `popup_hunt_page_${id}`;
 
-export default function PopupBanner({ popup, pageKey }: { popup: PopupData; pageKey: string }) {
+export default function PopupBanner({
+  popup, pageKey, disabled = false, alreadyFound = false, onFound,
+}: {
+  popup: PopupData;
+  pageKey: string;
+  disabled?: boolean;      // 이벤트가 꺼져 있는 등 노출하면 안 되는 상태
+  alreadyFound?: boolean;  // 이미 찾은 고양이 — 다시 노출하지 않음
+  onFound?: (code: string) => void;
+}) {
   const isFloating = popup.display_type === "floating";
+  const huntCode = popup.hunt_code || null;
 
   // SSR 시엔 항상 닫힌 상태로 시작 — localStorage는 클라이언트에서만 읽을 수 있어 hydration 불일치 방지
   const [open, setOpen] = useState(false);
@@ -41,6 +51,7 @@ export default function PopupBanner({ popup, pageKey }: { popup: PopupData; page
   }, [popup.id, popup.position]);
 
   useEffect(() => {
+    if (disabled || alreadyFound) { setOpen(false); return; }
     // 이 페이지가 노출 대상인지 먼저 확인
     const allowed = popup.pages?.length ? popup.pages : ["home"];
     if (!allowed.includes(pageKey)) return;
@@ -69,7 +80,7 @@ export default function PopupBanner({ popup, pageKey }: { popup: PopupData; page
       // 스토리지 차단 환경에서는 그냥 노출
     }
     setOpen(true);
-  }, [popup.id, popup.pages, popup.random_page, pageKey, isFloating]);
+  }, [popup.id, popup.pages, popup.random_page, pageKey, isFloating, disabled, alreadyFound]);
 
   if (!open) return null;
 
@@ -157,7 +168,16 @@ export default function PopupBanner({ popup, pageKey }: { popup: PopupData; page
           filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
         }}
       >
-        {popup.link_url ? (
+        {huntCode ? (
+          // 찾기 이벤트: 링크로 보내지 않고 코드를 알려준 뒤 사라짐
+          <button
+            onClick={() => { setOpen(false); onFound?.(huntCode); }}
+            title="클릭!"
+            style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "pointer" }}
+          >
+            {inner}
+          </button>
+        ) : popup.link_url ? (
           <a href={popup.link_url} target="_blank" rel="noopener noreferrer"
             title={popup.title} style={{ display: "block", textDecoration: "none" }}>
             {inner}

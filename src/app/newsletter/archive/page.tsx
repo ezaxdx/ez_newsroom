@@ -5,8 +5,8 @@ import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
 import TopBar from "@/components/newsroom/TopBar";
 import Footer from "@/components/newsroom/Footer";
 import NewsletterArchiveList, { ArchiveIssue } from "@/components/newsroom/NewsletterArchiveList";
-import PopupBanner from "@/components/newsroom/PopupBanner";
-import { fetchActivePopup } from "@/lib/popup";
+import PopupLayer from "@/components/newsroom/PopupLayer";
+import { fetchActivePopups, fetchEventSettings } from "@/lib/popup";
 
 export const dynamic = "force-dynamic";
 
@@ -50,7 +50,9 @@ async function fetchNavCategories(): Promise<string[]> {
 }
 
 export default async function NewsletterArchivePage() {
-  const [issues, navCategories, popup] = await Promise.all([fetchIssues(), fetchNavCategories(), fetchActivePopup()]);
+  const [issues, navCategories, popups, eventSettings] = await Promise.all([
+    fetchIssues(), fetchNavCategories(), fetchActivePopups(), fetchEventSettings(),
+  ]);
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "var(--surface)" }}>
@@ -78,7 +80,7 @@ export default async function NewsletterArchivePage() {
       </main>
 
       <Footer />
-      {popup && <PopupBanner popup={popup} pageKey="archive" />}
+      <PopupLayer popups={popups} event={eventSettings} pageKey="archive" />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus } from "lucide-react";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { POPUP_PAGES } from "@/lib/popup";
+import EventHuntManager from "@/components/admin/EventHuntManager";
 
 type Popup = {
   id: string;
@@ -18,6 +19,7 @@ type Popup = {
   position: string;
   pages: string[];
   random_page: boolean;
+  hunt_code: string | null;
   created_at: string;
 };
 
@@ -33,13 +35,14 @@ type FormState = {
   position: string;
   pages: string[];
   random_page: boolean;
+  hunt_code: string;
 };
 
 const EMPTY_FORM: FormState = {
   title: "", start_date: "", end_date: "",
   image_url: "", link_url: "", content: "", is_active: true,
   display_type: "floating", position: "bottom-right",
-  pages: ["home"], random_page: false,
+  pages: ["home"], random_page: false, hunt_code: "",
 };
 
 const todayKST = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -106,6 +109,7 @@ export default function PopupManager() {
       position: p.position ?? "bottom-right",
       pages: p.pages?.length ? p.pages : ["home"],
       random_page: p.random_page ?? false,
+      hunt_code: p.hunt_code ?? "",
     });
     setError(null);
     setShowModal(true);
@@ -197,6 +201,7 @@ export default function PopupManager() {
   };
 
   return (
+    <>
     <div className="p-5 rounded-lg mb-8 flex flex-col gap-4" style={{ background: "var(--surface-container-lowest)" }}>
       <div className="flex items-center justify-between">
         <div>
@@ -278,6 +283,12 @@ export default function PopupManager() {
                       {popups.length - idx}
                     </td>
                     <td style={{ padding: "9px 12px" }}>
+                      {p.hunt_code && (
+                        <span title={`찾기 코드: ${p.hunt_code}`} style={{
+                          marginRight: 5, padding: "1px 6px", borderRadius: 4, fontSize: 10,
+                          fontWeight: 700, background: "#7c3aed18", color: "#7c3aed",
+                        }}>🐱 {p.hunt_code}</span>
+                      )}
                       {p.title}
                       {live && (
                         <span style={{
@@ -494,9 +505,25 @@ export default function PopupManager() {
             </div>
 
             <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>링크 URL <span style={{ fontWeight: 400 }}>(클릭 시 이동 · 구글폼 등)</span></label>
-              <input value={form.link_url} placeholder="https://..."
-                onChange={(e) => setForm((f) => ({ ...f, link_url: e.target.value }))} style={inputStyle} />
+              <label style={labelStyle}>
+                링크 URL <span style={{ fontWeight: 400 }}>(클릭 시 이동 · 구글폼 등)</span>
+              </label>
+              <input value={form.link_url} placeholder="https://..." disabled={!!form.hunt_code.trim()}
+                onChange={(e) => setForm((f) => ({ ...f, link_url: e.target.value }))}
+                style={{ ...inputStyle, opacity: form.hunt_code.trim() ? 0.5 : 1 }} />
+              {form.hunt_code.trim() && (
+                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--on-surface-variant)" }}>
+                  찾기 코드가 있으면 링크 대신 코드를 알려주고 사라지므로 이 값은 사용되지 않습니다.
+                </p>
+              )}
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>
+                찾기 코드 <span style={{ fontWeight: 400 }}>(입력하면 숨은 그림 찾기 이벤트 대상이 됨)</span>
+              </label>
+              <input value={form.hunt_code} placeholder="예: 관광길 (비워두면 일반 팝업)"
+                onChange={(e) => setForm((f) => ({ ...f, hunt_code: e.target.value }))} style={inputStyle} />
             </div>
 
             <div style={{ marginBottom: 10 }}>
@@ -529,5 +556,9 @@ export default function PopupManager() {
         </div>
       )}
     </div>
+
+    {/* 숨은 그림 찾기 이벤트 — 찾기 코드가 붙은 팝업들을 묶어서 관리 */}
+    {!loading && <EventHuntManager huntPopups={popups.filter((p) => p.hunt_code)} />}
+    </>
   );
 }

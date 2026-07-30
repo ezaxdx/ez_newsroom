@@ -6,8 +6,8 @@ import { calcLastScheduledRun } from "@/lib/schedule";
 import TopBar from "@/components/newsroom/TopBar";
 import Footer from "@/components/newsroom/Footer";
 import CategoryArchive from "@/components/newsroom/CategoryArchive";
-import PopupBanner from "@/components/newsroom/PopupBanner";
-import { fetchActivePopup } from "@/lib/popup";
+import PopupLayer from "@/components/newsroom/PopupLayer";
+import { fetchActivePopups, fetchEventSettings } from "@/lib/popup";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
@@ -115,9 +115,10 @@ export default async function CategoryPage({ params }: Props) {
   const { navCategories, lastRunISO } = await fetchPageSettings();
   if (!navCategories.includes(category)) notFound();
 
-  const [items, popup] = await Promise.all([
+  const [items, popups, eventSettings] = await Promise.all([
     fetchCategoryItems(category, lastRunISO),
-    fetchActivePopup(),
+    fetchActivePopups(),
+    fetchEventSettings(),
   ]);
 
   return (
@@ -158,7 +159,7 @@ export default async function CategoryPage({ params }: Props) {
       </main>
 
       <Footer />
-      {popup && <PopupBanner popup={popup} pageKey="category" />}
+      <PopupLayer popups={popups} event={eventSettings} pageKey="category" />
     </div>
   );
 }
