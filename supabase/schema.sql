@@ -234,6 +234,29 @@ create table if not exists public.newsletter_subscribers (
   unsubscribed_at  timestamptz  -- 본인이 메일 내 "수신거부" 링크로 직접 해지한 시각 (관리자가 수동 비활성화한 경우는 null)
 );
 
+-- ── newsroom_popups ───────────────────────────────────────────────────
+-- 뉴스룸 홈 진입 시 노출되는 팝업(이벤트 안내 등). 게시기간 + 사용여부 둘 다 만족해야 노출됨
+create table if not exists public.newsroom_popups (
+  id          uuid primary key default gen_random_uuid(),
+  title       text not null,          -- 관리용 식별명 (사용자에게 노출 안 됨)
+  start_date  date not null,
+  end_date    date not null,
+  image_url   text,
+  link_url    text,                   -- 클릭 시 이동할 주소 (구글폼 등). 없으면 클릭 불가
+  content     text,                   -- 이미지 없이 텍스트만 띄우고 싶을 때
+  is_active   boolean default true not null,
+  display_type text default 'modal' not null,        -- modal(가운데 팝업·닫기 가능) | floating(구석 고정·상시 노출)
+  position     text default 'bottom-right' not null, -- 3×3 위치(top/middle/bottom-left/center/right) 또는 random
+  pages        jsonb default '["home"]' not null,    -- 노출 페이지: home|category|events|archive
+  random_page  boolean default false not null,       -- true면 pages 중 한 곳에만 랜덤 노출(숨은그림찾기용)
+  created_at  timestamptz default now()
+);
+create index if not exists idx_newsroom_popups_period on public.newsroom_popups (start_date, end_date);
+alter table public.newsroom_popups add column if not exists display_type text default 'modal' not null;
+alter table public.newsroom_popups add column if not exists position text default 'bottom-right' not null;
+alter table public.newsroom_popups add column if not exists pages jsonb default '["home"]' not null;
+alter table public.newsroom_popups add column if not exists random_page boolean default false not null;
+
 -- ── newsletter_subscriber_snapshots ───────────────────────────────────
 -- 매달 명단을 전체 삭제 후 재업로드하는 운영 방식 때문에 unsubscribed_at 이력이 사라짐 —
 -- 전체 삭제 직전 총원/수신거부 인원을 한 줄 남겨서 기수별 추세를 보존
@@ -300,6 +323,7 @@ alter table public.scrape_logs               enable row level security;
 alter table public.curation_logs             enable row level security;
 alter table public.newsletter_subscribers    enable row level security;
 alter table public.newsletter_subscriber_snapshots enable row level security;
+alter table public.newsroom_popups           enable row level security;
 alter table public.newsletter_issues         enable row level security;
 alter table public.newsletter_send_logs      enable row level security;
 alter table public.newsletter_cron_settings  enable row level security;
@@ -320,6 +344,8 @@ drop policy if exists "admin all scrape_logs"          on public.scrape_logs;
 drop policy if exists "admin all curation_logs"        on public.curation_logs;
 drop policy if exists "admin all newsletter_subscribers" on public.newsletter_subscribers;
 drop policy if exists "admin all newsletter_subscriber_snapshots" on public.newsletter_subscriber_snapshots;
+drop policy if exists "public read newsroom_popups" on public.newsroom_popups;
+drop policy if exists "admin all newsroom_popups" on public.newsroom_popups;
 drop policy if exists "admin all newsletter_issues"    on public.newsletter_issues;
 drop policy if exists "admin all newsletter_send_logs" on public.newsletter_send_logs;
 drop policy if exists "admin all newsletter_cron_settings" on public.newsletter_cron_settings;
@@ -382,6 +408,14 @@ create policy "admin all newsletter_subscribers"
 
 create policy "admin all newsletter_subscriber_snapshots"
   on public.newsletter_subscriber_snapshots for all
+  using (auth.role() = 'authenticated');
+
+create policy "public read newsroom_popups"
+  on public.newsroom_popups for select
+  using (true);
+
+create policy "admin all newsroom_popups"
+  on public.newsroom_popups for all
   using (auth.role() = 'authenticated');
 
 create policy "admin all newsletter_issues"

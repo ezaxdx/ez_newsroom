@@ -97,6 +97,28 @@ function proxyImg(image_url: string | null, site_url: string, _is_email = false)
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
 
+// 인사말에 적은 링크를 이메일에서 클릭 가능하게 변환.
+//   [원하는 문구](https://...) → 문구에 링크
+//   https://... 만 적으면      → 주소 그대로 노출되며 링크
+function linkifyEditorial(text: string): string {
+  const anchors: string[] = [];
+  const anchor = (label: string, url: string) =>
+    `<a href="${url}" target="_blank" style="color:${C.green};text-decoration:underline;font-family:${FONT_NOTO};">${label}</a>`;
+
+  // 1) [문구](url) 먼저 처리하고 자리표시자로 빼둠 — 2)에서 중복 변환되지 않도록
+  let out = text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, url) => {
+    anchors.push(anchor(label, url));
+    return `\u0000${anchors.length - 1}\u0000`;
+  });
+  // 2) 남은 맨 URL 처리 (문장 끝 마침표·괄호는 링크에서 제외)
+  out = out.replace(/https?:\/\/[^\s<]+/g, (url) => {
+    const trailing = url.match(/[.,)\]]+$/)?.[0] ?? "";
+    const clean = trailing ? url.slice(0, -trailing.length) : url;
+    return anchor(clean, clean) + trailing;
+  });
+  return out.replace(/\u0000(\d+)\u0000/g, (_m, i) => anchors[Number(i)]);
+}
+
 // 이번 주(7/28)까지는 기존대로 데이터허브, 다음 주 화요일(8/4)부터 뉴스룸 딥링크로 전환.
 // KST 기준으로 비교 — 발송이 보통 자정 직후 실행되므로 UTC 그대로 비교하면 하루 어긋날 수 있음.
 const NEWSROOM_LINK_CUTOVER = "2026-08-04";
@@ -297,11 +319,11 @@ export function generateNewsletterHTML(data: NewsletterData): string {
                 <tr>
                   <td style="padding:24px 28px;">
                     ${editorialFlapSrc ? `
-                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
+                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
                     <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
                     ` : `
                     <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
+                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
                     `}
                   </td>
                 </tr>

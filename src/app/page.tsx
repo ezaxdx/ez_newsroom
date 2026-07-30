@@ -6,6 +6,8 @@ import { selectEzpmpPickIds } from "@/lib/event-score";
 import TopBar from "@/components/newsroom/TopBar";
 import NewsroomClient from "@/components/newsroom/NewsroomClient";
 import Footer from "@/components/newsroom/Footer";
+import PopupBanner from "@/components/newsroom/PopupBanner";
+import { fetchActivePopup } from "@/lib/popup";
 import type { CalendarEvent } from "@/components/newsroom/EventsColumn";
 
 export const dynamic = "force-dynamic"; // 항상 최신 데이터 fetch
@@ -13,8 +15,10 @@ export const dynamic = "force-dynamic"; // 항상 최신 데이터 fetch
 const CATEGORY_ORDER = ["MICE", "TOURISM", "AI", "EZPMP", "STARTUP", "POLICY", "OPERATIONS", "INDUSTRY"];
 
 // 여백 있는 레이아웃(기존 16:9 꽉채움 → 스크롤 가능한 마진 레이아웃)은 8/4 기능 오픈에 포함 — KST 기준 비교
+// 오픈 전 미리보기용: .env.local에 NEXT_PUBLIC_FORCE_WIDE_LAYOUT=1 (로컬 전용, 배포엔 없음)
 const LAYOUT_CUTOVER = "2026-08-04";
 function isWideLayoutLive(): boolean {
+  if (process.env.NEXT_PUBLIC_FORCE_WIDE_LAYOUT === "1") return true;
   const kstDateStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
   return kstDateStr >= LAYOUT_CUTOVER;
 }
@@ -192,11 +196,12 @@ export default async function NewsroomPage({ searchParams }: Props) {
   const { navCategories, carouselIntervalMs, lastRunISO } = await fetchSiteSettings();
 
   const heroCategories = [...navCategories, "BLOG"];
-  const [heroNews, feedAllNews, events, deepLinkItem] = await Promise.all([
+  const [heroNews, feedAllNews, events, deepLinkItem, popup] = await Promise.all([
     fetchHeroNews(heroCategories),   // 히어로: 카테고리별 최신 1건 (시간 무관)
     fetchNews(lastRunISO),           // 피드: 최근 큐레이션 이후
     fetchUpcomingEvents(),
     fetchDeepLinkNews(deepLinkNewsId),
+    fetchActivePopup(),
   ]);
 
   // 히어로 슬라이드 (카테고리 순서대로)
@@ -242,6 +247,7 @@ export default async function NewsroomPage({ searchParams }: Props) {
         />
       </main>
       <Footer />
+      {popup && <PopupBanner popup={popup} pageKey="home" />}
     </div>
   );
 }
