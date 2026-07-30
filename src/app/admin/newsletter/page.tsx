@@ -1640,12 +1640,16 @@ export default function NewsletterPage() {
               const recentUnsub = [...unsubbed].sort((a, b) =>
                 (b.unsubscribed_at ?? "").localeCompare(a.unsubscribed_at ?? "")
               ).slice(0, 10);
+              // 명단이 매달 통째로 교체되므로, 지금 명단이 언제 업로드된 것인지(=가장 오래된 추가일) 기준으로 표시
+              const listMonth = subscribers.length > 0
+                ? subscribers.reduce((min, s) => (s.created_at < min ? s.created_at : min), subscribers[0].created_at).slice(0, 7)
+                : new Date().toISOString().slice(0, 7);
 
               return (
                 <>
                   <div style={cardStyle}>
                     <p style={{ margin: "0 0 4px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
-                      수신거부 현황 (현재 명단 기준)
+                      수신거부 현황 ({listMonth} 명단 기준)
                     </p>
                     <p style={{ margin: 0, fontSize: 28, fontWeight: 700 }}>{unsubRate}%</p>
                     <p style={{ margin: "2px 0 0", fontSize: 13, color: "var(--on-surface-variant)" }}>
