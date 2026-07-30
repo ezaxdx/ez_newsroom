@@ -12,6 +12,13 @@ export const dynamic = "force-dynamic"; // 항상 최신 데이터 fetch
 
 const CATEGORY_ORDER = ["MICE", "TOURISM", "AI", "EZPMP", "STARTUP", "POLICY", "OPERATIONS", "INDUSTRY"];
 
+// 여백 있는 레이아웃(기존 16:9 꽉채움 → 스크롤 가능한 마진 레이아웃)은 8/4 기능 오픈에 포함 — KST 기준 비교
+const LAYOUT_CUTOVER = "2026-08-04";
+function isWideLayoutLive(): boolean {
+  const kstDateStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
+  return kstDateStr >= LAYOUT_CUTOVER;
+}
+
 function groupByCategory(items: NewsItem[]) {
   const map = new Map<string, NewsItem[]>();
   for (const item of items) {
@@ -231,6 +238,7 @@ export default async function NewsroomPage({ searchParams }: Props) {
           events={events}
           carouselInterval={carouselIntervalMs}
           deepLinkItem={deepLinkItem}
+          wideLayout={isWideLayoutLive()}
         />
       </main>
       <Footer />
