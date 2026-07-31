@@ -67,7 +67,13 @@ const PRESET_PCT: Record<string, { x: number; y: number }> = {
 };
 
 const todayKST = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-const fmtDate = (s: string) => s.slice(5).replace("-", ".");
+const fmtDate = (s: string) => s.replaceAll("-", ".");
+// 오늘로부터 정확히 한 달 뒤(YYYY-MM-DD, KST) — 날짜 필터 기본 종료일
+function oneMonthFromTodayKST() {
+  const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
+  d.setUTCMonth(d.getUTCMonth() + 1);
+  return d.toISOString().slice(0, 10);
+}
 
 const ROW_KO: Record<string, string> = { top: "위", middle: "가운데", bottom: "아래" };
 const COL_KO: Record<string, string> = { left: "왼쪽", center: "가운데", right: "오른쪽" };
@@ -116,6 +122,9 @@ export default function PopupManager() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // 게시기간 날짜 필터 — 기본값: 오늘 ~ 한 달 뒤
+  const [filterFrom, setFilterFrom] = useState(todayKST());
+  const [filterTo, setFilterTo] = useState(oneMonthFromTodayKST());
   // 미리보기 화면에서 팝업을 직접 드래그로 옮기거나 모서리로 크기 조절할 때의 드래그 상태
   const [dragState, setDragState] = useState<{
     mode: "move" | "resize";
@@ -190,6 +199,13 @@ export default function PopupManager() {
     const today = todayKST();
     return p.is_active && p.start_date <= today && p.end_date >= today;
   }
+
+  // 게시기간이 필터 범위와 겹치는 팝업만 — 기간이 하루라도 걸치면 포함
+  const filteredPopups = popups.filter((p) => {
+    if (filterFrom && p.end_date < filterFrom) return false;
+    if (filterTo && p.start_date > filterTo) return false;
+    return true;
+  });
 
   function openNew() {
     setEditingId(null);
@@ -357,13 +373,29 @@ export default function PopupManager() {
         </button>
       </div>
 
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>게시기간 필터</span>
+        <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+          style={{ ...inputStyle, width: "auto", height: 30 }} />
+        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
+        <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+          style={{ ...inputStyle, width: "auto", height: 30 }} />
+        <button
+          onClick={() => { setFilterFrom(todayKST()); setFilterTo(oneMonthFromTodayKST()); }}
+          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary)", textDecoration: "underline" }}
+        >
+          기본값(오늘~한 달)
+        </button>
+        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{filteredPopups.length}건</span>
+      </div>
+
       {loading ? (
         <div className="flex items-center gap-2 text-sm" style={{ color: "var(--on-surface-variant)" }}>
           <Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> 불러오는 중...
         </div>
-      ) : popups.length === 0 ? (
+      ) : filteredPopups.length === 0 ? (
         <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
-          등록된 팝업이 없습니다.
+          {popups.length === 0 ? "등록된 팝업이 없습니다." : "이 기간에 게시되는 팝업이 없습니다."}
         </p>
       ) : (
         <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--surface-container-high)" }}>
@@ -380,7 +412,7 @@ export default function PopupManager() {
               </tr>
             </thead>
             <tbody>
-              {popups.map((p, idx) => {
+              {filteredPopups.map((p, idx) => {
                 const live = isLive(p);
                 return (
                   <tr key={p.id} style={{
@@ -388,7 +420,7 @@ export default function PopupManager() {
                     background: live ? "color-mix(in srgb, var(--primary) 5%, transparent)" : undefined,
                   }}>
                     <td style={{ padding: "9px 12px", textAlign: "center", color: "var(--on-surface-variant)", fontSize: "0.72rem" }}>
-                      {popups.length - idx}
+                      {filteredPopups.length - idx}
                     </td>
                     <td style={{ padding: "9px 12px" }}>
                       {p.hunt_code && (
