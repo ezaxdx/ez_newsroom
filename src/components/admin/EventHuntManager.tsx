@@ -69,22 +69,29 @@ export default function EventHuntManager({ huntPopups }: { huntPopups: HuntPopup
           style={{ color: "var(--on-surface-variant)" }}>
           이벤트 관리 (숨은 그림 찾기)
           <SectionInfoModal title="숨은 그림 찾기 이벤트 안내">
-            <p style={{ margin: "0 0 10px" }}>
-              팝업에 <b>찾기 코드</b>를 입력하면 그 팝업은 일반 배너가 아니라 <b>찾기 대상</b>이 됩니다.
-              방문자가 클릭하면 링크로 이동하는 대신 코드를 알려주고 사라집니다.
-            </p>
-            <p style={{ margin: "0 0 10px" }}>
-              <b>당첨 층을 나누는 방법</b> — 로그인이 없어 사이트가 &quot;누가 몇 개 찾았는지&quot;를 증명할 수 없습니다.
-              그래서 찾을 때마다 코드를 알려주고, 응모 구글폼에서 <b>찾은 코드를 모두 적게</b> 합니다.
-              폼 응답에 적힌 코드 개수로 1개·3개·6개 층을 구분하면 됩니다.
-            </p>
-            <p style={{ margin: "0 0 10px" }}>
-              <b>등록 방법</b> — 위 팝업 목록에서 고양이 수만큼 팝업을 만들고, 각각 노출 페이지·위치를 다르게 준 뒤
-              찾기 코드를 서로 다르게 입력합니다. 표시 방식은 <b>고정</b>, 위치는 <b>랜덤</b>을 권장합니다.
-            </p>
-            <p style={{ margin: 0 }}>
-              <b>이벤트 사용</b>을 꺼두면 코드가 입력된 팝업은 사이트에 아예 노출되지 않습니다. 준비 중에는 꺼두세요.
-            </p>
+            {[
+              {
+                n: 1, title: "찾기 코드란",
+                body: "팝업에 찾기 코드를 입력하면 그 팝업은 일반 배너가 아니라 찾기 대상이 됩니다. 방문자가 클릭하면 링크로 이동하는 대신 코드를 알려주고 사라집니다.",
+              },
+              {
+                n: 2, title: "당첨 층을 나누는 방법",
+                body: "로그인이 없어 사이트가 “누가 몇 개 찾았는지”를 증명할 수 없습니다. 그래서 찾을 때마다 코드를 알려주고, 응모 구글폼에서 찾은 코드를 모두 적게 합니다. 폼 응답에 적힌 코드 개수로 1개·3개·6개 층을 구분하면 됩니다.",
+              },
+              {
+                n: 3, title: "등록 방법",
+                body: "위 팝업 목록에서 고양이 수만큼 팝업을 만들고, 각각 노출 페이지·위치를 다르게 준 뒤 찾기 코드를 서로 다르게 입력합니다. 표시 방식은 고정, 위치는 랜덤을 권장합니다.",
+              },
+              {
+                n: 4, title: "이벤트 사용",
+                body: "꺼두면 코드가 입력된 팝업은 사이트에 아예 노출되지 않습니다. 준비 중에는 꺼두세요.",
+              },
+            ].map(({ n, title: t, body }) => (
+              <div key={n} style={{ marginBottom: 14 }}>
+                <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14, color: "#111" }}>{n}. {t}</p>
+                <p style={{ margin: 0, fontWeight: 400, fontSize: 13, color: "#555", lineHeight: 1.65 }}>{body}</p>
+              </div>
+            ))}
           </SectionInfoModal>
         </p>
         <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>

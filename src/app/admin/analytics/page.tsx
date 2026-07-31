@@ -1,5 +1,5 @@
 import { createAdminClient } from "@/lib/supabase/admin";
-import { HelpProvider, HelpTriggerConnected, HelpPanelConnected } from "@/components/admin/HelpPanel";
+import { HelpProvider, HelpTriggerConnected, HelpPanelConnected, Section, Item, Indent, Def } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import DateRangePicker from "./DateRangePicker";
 
@@ -730,72 +730,85 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       </section>
 
       <HelpPanelConnected title="애널리틱스 가이드">
-        <p style={{ marginBottom: 16 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           뉴스룸 독자의 행동 데이터를 자동 수집·분석합니다. 별도 설정 없이 방문자 발생 시 즉시 기록됩니다.
         </p>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>1. KPI 카드</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>총 접속 수</strong> — 메인 페이지(뉴스룸 홈) 방문 횟수. 새로고침·재방문 포함, 아카이브 카테고리 페이지 방문은 별도 집계(4. 아카이브 카테고리별 기사 반응)이므로 제외</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 모달 내 "VIEW ORIGINAL SOURCE" 클릭 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>전체 전환율</strong> — 메인 접속 대비 원문 클릭 비율 (접속 → 원문 클릭)</li>
-        </ul>
+        <Section title="1. KPI 카드">
+          <Def term="총 접속 수">
+            메인 페이지(뉴스룸 홈) 방문 횟수입니다. 새로고침·재방문 포함, 아카이브 카테고리 페이지 방문은
+            별도 집계(4. 아카이브 카테고리별 기사 반응)이므로 제외됩니다.
+          </Def>
+          <Def term="기사 클릭">기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수입니다.</Def>
+          <Def term="원문 클릭">모달 내 &quot;VIEW ORIGINAL SOURCE&quot; 클릭 횟수입니다.</Def>
+          <Def term="전체 전환율">메인 접속 대비 원문 클릭 비율입니다(접속 → 원문 클릭).</Def>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>2. 인게이지먼트 퍼널</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>탐색형/딥링크 여정 구분 및 상세 설명은 해당 섹션 제목 옆 <strong style={{ color: "var(--on-surface)" }}>ⓘ 아이콘</strong>을 참고하세요</li>
-        </ul>
+        <Section title="2. 인게이지먼트 퍼널">
+          <Item text="탐색형/딥링크 여정 구분 및 상세 설명은 해당 섹션 제목 옆 ⓘ 아이콘을 참고하세요." />
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>3. 트래픽 소스</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>UTM 파라미터가 있으면 우선 사용 (카카오톡, 뉴스레터, SNS 등)</li>
-          <li>UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘</li>
-          <li>링크 예시: <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>?utm_source=kakao&amp;utm_campaign=weekly</code></li>
-          <li><strong style={{ color: "var(--on-surface)" }}>&ldquo;OO 클릭 유입&rdquo;의 의미</strong> — 각 라벨은 <strong style={{ color: "var(--on-surface)" }}>그 방문이 해당 링크를 직접 클릭해 들어왔다</strong>는 뜻(last-touch). 같은 사람이 나중에 북마크·주소입력으로 재방문하면 &lsquo;직접 접속&rsquo;으로 잡히므로, &ldquo;뉴스레터가 끌어온 누적 트래픽&rdquo;이 아니라 &ldquo;이번 방문의 직접 유입원&rdquo;으로 해석해야 정확함</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>봇/크롤러(자동수집)</strong> — 실제 사람이 아니라 시스템이 자동으로 페이지를 렌더링한 접속. 사람 트래픽과 구분해 표시하지만 총 접속 수 집계에서 제외되진 않음
-            <ul style={{ paddingLeft: 16, marginTop: 4 }}>
-              <li>카카오톡·슬랙·카카오뷰 등에 링크를 공유하면 메신저 서버가 미리보기용으로 한 번 접속 (링크 미리보기 봇)</li>
-              <li>사이트가 살아있는지 주기적으로 확인하는 모니터링/업타임 체크 봇</li>
-              <li>Playwright·Puppeteer 등 SEO 크롤러·자동화 테스트 툴</li>
-            </ul>
-          </li>
-        </ul>
+        <Section title="3. 트래픽 소스">
+          <Item text="UTM 파라미터가 있으면 우선 사용합니다(카카오톡, 뉴스레터, SNS 등)." />
+          <Item text="UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별합니다 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘." />
+          <Indent>링크 예시: ?utm_source=kakao&amp;utm_campaign=weekly</Indent>
+          <Def term="&quot;OO 클릭 유입&quot;의 의미">
+            각 라벨은 그 방문이 해당 링크를 직접 클릭해 들어왔다는 뜻(last-touch)입니다. 같은 사람이 나중에
+            북마크·주소입력으로 재방문하면 &apos;직접 접속&apos;으로 잡히므로, &quot;뉴스레터가 끌어온 누적 트래픽&quot;이 아니라
+            &quot;이번 방문의 직접 유입원&quot;으로 해석해야 정확합니다.
+          </Def>
+          <Def term="봇/크롤러(자동수집)">
+            실제 사람이 아니라 시스템이 자동으로 페이지를 렌더링한 접속입니다. 사람 트래픽과 구분해 표시하지만
+            총 접속 수 집계에서 제외되진 않습니다.
+          </Def>
+          <Indent>
+            카카오톡·슬랙·카카오뷰 등에 링크를 공유하면 메신저 서버가 미리보기용으로 한 번 접속(링크 미리보기 봇) ·
+            사이트가 살아있는지 주기적으로 확인하는 모니터링/업타임 체크 봇 · Playwright·Puppeteer 등 SEO 크롤러·자동화 테스트 툴
+          </Indent>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>4. 아카이브 카테고리별 기사 반응</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>아카이브 방문</strong> — 상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지(/category/AI 등)를 연 횟수</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>기사 클릭</strong> — 해당 카테고리 기사를 클릭해 모달을 열람한 횟수 (홈 피드·아카이브 등 경로 무관 합산)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>원문 클릭</strong> — 해당 카테고리 기사에서 원문으로 이동한 횟수</li>
-        </ul>
+        <Section title="4. 아카이브 카테고리별 기사 반응">
+          <Def term="아카이브 방문">상단 카테고리(MICE·TOURISM·AI·EZPMP)를 눌러 아카이브 페이지(/category/AI 등)를 연 횟수입니다.</Def>
+          <Def term="기사 클릭">해당 카테고리 기사를 클릭해 모달을 열람한 횟수입니다(홈 피드·아카이브 등 경로 무관 합산).</Def>
+          <Def term="원문 클릭">해당 카테고리 기사에서 원문으로 이동한 횟수입니다.</Def>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>5. 뉴스레터 지난호</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>지난호 목록 조회수</strong> — 뉴스룸 푸터의 &ldquo;지난호 보기&rdquo; 방문 횟수. "그 중 이메일 유입"은 뉴스레터 본문 링크(UTM 포함)로 들어온 것만 구분 — 나머지는 사이트 Footer 등에서 직접 들어온 것</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>Vol별 조회수</strong> — 목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수. 어떤 지난호가 인기 있는지 확인 가능</li>
-          <li>2026-07-30부터 수집 시작 — 그 이전 시점 데이터는 없음</li>
-        </ul>
+        <Section title="5. 뉴스레터 지난호">
+          <Def term="지난호 목록 조회수">
+            뉴스룸 푸터의 &quot;지난호 보기&quot; 방문 횟수입니다. &quot;그 중 이메일 유입&quot;은 뉴스레터 본문 링크(UTM 포함)로
+            들어온 것만 구분하며, 나머지는 사이트 Footer 등에서 직접 들어온 것입니다.
+          </Def>
+          <Def term="Vol별 조회수">
+            목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수입니다. 어떤 지난호가 인기 있는지
+            확인할 수 있습니다.
+          </Def>
+          <Item text="2026-07-30부터 수집 시작 — 그 이전 시점 데이터는 없습니다." />
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>6. 인기 검색어</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>뉴스룸 상단 검색창에서 실행된 검색어를 빈도순으로 집계</li>
-          <li>독자가 관심 갖는 키워드 파악 및 콘텐츠 기획에 활용</li>
-        </ul>
+        <Section title="6. 인기 검색어">
+          <Item text="뉴스룸 상단 검색창에서 실행된 검색어를 빈도순으로 집계합니다." />
+          <Item text="독자가 관심 갖는 키워드 파악 및 콘텐츠 기획에 활용하세요." />
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>7. 행사 클릭 · 평균 체류시간</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>행사 클릭</strong> — 홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수. 인기 행사 TOP 5로 어떤 픽이 실제 반응 좋은지 확인 가능</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>평균 체류시간</strong> — 홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초). 탭이 백그라운드에 있는 동안은 카운트 제외. 2026-07-21부터 수집</li>
-          <li>카테고리별 성과 표의 "평균 체류(초)"는 이것과 다름 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계 (2026-05-28부터 수집)</li>
-          <li style={{ marginTop: 6 }}><strong style={{ color: "var(--on-surface)" }}>어떻게 측정하나</strong>
-            <ul style={{ paddingLeft: 16, marginTop: 4 }}>
-              <li>홈 화면 진입 시점에 타이머 시작, 탭이 백그라운드로 전환되면(Page Visibility API) 자동으로 일시정지 — 딴 짓하는 시간은 제외</li>
-              <li>탭을 닫거나 다른 사이트로 이동하면(pagehide) <code style={{ fontSize: 11, background: "var(--surface-container-high)", padding: "1px 5px", borderRadius: 3 }}>navigator.sendBeacon()</code>으로 마지막 순간까지 반영해 전송 — 일반 요청과 달리 페이지가 사라져도 유실 없이 도착</li>
-              <li>사이트 내 다른 화면으로 이동(카테고리 페이지 등)해도 벗어나는 순간 지금까지 누적된 시간을 기록</li>
-              <li>자리비움 등으로 인한 이상치 방지를 위해 최대 30분까지만 인정</li>
-            </ul>
-          </li>
-        </ul>
+        <Section title="7. 행사 클릭 · 평균 체류시간">
+          <Def term="행사 클릭">
+            홈·행사 캘린더의 EZPMP 픽 카드를 클릭한 횟수입니다. 인기 행사 TOP 5로 어떤 픽이 실제 반응이 좋은지 확인할 수 있습니다.
+          </Def>
+          <Def term="평균 체류시간">
+            홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초)입니다.
+            탭이 백그라운드에 있는 동안은 카운트에서 제외됩니다. 2026-07-21부터 수집.
+          </Def>
+          <Item text="카테고리별 성과 표의 '평균 체류(초)'는 이것과 다릅니다 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계(2026-05-28부터 수집)." />
+          <div style={{ marginTop: 6 }}>
+            <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>어떻게 측정하나</p>
+            <Indent>
+              홈 화면 진입 시점에 타이머 시작, 탭이 백그라운드로 전환되면(Page Visibility API) 자동으로 일시정지되어
+              딴 짓하는 시간은 제외됩니다. 탭을 닫거나 다른 사이트로 이동하면(pagehide) navigator.sendBeacon()으로
+              마지막 순간까지 반영해 전송하므로 페이지가 사라져도 유실 없이 도착합니다. 사이트 내 다른 화면으로
+              이동해도 벗어나는 순간 지금까지 누적된 시간을 기록하며, 자리비움 등 이상치 방지를 위해 최대 30분까지만 인정합니다.
+            </Indent>
+          </div>
+        </Section>
       </HelpPanelConnected>
     </div>
     </HelpProvider>

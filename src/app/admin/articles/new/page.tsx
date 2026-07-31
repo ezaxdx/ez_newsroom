@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 import { Loader2, Sparkles, PenLine, ExternalLink, CheckCircle2 } from "lucide-react";
-import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Item, Def } from "@/components/admin/HelpPanel";
 
 type Tab = "ai" | "manual";
 
@@ -543,27 +543,27 @@ export default function NewArticlePage() {
       </div>
 
       <HelpPanel title="기사 작성 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
-        <p style={{ marginBottom: 12 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           AI 자동 생성 또는 직접 작성으로 기사를 개별 등록합니다.
         </p>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>AI 생성 탭</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>기사 URL 입력 시 Gemini가 제목·요약·분석·시사점 자동 생성</li>
-          <li>생성 후 내용 직접 수정 가능</li>
-          <li>카테고리·레벨 선택 후 대기 저장 또는 즉시 발행</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>직접 작성 탭</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>제목, 요약(120자 이내), 본문, 시사점 수동 입력</li>
-          <li>이미지 URL, 원문 URL 선택 입력</li>
-          <li>대기 상태로 저장하거나 즉시 발행 선택 가능</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>레벨 기준</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>Beginner</strong> — 업계 입문자, 배경지식 없이 이해 가능</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>Intermediate</strong> — 실무 담당자, 기본 지식 보유자</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>Advanced</strong> — 전략·기획자, 심층 분석 대상</li>
-        </ul>
+
+        <Section title="AI 생성 탭">
+          <Item text="기사 URL 입력 시 Gemini가 제목·요약·분석·시사점을 자동 생성합니다." />
+          <Item text="생성 후 내용을 직접 수정할 수 있습니다." />
+          <Item text="카테고리·레벨 선택 후 대기 저장 또는 즉시 발행할 수 있습니다." />
+        </Section>
+
+        <Section title="직접 작성 탭">
+          <Item text="제목, 요약(120자 이내), 본문, 시사점을 수동 입력합니다." />
+          <Item text="이미지 URL, 원문 URL은 선택 입력입니다." />
+          <Item text="대기 상태로 저장하거나 즉시 발행을 선택할 수 있습니다." />
+        </Section>
+
+        <Section title="레벨 기준">
+          <Def term="Beginner">업계 입문자 대상, 배경지식 없이 이해 가능합니다.</Def>
+          <Def term="Intermediate">실무 담당자 대상, 기본 지식 보유자를 가정합니다.</Def>
+          <Def term="Advanced">전략·기획자 대상, 심층 분석입니다.</Def>
+        </Section>
       </HelpPanel>
     </div>
   );

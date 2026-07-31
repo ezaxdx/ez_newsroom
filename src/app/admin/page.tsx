@@ -1,7 +1,7 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
 import CurationBoard from "@/components/admin/CurationBoard";
-import { HelpProvider, HelpPanelConnected } from "@/components/admin/HelpPanel";
+import { HelpProvider, HelpPanelConnected, Section, Item, Def } from "@/components/admin/HelpPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -166,40 +166,40 @@ export default async function AdminPage() {
       </div>
 
       <HelpPanelConnected title="큐레이션 보드 가이드">
-        <p style={{ marginBottom: 12 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           뉴스룸의 핵심 운영 화면입니다. 수집된 기사 전체를 확인하고 발행·반려를 직접 처리합니다.
         </p>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>주요 기능</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>전체·발행됨·대기 중 기사 수 통계 확인</li>
-          <li>기사별 품질 점수(1~10), 카테고리, 레벨 확인</li>
-          <li>대기 중 기사 수동 발행 또는 삭제</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>큐레이션 즉시 실행</strong> — 스케줄 외 수동 실행</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>품질 점수 기준</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>6점 이상 → 자동 발행</li>
-          <li>4~5점 → 대기 (수동 검토 후 발행)</li>
-          <li>3점 이하 → 자동 폐기</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>자동 실행 스케줄</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>매주 화요일·목요일 오전 9시 자동 실행</li>
-          <li>수동 실행은 [큐레이션 실행] 버튼 클릭</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>탭 분류 기준</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>메인 표시 중</strong> — 가장 최근 큐레이션 실행 이후 발행된 기사. 홈 페이지에 노출됨</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>대기열</strong> — 품질 점수 미달로 자동 발행 보류 중인 기사. 수동으로 발행·삭제 가능</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>아카이브</strong> — 이전 큐레이션 배치의 기사. 홈에서 내려간 상태이며 카테고리 아카이브 페이지에 표시됨</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>아카이브 기준</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li>기준 시각: 가장 최근 스케줄 실행일 오전 9시 KST (화·목 기준)</li>
-          <li>기준 시각 <strong style={{ color: "var(--on-surface)" }}>이전</strong> 발행 → 아카이브 / <strong style={{ color: "var(--on-surface)" }}>이후</strong> 발행 → 메인 표시 중</li>
-          <li>예) 목요일 큐레이션 실행 후 → 목요일 오전 9시 이전 기사는 전부 아카이브로 이동</li>
-          <li>아카이브 기사는 [재발행] 버튼으로 오늘 날짜 기준 메인에 다시 올릴 수 있음</li>
-        </ul>
+
+        <Section title="주요 기능">
+          <Item text="전체·발행됨·대기 중 기사 수 통계를 확인합니다." />
+          <Item text="기사별 품질 점수(1~10), 카테고리, 레벨을 확인합니다." />
+          <Item text="대기 중 기사를 수동으로 발행하거나 삭제합니다." />
+          <Def term="큐레이션 즉시 실행">스케줄 외에 수동으로 실행할 수 있습니다.</Def>
+        </Section>
+
+        <Section title="품질 점수 기준">
+          <Item text="6점 이상 → 자동 발행" />
+          <Item text="4~5점 → 대기 (수동 검토 후 발행)" />
+          <Item text="3점 이하 → 자동 폐기" />
+        </Section>
+
+        <Section title="자동 실행 스케줄">
+          <Item text="매주 화요일·목요일 오전 9시 자동 실행됩니다." />
+          <Item text="수동 실행은 [큐레이션 실행] 버튼을 클릭하세요." />
+        </Section>
+
+        <Section title="탭 분류 기준">
+          <Def term="메인 표시 중">가장 최근 큐레이션 실행 이후 발행된 기사입니다. 홈 페이지에 노출됩니다.</Def>
+          <Def term="대기열">품질 점수 미달로 자동 발행이 보류 중인 기사입니다. 수동으로 발행·삭제할 수 있습니다.</Def>
+          <Def term="아카이브">이전 큐레이션 배치의 기사입니다. 홈에서 내려간 상태이며 카테고리 아카이브 페이지에 표시됩니다.</Def>
+        </Section>
+
+        <Section title="아카이브 기준">
+          <Item text="기준 시각: 가장 최근 스케줄 실행일 오전 9시 KST(화·목 기준)" />
+          <Item text="기준 시각 이전 발행 → 아카이브 / 이후 발행 → 메인 표시 중" />
+          <Item text="예) 목요일 큐레이션 실행 후 → 목요일 오전 9시 이전 기사는 전부 아카이브로 이동" />
+          <Item text="아카이브 기사는 [재발행] 버튼으로 오늘 날짜 기준 메인에 다시 올릴 수 있습니다." />
+        </Section>
       </HelpPanelConnected>
     </div>
     </HelpProvider>

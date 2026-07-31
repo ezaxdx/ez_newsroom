@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Mail, CheckCircle, XCircle, Loader2, ExternalLink } from "lucide-react";
-import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Item } from "@/components/admin/HelpPanel";
 
 export default function GmailPage() {
   const [helpOpen, setHelpOpen] = useState(false);
@@ -108,26 +108,26 @@ export default function GmailPage() {
       </div>
 
       <HelpPanel title="Gmail 연동 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
-        <p style={{ marginBottom: 12 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           Gmail로 수신된 뉴스레터를 자동으로 읽어 큐레이션 소스로 활용합니다.
           OAuth2 인증은 1회 설정으로 지속 유지됩니다.
         </p>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>현재 상태</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>✅ Gmail 연동 완료 (2026년 5월 22일 인증)</li>
-          <li>등록된 뉴스레터: 요즘IT, MICE人</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>토큰 만료 시</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>큐레이션 실행 시 Gmail 소스 수집이 실패</li>
-          <li>이 페이지에서 [다시 인증] 버튼으로 재연동</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>뉴스레터 추가 방법</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li>뉴스레터 수신 확인 후 Gmail 발신자 이메일 주소 확인</li>
-          <li>/admin/rss → 소스 추가 → 타입: Gmail 뉴스레터</li>
-          <li>발신자 이메일 입력 후 저장</li>
-        </ul>
+
+        <Section title="현재 상태">
+          <Item text="✅ Gmail 연동 완료 (2026년 5월 22일 인증)" />
+          <Item text="등록된 뉴스레터: 요즘IT, MICE人" />
+        </Section>
+
+        <Section title="토큰 만료 시">
+          <Item text="큐레이션 실행 시 Gmail 소스 수집이 실패합니다." />
+          <Item text="이 페이지에서 [다시 인증] 버튼으로 재연동하세요." />
+        </Section>
+
+        <Section title="뉴스레터 추가 방법">
+          <Item text="뉴스레터 수신 확인 후 Gmail 발신자 이메일 주소를 확인합니다." />
+          <Item text="/admin/rss → 소스 추가 → 타입: Gmail 뉴스레터" />
+          <Item text="발신자 이메일 입력 후 저장합니다." />
+        </Section>
       </HelpPanel>
     </div>
   );

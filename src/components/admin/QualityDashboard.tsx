@@ -4,7 +4,7 @@ import { useState, useMemo, useRef, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Check, Sparkles, X, RefreshCw } from "lucide-react";
 import { NewsItem } from "@/lib/types";
-import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note, Def } from "@/components/admin/HelpPanel";
 
 type EventRow = {
   id: string;
@@ -1892,75 +1892,101 @@ export default function QualityDashboard({ news, events }: Props) {
       {tab === "news" ? <NewsTab news={news} /> : <EventsTab initialEvents={events} />}
 
       <HelpPanel title="정합성 관리 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
-        <p style={{ marginBottom: 12 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           뉴스 DB와 행사 데이터의 품질을 점검하고 관리합니다. 수치가 높을수록 콘텐츠 노출 품질에 직접 영향을 줍니다.
         </p>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📰 뉴스 정합성 탭</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>빠진 필드</strong> — 카테고리 또는 요약(summary_short)이 없는 기사. 뉴스룸 리스트·검색에서 빈 카드로 노출될 수 있습니다. (이미지 없음은 로고 자동 대체되므로 이슈 아님)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>발행 기준 위반</strong> — 자동발행 규칙을 어기고 발행된 경우. <strong style={{ color: "var(--on-surface)" }}>저품질 발행</strong>(품질점수 4점 미만인데 발행) 또는 <strong style={{ color: "var(--on-surface)" }}>적합성 미달 발행</strong>(fit 6점 미만인데 발행 — MICE·관광 실무와 무관한데 자동발행됨) 두 가지를 봅니다. AI 재판단이 아니라 저장된 값과 규칙을 그대로 대조하는 것이라 즉시·무료로 확인됩니다.</li>
-          <li>URL 중복은 <code style={{ fontSize: 11 }}>news_original_url_unique</code> 제약으로 DB 단에서 아예 발생하지 않아 별도 체크가 필요 없습니다.</li>
-        </ul>
+        <Section title="📰 뉴스 정합성 탭">
+          <Def term="빠진 필드">
+            카테고리 또는 요약(summary_short)이 없는 기사입니다. 뉴스룸 리스트·검색에서 빈 카드로 노출될 수 있습니다.
+            (이미지 없음은 로고 자동 대체되므로 이슈 아님)
+          </Def>
+          <Def term="발행 기준 위반">
+            자동발행 규칙을 어기고 발행된 경우입니다. 저품질 발행(품질점수 4점 미만인데 발행) 또는 적합성 미달 발행
+            (fit 6점 미만인데 발행 — MICE·관광 실무와 무관한데 자동발행됨) 두 가지를 봅니다.
+            AI 재판단이 아니라 저장된 값과 규칙을 그대로 대조하는 것이라 즉시·무료로 확인됩니다.
+          </Def>
+          <Item text="URL 중복은 news_original_url_unique 제약으로 DB 단에서 아예 발생하지 않아 별도 체크가 필요 없습니다." />
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📊 사업영역 커버리지</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 중 어디에 해당하는지 비율로 표시합니다.</li>
-          <li>키워드로 본문을 사후 스캔하지 않고, <strong style={{ color: "var(--on-surface)" }}>큐레이션 시 AI가 기사 생성과 동시에 직접 판단</strong>해 저장한 값(business_domains)을 그대로 집계합니다 — 본문에 우연히 스친 단어로 오분류되지 않습니다.</li>
-          <li>건수/퍼센트에 마우스를 올리면 해당 도메인의 기사 목록(최대 8건)을 미리볼 수 있습니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>미분류</strong> — AI가 7개 사업영역 중 어디에도 해당 없다고 판단했거나, 이 분류 기능 도입 이전에 생성된 기사(값 없음)입니다. 비율이 높으면 시스템 프롬프트(회사 컨텍스트)의 사업영역 정의를 점검하세요.</li>
-          <li>하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 &gt; 100% 가능).</li>
-        </ul>
+        <Section title="📊 사업영역 커버리지">
+          <Item text="발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 중 어디에 해당하는지 비율로 표시합니다." />
+          <Def term="분류 방식">
+            키워드로 본문을 사후 스캔하지 않고, 큐레이션 시 AI가 기사 생성과 동시에 직접 판단해 저장한 값(business_domains)을
+            그대로 집계합니다 — 본문에 우연히 스친 단어로 오분류되지 않습니다.
+          </Def>
+          <Item text="건수/퍼센트에 마우스를 올리면 해당 도메인의 기사 목록(최대 8건)을 미리볼 수 있습니다." />
+          <Def term="미분류">
+            AI가 7개 사업영역 중 어디에도 해당 없다고 판단했거나, 이 분류 기능 도입 이전에 생성된 기사(값 없음)입니다.
+            비율이 높으면 시스템 프롬프트(회사 컨텍스트)의 사업영역 정의를 점검하세요.
+          </Def>
+          <Item text="하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 100% 초과 가능)." />
+        </Section>
 
+        <Section title="📅 행사 관리 탭">
+          <Item text="⚠️ 아이콘이 있는 행은 주최기관 없음·이름 짧음(데이터 짤림 의심)·카테고리 없음 중 하나 이상의 이슈가 있습니다." />
+          <Item text="공개/비공개 버튼으로 뉴스룸 행사 섹션 노출 여부를 즉시 전환합니다." />
+          <Def term="인라인 편집">
+            행사명·주최기관·시작일·종료일 셀을 클릭하면 바로 수정할 수 있습니다.
+            Enter 또는 클릭 아웃 시 저장, ESC로 취소. 변경 즉시 DB에 반영됩니다.
+          </Def>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>📅 행사 관리 탭</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>⚠️ 아이콘이 있는 행은 주최기관 없음·이름 짧음(데이터 짤림 의심)·카테고리 없음 중 하나 이상의 이슈가 있습니다.</li>
-          <li>공개/비공개 버튼으로 뉴스룸 행사 섹션 노출 여부를 즉시 전환합니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>인라인 편집</strong> — 행사명·주최기관·시작일·종료일 셀을 클릭하면 바로 수정할 수 있습니다. Enter 또는 클릭 아웃 시 저장, ESC로 취소. 변경 즉시 DB에 반영됩니다.</li>
-        </ul>
+        <Section title="🔬 콘텐츠 품질 감사">
+          <Item text="사업영역 분류가 '맞는 카테고리에 넣었는가'를 본다면, 이건 '글 자체가 원문에 충실한가'를 봅니다 — 서로 다른 검증입니다." />
+          <Item text="원문(original_url)을 다시 가져와 생성된 제목·요약·본문과 대조, 할루시네이션(원문에 없는 내용)·과장·왜곡 여부를 AI로 재판단합니다." />
+          <Item text="이미 감사한 기사는 건너뛰므로 여러 번 실행해도 비용이 중복되지 않고, 시간예산 초과로 다 못 돈 나머지는 다음 실행에서 이어서 처리됩니다." />
+          <Item text="충실도 점수 6점 이하이거나 문제점이 있는 기사만 목록에 표시됩니다. 자동으로 발행취소되지 않으니 직접 확인 후 조치하세요." />
+          <Def term="AI로 수정 제안">
+            원문과 지적된 문제점을 근거로 AI가 고친 버전을 생성해 편집창에 채워줍니다. 자동 저장되지 않으므로 검토·수정 후 저장하세요.
+          </Def>
+          <Def term="직접 수정">제목·요약·본문·시사점을 바로 편집해 저장할 수 있습니다.</Def>
+          <Item text="수정해 저장하면 재감사 대상으로 다시 큐에 들어가고, 걸렸던 문제점은 이후 큐레이션 프롬프트에 '이런 실수 반복하지 말 것'으로 누적 반영됩니다." />
+          <Def term="완료처리">확인했지만 수정하지 않기로 한 경우 목록에서 제외합니다(삭제·발행취소 아님).</Def>
+          <Item text="새 기사가 발행될 때(큐레이션 실행 직후, 또는 '기사 작성'에서 URL로 직접 발행 시) 감사가 자동으로 실행됩니다. '감사 실행' 버튼은 놓친 것을 몰아서 처리하는 보조 수단입니다." />
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🔬 콘텐츠 품질 감사</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>사업영역 분류가 <strong style={{ color: "var(--on-surface)" }}>&ldquo;맞는 카테고리에 넣었는가&rdquo;</strong>를 본다면, 이건 <strong style={{ color: "var(--on-surface)" }}>&ldquo;글 자체가 원문에 충실한가&rdquo;</strong>를 봅니다 — 서로 다른 검증입니다.</li>
-          <li>원문(original_url)을 다시 가져와 생성된 제목·요약·본문과 대조, 할루시네이션(원문에 없는 내용)·과장·왜곡 여부를 AI로 재판단합니다.</li>
-          <li>이미 감사한 기사는 건너뛰므로 여러 번 실행해도 비용이 중복되지 않고, 시간예산 초과로 다 못 돈 나머지는 다음 실행에서 이어서 처리됩니다.</li>
-          <li>충실도 점수 6점 이하이거나 문제점이 있는 기사만 목록에 표시됩니다. 자동으로 발행취소되지 않으니 직접 확인 후 조치하세요.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>AI로 수정 제안</strong> — 원문과 지적된 문제점을 근거로 AI가 고친 버전을 생성해 편집창에 채워줍니다. 자동 저장되지 않으므로 검토·수정 후 저장하세요.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>직접 수정</strong> — 제목·요약·본문·시사점을 바로 편집해 저장할 수 있습니다.</li>
-          <li>수정해 저장하면 재감사 대상으로 다시 큐에 들어가고, 걸렸던 문제점은 이후 큐레이션 프롬프트에 &ldquo;이런 실수 반복하지 말 것&rdquo;으로 누적 반영됩니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>완료처리</strong> — 확인했지만 수정하지 않기로 한 경우 목록에서 제외합니다(삭제·발행취소 아님).</li>
-          <li>새 기사가 발행될 때(큐레이션 실행 직후, 또는 &ldquo;기사 작성&rdquo;에서 URL로 직접 발행 시) 감사가 자동으로 실행됩니다. &ldquo;감사 실행&rdquo; 버튼은 놓친 것을 몰아서 처리하는 보조 수단입니다.</li>
-        </ul>
+        <Section title="🛠 수동 관리">
+          <Def term="행사 데이터 수집">
+            쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤
+            새로고침하면 결과를 확인할 수 있습니다.
+          </Def>
+          <Def term="중복/불량 정리">
+            미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명(총회·웨딩·설명회 등) 삭제, 완전 중복 그룹에서
+            정보량이 낮은 행 삭제를 한번에 수행합니다.
+          </Def>
+          <Note>실행 후 복원 불가.</Note>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>🛠 수동 관리</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>행사 데이터 수집</strong> — 쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤 새로고침하면 결과를 확인할 수 있습니다.</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>중복/불량 정리</strong> — 미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명(총회·웨딩·설명회 등) 삭제, 완전 중복 그룹에서 정보량이 낮은 행 삭제를 한번에 수행합니다. <strong style={{ color: "#ef4444" }}>실행 후 복원 불가.</strong></li>
-          <li style={{ marginTop: 8 }}><strong style={{ color: "var(--on-surface)" }}>AKEI 엑셀 가져오기 (UI)</strong> — 한국전시산업진흥회(AKEI) 엑셀 파일을 업로드해 행사를 추가합니다.
-            <ol style={{ paddingLeft: 16, marginTop: 4, lineHeight: 1.8 }}>
-              <li>AKEI 사이트에서 전시행사 일정 엑셀을 다운로드합니다.</li>
-              <li>수동 관리 패널 &gt; <em>AKEI 엑셀 가져오기</em> 영역에 파일을 업로드합니다.</li>
-              <li><em>미리보기</em>로 신규·보강·중복 건수를 확인합니다.</li>
-              <li><em>DB에 저장</em> 버튼을 눌러 확정합니다.</li>
-            </ol>
-            <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
-              중복 처리 기준: (행사명 + 시작일)이 같으면 <strong>빈 필드만 보강</strong>하고 이미 채워진 데이터는 건드리지 않습니다.
-            </span>
-          </li>
-          <li style={{ marginTop: 8 }}><strong style={{ color: "var(--on-surface)" }}>AKEI Python 스크립트 (직접 크롤링)</strong> — UI 없이 터미널에서 AKEI 사이트를 직접 크롤링해 Supabase에 저장합니다.
-            <ol style={{ paddingLeft: 16, marginTop: 4, lineHeight: 1.8 }}>
-              <li><code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>cd app-src/docs</code> 로 이동합니다.</li>
-              <li>먼저 <strong>미리보기</strong>로 확인: <code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>py exhibition_crawler.py --dry-run</code></li>
-              <li>확인 후 <strong>실제 저장</strong>: <code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>py exhibition_crawler.py</code></li>
-            </ol>
-            <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)", display: "block", marginTop: 4 }}>
-              기본값: 현재 연도 · 이번 달부터 크롤링 (과거 데이터 재수집 불필요).
-              특정 월부터 지정하려면 <code style={{ background: "var(--surface-variant)", padding: "1px 4px", borderRadius: 3 }}>--from-month 3</code> 옵션을 추가하세요.
-              중복 처리 기준은 UI와 동일 (빈 필드 보강, 기존 데이터 보존).
-            </span>
-          </li>
-        </ul>
+          <div style={{ marginTop: 10 }}>
+            <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>
+              AKEI 엑셀 가져오기 (UI)
+            </p>
+            <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--on-surface-variant)", lineHeight: 1.65 }}>
+              한국전시산업진흥회(AKEI) 엑셀 파일을 업로드해 행사를 추가합니다.
+            </p>
+            <Step n={1} text="AKEI 사이트에서 전시행사 일정 엑셀을 다운로드합니다." />
+            <Step n={2} text="수동 관리 패널 > AKEI 엑셀 가져오기 영역에 파일을 업로드합니다." />
+            <Step n={3} text="미리보기로 신규·보강·중복 건수를 확인합니다." />
+            <Step n={4} text="DB에 저장 버튼을 눌러 확정합니다." />
+            <Indent>중복 처리 기준: (행사명 + 시작일)이 같으면 빈 필드만 보강하고 이미 채워진 데이터는 건드리지 않습니다.</Indent>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>
+              AKEI Python 스크립트 (직접 크롤링)
+            </p>
+            <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--on-surface-variant)", lineHeight: 1.65 }}>
+              UI 없이 터미널에서 AKEI 사이트를 직접 크롤링해 Supabase에 저장합니다.
+            </p>
+            <Step n={1} text="cd app-src/docs 로 이동합니다." />
+            <Step n={2} text="먼저 미리보기로 확인: py exhibition_crawler.py --dry-run" />
+            <Step n={3} text="확인 후 실제 저장: py exhibition_crawler.py" />
+            <Indent>
+              기본값: 현재 연도 · 이번 달부터 크롤링 (과거 데이터 재수집 불필요). 특정 월부터 지정하려면
+              --from-month 3 옵션을 추가하세요. 중복 처리 기준은 UI와 동일(빈 필드 보강, 기존 데이터 보존).
+            </Indent>
+          </div>
+        </Section>
       </HelpPanel>
     </div>
   );

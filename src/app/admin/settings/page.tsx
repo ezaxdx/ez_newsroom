@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, X, Sparkles, Save, Loader2, ChevronLeft, ChevronRight, Check, ToggleLeft, ToggleRight } from "lucide-react";
-import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Item, Def } from "@/components/admin/HelpPanel";
 
 type Preset = { label: string; prompt: string };
 
@@ -688,49 +688,45 @@ export default function SettingsPage() {
       )}
 
       <HelpPanel title="큐레이션 설정 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
-        <p style={{ marginBottom: 12 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           AI 큐레이션의 전체 동작 방식을 설정합니다. 저장 후 다음 큐레이션 실행부터 반영됩니다.
         </p>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리 관리</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>추가</strong> — 새 카테고리를 뉴스룸 네비게이션에 즉시 반영</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>삭제</strong> — 네비게이션에서만 숨겨지며, <strong style={{ color: "var(--on-surface)" }}>기사·설정은 DB에 그대로 보존</strong>됩니다. 같은 이름으로 재추가하면 기사와 페르소나·키워드 설정이 모두 복원됩니다.</li>
-        </ul>
+        <Section title="카테고리 관리">
+          <Def term="추가">새 카테고리를 뉴스룸 네비게이션에 즉시 반영합니다.</Def>
+          <Def term="삭제">
+            네비게이션에서만 숨겨지며, 기사·설정은 DB에 그대로 보존됩니다.
+            같은 이름으로 재추가하면 기사와 페르소나·키워드 설정이 모두 복원됩니다.
+          </Def>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>카테고리별 AI 설정</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>타겟 독자</strong> — 카테고리 독자층 설명 (AI 생성 방향에 반영)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>AI 페르소나</strong> — 기사 작성 스타일 프롬프트. 프리셋 버튼으로 빠르게 전환 가능</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>강조 키워드</strong> — 분석 시 우선 언급할 키워드 (순서 조정 가능)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>레벨별 지침</strong> — Beginner / Intermediate / Advanced 별 문체·관점 지침</li>
-        </ul>
+        <Section title="카테고리별 AI 설정">
+          <Def term="타겟 독자">카테고리 독자층 설명입니다(AI 생성 방향에 반영).</Def>
+          <Def term="AI 페르소나">기사 작성 스타일 프롬프트입니다. 프리셋 버튼으로 빠르게 전환할 수 있습니다.</Def>
+          <Def term="강조 키워드">분석 시 우선 언급할 키워드입니다(순서 조정 가능).</Def>
+          <Def term="레벨별 지침">Beginner / Intermediate / Advanced 별 문체·관점 지침입니다.</Def>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>현재 품질 기준 (1~10점)</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 8 }}>
-          <li>
-            <strong style={{ color: "var(--on-surface)" }}>{qualityThresholds.auto_publish}점 이상 → 자동 발행</strong>
-            {" "}— 관련성·완성도가 높은 기사. 큐레이션 직후 뉴스룸에 즉시 게시됩니다.
-          </li>
-          <li>
-            <strong style={{ color: "var(--on-surface)" }}>{qualityThresholds.staging}~{qualityThresholds.auto_publish - 1}점 → 대기열 (스테이징)</strong>
-            {" "}— DB에 저장되지만 비공개 상태. 큐레이션 보드에서 관리자가 직접 발행 여부를 결정합니다.
-          </li>
-          <li>
-            <strong style={{ color: "var(--on-surface)" }}>{qualityThresholds.staging - 1}점 이하 → 자동 폐기</strong>
-            {" "}— 관련성이 낮거나 품질이 미달인 기사. <strong style={{ color: "var(--on-surface)" }}>DB에 저장되지 않고 즉시 삭제</strong>되므로 복원 불가합니다.
-          </li>
-        </ul>
-        <p style={{ fontSize: 11, color: "var(--on-surface-variant)", marginBottom: 16, paddingLeft: 2 }}>
-          ※ 점수는 AI가 수집된 원문의 주제 적합성·정보 밀도·독창성을 종합 평가합니다. 슬라이더로 기준을 조정하면 다음 큐레이션부터 적용됩니다.
-        </p>
+        <Section title="현재 품질 기준 (1~10점)">
+          <Def term={`${qualityThresholds.auto_publish}점 이상 → 자동 발행`}>
+            관련성·완성도가 높은 기사입니다. 큐레이션 직후 뉴스룸에 즉시 게시됩니다.
+          </Def>
+          <Def term={`${qualityThresholds.staging}~${qualityThresholds.auto_publish - 1}점 → 대기열 (스테이징)`}>
+            DB에 저장되지만 비공개 상태입니다. 큐레이션 보드에서 관리자가 직접 발행 여부를 결정합니다.
+          </Def>
+          <Def term={`${qualityThresholds.staging - 1}점 이하 → 자동 폐기`}>
+            관련성이 낮거나 품질이 미달인 기사입니다. DB에 저장되지 않고 즉시 삭제되므로 복원 불가합니다.
+          </Def>
+          <p style={{ fontSize: 11, color: "var(--on-surface-variant)", margin: "4px 0 0" }}>
+            ※ 점수는 AI가 수집된 원문의 주제 적합성·정보 밀도·독창성을 종합 평가합니다. 슬라이더로 기준을 조정하면 다음 큐레이션부터 적용됩니다.
+          </p>
+        </Section>
 
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>자동 큐레이션 스케줄</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li>설정한 요일에 자동으로 AI 큐레이션이 실행됩니다</li>
-          <li>Vercel Hobby 플랜 특성상 실행 시각은 최대 1시간 오차가 있을 수 있습니다</li>
-          <li>스케줄 OFF 시에도 큐레이션 보드에서 수동 실행 가능합니다</li>
-        </ul>
+        <Section title="자동 큐레이션 스케줄">
+          <Item text="설정한 요일에 자동으로 AI 큐레이션이 실행됩니다." />
+          <Item text="Vercel Hobby 플랜 특성상 실행 시각은 최대 1시간 오차가 있을 수 있습니다." />
+          <Item text="스케줄 OFF 시에도 큐레이션 보드에서 수동 실행할 수 있습니다." />
+        </Section>
       </HelpPanel>
     </div>
   );

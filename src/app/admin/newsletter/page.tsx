@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
-import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
@@ -2467,49 +2467,6 @@ export default function NewsletterPage() {
       <style>{`
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
-    </div>
-  );
-}
-
-// ── 매뉴얼 UI 컴포넌트 ──────────────────────────────────
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div style={{ background: "var(--surface-container)", borderRadius: 10, padding: "18px 20px", marginBottom: 14 }}>
-      <p style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "var(--on-surface)" }}>{title}</p>
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{children}</div>
-    </div>
-  );
-}
-function Step({ n, text }: { n: number; text: string }) {
-  return (
-    <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-      <span style={{ minWidth: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff",
-        fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-        {n}
-      </span>
-      <span style={{ fontSize: 13, color: "var(--on-surface)", paddingTop: 2 }}>{text}</span>
-    </div>
-  );
-}
-function Item({ text }: { text: string }) {
-  return (
-    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-      <span style={{ color: "var(--primary)", fontWeight: 700, flexShrink: 0, fontSize: 13 }}>·</span>
-      <span style={{ fontSize: 13, color: "var(--on-surface)" }}>{text}</span>
-    </div>
-  );
-}
-function Indent({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ marginLeft: 16, fontSize: 13, color: "var(--on-surface-variant)" }}>{children}</div>
-  );
-}
-function Note({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ marginTop: 4, padding: "8px 12px", borderRadius: 6,
-      background: "color-mix(in srgb, var(--primary) 8%, transparent)",
-      fontSize: 12, color: "var(--on-surface-variant)", borderLeft: "3px solid var(--primary)" }}>
-      💡 {children}
     </div>
   );
 }

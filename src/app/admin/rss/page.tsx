@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Plus, Trash2, ToggleLeft, ToggleRight, Loader2, Rss, Link, Database, Mail, Search, Pencil, Check, X as XIcon } from "lucide-react";
-import HelpPanel, { HelpTrigger } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Item, Def } from "@/components/admin/HelpPanel";
 import { RssSource, ApiConfig, GmailConfig } from "@/lib/types";
 
 const EMPTY_API_CONFIG: ApiConfig = {
@@ -625,27 +625,27 @@ export default function RssPage() {
       </div>
 
       <HelpPanel title="RSS 소스 매니저 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
-        <p style={{ marginBottom: 12 }}>
+        <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
           콘텐츠 수집 소스를 등록·관리합니다. 등록된 소스는 큐레이션 실행 시 자동으로 수집됩니다.
         </p>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>소스 타입</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li><strong style={{ color: "var(--on-surface)" }}>RSS 피드</strong> — URL 등록 시 최신 기사 최대 10개 자동 수집 (언론사 전체 피드는 키워드 필터 권장)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>직접 URL</strong> — 특정 기사 1건만 분석·등록</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>네이버뉴스 검색</strong> — 검색어(예: MICE) 매칭 기사 자동 수집, IP 차단 없는 정식 API</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>Gmail 뉴스레터</strong> — 발신자 이메일 기반 자동 파싱 (고급)</li>
-          <li><strong style={{ color: "var(--on-surface)" }}>공공 API</strong> — 한국관광공사 등 공공데이터 연동 (고급)</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>중요도</p>
-        <ul style={{ paddingLeft: 16, marginBottom: 16 }}>
-          <li>중요/보통/낮음 — 높을수록 품질 점수에 가산</li>
-          <li>공고·홍보성 소스는 낮음, 분석·인사이트 소스는 중요로 설정 권장</li>
-        </ul>
-        <p style={{ fontWeight: 700, fontSize: 12, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6, color: "var(--on-surface)" }}>활성/비활성</p>
-        <ul style={{ paddingLeft: 16 }}>
-          <li>토글 OFF 시 큐레이션에서 해당 소스 건너뜀</li>
-          <li>소스를 삭제하지 않고 임시 중단할 때 활용</li>
-        </ul>
+
+        <Section title="소스 타입">
+          <Def term="RSS 피드">URL 등록 시 최신 기사 최대 10개를 자동 수집합니다(언론사 전체 피드는 키워드 필터 권장).</Def>
+          <Def term="직접 URL">특정 기사 1건만 분석·등록합니다.</Def>
+          <Def term="네이버뉴스 검색">검색어(예: MICE) 매칭 기사를 자동 수집합니다. IP 차단 없는 정식 API입니다.</Def>
+          <Def term="Gmail 뉴스레터">발신자 이메일 기반으로 자동 파싱합니다(고급).</Def>
+          <Def term="공공 API">한국관광공사 등 공공데이터와 연동합니다(고급).</Def>
+        </Section>
+
+        <Section title="중요도">
+          <Item text="중요/보통/낮음 — 높을수록 품질 점수에 가산됩니다." />
+          <Item text="공고·홍보성 소스는 낮음, 분석·인사이트 소스는 중요로 설정하는 것을 권장합니다." />
+        </Section>
+
+        <Section title="활성/비활성">
+          <Item text="토글 OFF 시 큐레이션에서 해당 소스를 건너뜁니다." />
+          <Item text="소스를 삭제하지 않고 임시 중단할 때 활용하세요." />
+        </Section>
       </HelpPanel>
     </div>
   );
