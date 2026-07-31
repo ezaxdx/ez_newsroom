@@ -251,6 +251,8 @@ create table if not exists public.newsroom_popups (
   random_page  boolean default false not null,       -- true면 pages 중 한 곳에만 랜덤 노출(숨은그림찾기용)
   hunt_code    text,                                 -- 값이 있으면 '찾기 이벤트' 대상 — 클릭 시 링크 대신 이 코드를 보여주고 사라짐
   size_px      integer,                               -- 폭(px). null이면 표시 방식별 기본값(고정 150 / 팝업 420) 사용
+  pos_x        numeric,                                -- position='custom'일 때만 사용 — 화면 미리보기를 클릭해 찍은 위치(%)
+  pos_y        numeric,
   created_at  timestamptz default now()
 );
 create index if not exists idx_newsroom_popups_period on public.newsroom_popups (start_date, end_date);
@@ -260,6 +262,8 @@ alter table public.newsroom_popups add column if not exists pages jsonb default 
 alter table public.newsroom_popups add column if not exists random_page boolean default false not null;
 alter table public.newsroom_popups add column if not exists hunt_code text;
 alter table public.newsroom_popups add column if not exists size_px integer;
+alter table public.newsroom_popups add column if not exists pos_x numeric;
+alter table public.newsroom_popups add column if not exists pos_y numeric;
 
 -- ── newsroom_event_settings ───────────────────────────────────────────
 -- 숨은 그림(고양이) 찾기 이벤트 전역 설정. 단일 행으로만 사용

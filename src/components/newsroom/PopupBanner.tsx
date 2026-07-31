@@ -14,6 +14,8 @@ export type PopupData = {
   random_page: boolean;  // true면 pages 중 한 곳에만 랜덤 노출
   hunt_code?: string | null; // 값이 있으면 찾기 이벤트 대상 — 클릭 시 링크 대신 코드를 알려주고 사라짐
   size_px?: number | null;   // 없으면 표시 방식별 기본값(고정 150 / 팝업 420)
+  pos_x?: number | null;     // position="custom"일 때만 사용 — 관리자가 미리보기를 클릭해 찍은 위치(%)
+  pos_y?: number | null;
 };
 
 const DEFAULT_SIZE = { floating: 150, modal: 420 } as const;
@@ -88,6 +90,33 @@ export default function PopupBanner({
 
   if (!open) return null;
 
+  // position("top/middle/bottom-left/center/right" | "random" | "custom") → 실제 배치 CSS.
+  // 모달·고정형 둘 다 같은 좌표계를 쓰므로 공유.
+  function resolvePlace(margin: number, topOffset: number): React.CSSProperties {
+    if (popup.position === "random") {
+      // 랜덤 위치가 아직 안 정해졌으면(첫 렌더) 화면 밖으로 — 왼쪽 위에 잠깐 튀는 것 방지
+      if (!randomPos) return { top: "-9999px", left: "-9999px" };
+      return { top: randomPos.top, left: randomPos.left };
+    }
+    if (popup.position === "custom") {
+      // 관리자가 미리보기를 클릭해 찍은 지점 — 그 점이 팝업 중심이 되도록 이동
+      const x = popup.pos_x ?? 50;
+      const y = popup.pos_y ?? 50;
+      return { top: `${y}%`, left: `${x}%`, transform: "translate(-50%, -50%)" };
+    }
+    const [row = "bottom", col = "right"] = popup.position.split("-");
+    const translate = [
+      row === "middle" ? "translateY(-50%)" : "",
+      col === "center" ? "translateX(-50%)" : "",
+    ].filter(Boolean).join(" ");
+    return {
+      // 상단은 헤더에 가리지 않도록 아래로 내려서 배치
+      ...(row === "top" ? { top: topOffset } : row === "middle" ? { top: "50%" } : { bottom: margin }),
+      ...(col === "left" ? { left: margin } : col === "center" ? { left: "50%" } : { right: margin }),
+      ...(translate ? { transform: translate } : {}),
+    };
+  }
+
   function close() {
     setOpen(false);
   }
@@ -129,25 +158,9 @@ export default function PopupBanner({
 
   // ── 고정형: 화면에 상시 노출, 닫기 없음 ──
   if (isFloating) {
-    // position은 "세로-가로" 조합(top/middle/bottom × left/center/right) 또는 "random"
-    let place: React.CSSProperties;
-    if (popup.position === "random") {
-      // 랜덤 위치가 아직 안 정해졌으면(첫 렌더) 그리지 않음 — 왼쪽 위에 잠깐 튀는 것 방지
-      if (!randomPos) return null;
-      place = { top: randomPos.top, left: randomPos.left };
-    } else {
-      const [row = "bottom", col = "right"] = popup.position.split("-");
-      const translate = [
-        row === "middle" ? "translateY(-50%)" : "",
-        col === "center" ? "translateX(-50%)" : "",
-      ].filter(Boolean).join(" ");
-      place = {
-        // 상단은 헤더에 가리지 않도록 아래로 내려서 배치
-        ...(row === "top" ? { top: 110 } : row === "middle" ? { top: "50%" } : { bottom: 20 }),
-        ...(col === "left" ? { left: 20 } : col === "center" ? { left: "50%" } : { right: 20 }),
-        ...(translate ? { transform: translate } : {}),
-      };
-    }
+    // 랜덤 위치가 아직 안 정해졌으면(첫 렌더) 그리지 않음 — 왼쪽 위에 잠깐 튀는 것 방지
+    if (popup.position === "random" && !randomPos) return null;
+    const place = resolvePlace(20, 110);
     const inner = popup.image_url ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
@@ -191,25 +204,26 @@ export default function PopupBanner({
     );
   }
 
-  // ── 모달형: 가운데 팝업, 닫기·오늘 하루 보지 않기 제공 ──
+  // ── 모달형: 배경은 어둡게 깔리고, 대화상자는 선택한 위치에 노출. 닫기·오늘 하루 보지 않기 제공 ──
+  // 랜덤 위치가 아직 안 정해졌으면(첫 렌더) 그리지 않음 — 왼쪽 위에 잠깐 튀는 것 방지
+  if (popup.position === "random" && !randomPos) return null;
+  const modalPlace = resolvePlace(20, 110);
   return (
     <div
       onClick={close}
       style={{
         position: "fixed", inset: 0, zIndex: 1000,
         background: "rgba(0,0,0,0.5)",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        padding: 20,
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          position: "fixed", ...modalPlace,
           background: "#fff",
           borderRadius: 12,
           overflow: "hidden",
-          width: "100%",
-          maxWidth: sizePx,
+          width: `min(${sizePx}px, calc(100vw - 40px))`,
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 12px 40px rgba(0,0,0,0.25)",

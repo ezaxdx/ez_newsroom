@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const SELECT = "id, title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, size_px, created_at";
+const SELECT = "id, title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y, created_at";
 
 const VALID_PAGES = new Set(["home", "category", "events", "archive"]);
 function normalizePages(pages: unknown): string[] {
@@ -10,13 +10,18 @@ function normalizePages(pages: unknown): string[] {
   return list.length ? list : ["home"];
 }
 
-// 3×3 위치 + 랜덤 — 그 외 값이 들어오면 기본값으로 떨어뜨림
+// 3×3 프리셋 + 랜덤 + 미리보기 클릭으로 찍은 자유 위치(custom) — 그 외 값이 들어오면 기본값으로 떨어뜨림
 const VALID_POSITIONS = new Set([
   "top-left", "top-center", "top-right",
   "middle-left", "middle-center", "middle-right",
   "bottom-left", "bottom-center", "bottom-right",
-  "random",
+  "random", "custom",
 ]);
+// 0~100 범위의 %만 허용 — 화면 밖을 가리키는 값 방지
+function normalizePct(v: unknown): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+}
 
 // 표시 방식별 사이즈(px) 허용 범위 — 이 범위 밖 값은 무시하고 null(=기본값) 처리
 const SIZE_RANGE: Record<string, { min: number; max: number }> = {
@@ -49,7 +54,7 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   const body = await req.json();
-  const { title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, size_px } = body;
+  const { title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y } = body;
   if (!title?.trim() || !start_date || !end_date) {
     return NextResponse.json({ error: "제목, 게시기간은 필수입니다." }, { status: 400 });
   }
@@ -58,6 +63,7 @@ export async function POST(req: NextRequest) {
   }
 
   const resolvedType = display_type === "floating" ? "floating" : "modal";
+  const resolvedPosition = VALID_POSITIONS.has(position) ? position : "bottom-right";
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("newsroom_popups")
@@ -70,11 +76,13 @@ export async function POST(req: NextRequest) {
       content: content?.trim() || null,
       is_active: is_active ?? true,
       display_type: resolvedType,
-      position: VALID_POSITIONS.has(position) ? position : "bottom-right",
+      position: resolvedPosition,
       pages: normalizePages(pages),
       random_page: !!random_page,
       hunt_code: hunt_code?.trim() || null,
       size_px: normalizeSize(resolvedType, size_px),
+      pos_x: resolvedPosition === "custom" ? normalizePct(pos_x) : null,
+      pos_y: resolvedPosition === "custom" ? normalizePct(pos_y) : null,
     })
     .select(SELECT)
     .single();
@@ -91,7 +99,7 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const ALLOWED = ["title", "start_date", "end_date", "image_url", "link_url", "content", "is_active", "display_type", "position", "pages", "random_page", "hunt_code", "size_px"];
+  const ALLOWED = ["title", "start_date", "end_date", "image_url", "link_url", "content", "is_active", "display_type", "position", "pages", "random_page", "hunt_code", "size_px", "pos_x", "pos_y"];
   const updates: Record<string, unknown> = {};
   for (const key of ALLOWED) {
     if (key in fields) updates[key] = fields[key];
@@ -101,6 +109,14 @@ export async function PATCH(req: NextRequest) {
   if ("size_px" in updates) {
     const type = typeof updates.display_type === "string" ? updates.display_type : (fields.display_type ?? "modal");
     updates.size_px = normalizeSize(type, updates.size_px);
+  }
+  if ("position" in updates) {
+    updates.position = VALID_POSITIONS.has(updates.position as string) ? updates.position : "bottom-right";
+  }
+  if ("pos_x" in updates || "pos_y" in updates) {
+    const isCustom = ("position" in updates ? updates.position : undefined) === "custom";
+    updates.pos_x = isCustom ? normalizePct(updates.pos_x) : null;
+    updates.pos_y = isCustom ? normalizePct(updates.pos_y) : null;
   }
 
   const supabase = createAdminClient();

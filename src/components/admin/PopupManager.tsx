@@ -21,6 +21,8 @@ type Popup = {
   random_page: boolean;
   hunt_code: string | null;
   size_px: number | null;
+  pos_x: number | null;
+  pos_y: number | null;
   created_at: string;
 };
 
@@ -38,6 +40,8 @@ type FormState = {
   random_page: boolean;
   hunt_code: string;
   size_px: number;
+  pos_x: number;
+  pos_y: number;
 };
 
 // 표시 방식별 사이즈 슬라이더 범위/기본값 — API의 SIZE_RANGE와 동일하게 유지
@@ -52,6 +56,14 @@ const EMPTY_FORM: FormState = {
   display_type: "floating", position: "bottom-right",
   pages: ["home"], random_page: false, hunt_code: "",
   size_px: SIZE_RANGE.floating.default,
+  pos_x: 90, pos_y: 90,
+};
+
+// 프리셋 위치("top-left" 등)를 미리보기 화면 안 대략적인 %로 변환 — 마커 표시용
+const PRESET_PCT: Record<string, { x: number; y: number }> = {
+  "top-left": { x: 8, y: 12 }, "top-center": { x: 50, y: 12 }, "top-right": { x: 92, y: 12 },
+  "middle-left": { x: 8, y: 50 }, "middle-center": { x: 50, y: 50 }, "middle-right": { x: 92, y: 50 },
+  "bottom-left": { x: 8, y: 88 }, "bottom-center": { x: 50, y: 88 }, "bottom-right": { x: 92, y: 88 },
 };
 
 const todayKST = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -62,8 +74,29 @@ const COL_KO: Record<string, string> = { left: "왼쪽", center: "가운데", ri
 function pageLabel(key: string) {
   return POPUP_PAGES.find((p) => p.key === key)?.label ?? key;
 }
+// 실제 노출 로직(PopupBanner)과 동일한 위치 계산 — 저장 전 미리보기용
+function resolvePreviewPlace(position: string, posX: number, posY: number, margin: number, topOffset: number): React.CSSProperties {
+  if (position === "custom") {
+    return { top: `${posY}%`, left: `${posX}%`, transform: "translate(-50%, -50%)" };
+  }
+  if (position === "random") {
+    return { top: "50%", left: "50%", transform: "translate(-50%, -50%)" };
+  }
+  const [row = "bottom", col = "right"] = position.split("-");
+  const translate = [
+    row === "middle" ? "translateY(-50%)" : "",
+    col === "center" ? "translateX(-50%)" : "",
+  ].filter(Boolean).join(" ");
+  return {
+    ...(row === "top" ? { top: topOffset } : row === "middle" ? { top: "50%" } : { bottom: margin }),
+    ...(col === "left" ? { left: margin } : col === "center" ? { left: "50%" } : { right: margin }),
+    ...(translate ? { transform: translate } : {}),
+  };
+}
+
 function positionLabel(pos: string) {
   if (pos === "random") return "랜덤";
+  if (pos === "custom") return "직접 지정";
   const [row, col] = pos.split("-");
   return `${COL_KO[col] ?? ""} ${ROW_KO[row] ?? ""}`.trim();
 }
@@ -77,6 +110,7 @@ export default function PopupManager() {
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const fetchPopups = useCallback(async () => {
     setLoading(true);
@@ -120,6 +154,8 @@ export default function PopupManager() {
       random_page: p.random_page ?? false,
       hunt_code: p.hunt_code ?? "",
       size_px: p.size_px ?? SIZE_RANGE[p.display_type ?? "modal"]?.default ?? 420,
+      pos_x: p.pos_x ?? 90,
+      pos_y: p.pos_y ?? 90,
     });
     setError(null);
     setShowModal(true);
@@ -237,6 +273,10 @@ export default function PopupManager() {
               </p>
               <p style={{ margin: "0 0 10px" }}>
                 <b>링크 URL</b> — 입력하면 클릭 시 새 탭으로 이동합니다(구글폼 등). 비워두면 클릭해도 이동하지 않습니다.
+              </p>
+              <p style={{ margin: "0 0 10px" }}>
+                <b>노출 위치</b> — 미니 화면 미리보기를 원하는 자리에 클릭하면 그 지점에 뜹니다.
+                랜덤 위치를 켜면 클릭한 지점은 무시되고 접속할 때마다 다른 자리에 나타납니다.
               </p>
               <p style={{ margin: 0 }}>
                 <b>노출 페이지</b> — 여러 곳을 선택하면 기본적으로 모든 선택 페이지에 노출됩니다.
@@ -389,6 +429,10 @@ export default function PopupManager() {
                         ...f, display_type: key,
                         // 다른 방식으로 바꾸면 이전 방식 기준 크기가 안 맞을 수 있어 그 방식의 기본값으로 리셋
                         size_px: SIZE_RANGE[key].default,
+                        // 팝업은 기본이 정가운데, 고정은 기본이 오른쪽 아래 — 방식 바꿀 때 위치도 그에 맞게
+                        position: f.position === "bottom-right" || f.position === "middle-center"
+                          ? (key === "modal" ? "middle-center" : "bottom-right")
+                          : f.position,
                       }))}
                       style={{
                         flex: 1, padding: "8px 10px", borderRadius: 6, cursor: "pointer", textAlign: "left",
@@ -472,47 +516,70 @@ export default function PopupManager() {
               )}
             </div>
 
-            {form.display_type === "floating" && (
-              <div style={{ marginBottom: 10 }}>
-                <label style={labelStyle}>노출 위치</label>
-                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-                  {/* 9칸 위치 선택 — 화면을 3×3으로 나눈 실제 배치와 동일 */}
-                  <div style={{
-                    display: "grid", gridTemplateColumns: "repeat(3, 34px)", gridTemplateRows: "repeat(3, 26px)",
-                    gap: 3, opacity: form.position === "random" ? 0.35 : 1,
-                  }}>
-                    {["top", "middle", "bottom"].map((row) =>
-                      ["left", "center", "right"].map((col) => {
-                        const key = `${row}-${col}`;
-                        const on = form.position === key;
-                        return (
-                          <button key={key} type="button" title={key}
-                            onClick={() => setForm((f) => ({ ...f, position: key }))}
-                            style={{
-                              borderRadius: 4, cursor: "pointer",
-                              border: `1px solid ${on ? "var(--primary)" : "var(--surface-container-highest)"}`,
-                              background: on ? "var(--primary)" : "var(--surface-container-low)",
-                            }} />
-                        );
-                      })
+            {(() => {
+              const marker = form.position === "custom"
+                ? { x: form.pos_x, y: form.pos_y }
+                : PRESET_PCT[form.position] ?? PRESET_PCT["bottom-right"];
+
+              function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
+                const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
+                setForm((f) => ({
+                  ...f,
+                  position: "custom",
+                  pos_x: Math.min(96, Math.max(4, x)),
+                  pos_y: Math.min(96, Math.max(4, y)),
+                }));
+              }
+
+              return (
+                <div style={{ marginBottom: 10 }}>
+                  <label style={labelStyle}>
+                    노출 위치 <span style={{ fontWeight: 400 }}>(화면을 클릭해서 위치를 찍으세요)</span>
+                  </label>
+                  <div
+                    onClick={form.position === "random" ? undefined : handlePreviewClick}
+                    style={{
+                      position: "relative", width: "100%", maxWidth: 320, aspectRatio: "16 / 10",
+                      borderRadius: 8, overflow: "hidden",
+                      border: "1px solid var(--surface-container-highest)",
+                      background: "var(--surface)",
+                      cursor: form.position === "random" ? "not-allowed" : "crosshair",
+                      opacity: form.position === "random" ? 0.4 : 1,
+                    }}
+                  >
+                    {/* 실제 화면을 흉내낸 미니 목업 — 상단바 + 히어로 2단 + 사이드 컬럼 */}
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "14%", background: "var(--on-surface)" }} />
+                    <div style={{ position: "absolute", top: "20%", left: "4%", width: "58%", height: "34%", background: "var(--surface-container-high)", borderRadius: 3 }} />
+                    <div style={{ position: "absolute", top: "56%", left: "4%", width: "58%", height: "34%", background: "var(--surface-container-high)", borderRadius: 3 }} />
+                    <div style={{ position: "absolute", top: "20%", right: "4%", width: "30%", height: "70%", background: "var(--surface-container-low)", borderRadius: 3, border: "1px solid var(--surface-container-highest)" }} />
+
+                    {form.position !== "random" && (
+                      <div style={{
+                        position: "absolute", top: `${marker.y}%`, left: `${marker.x}%`,
+                        transform: "translate(-50%, -50%)",
+                        width: 18, height: 18, borderRadius: "50%",
+                        background: "var(--primary)", border: "2px solid #fff",
+                        boxShadow: "0 1px 4px rgba(0,0,0,0.4)", pointerEvents: "none",
+                      }} />
                     )}
                   </div>
-                  <div style={{ flex: 1 }}>
-                    <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer" }}>
-                      <input type="checkbox" checked={form.position === "random"}
-                        onChange={(e) => setForm((f) => ({ ...f, position: e.target.checked ? "random" : "bottom-right" }))}
-                        style={{ width: 14, height: 14, cursor: "pointer", marginTop: 2 }} />
-                      <span>
-                        랜덤 위치
-                        <span style={{ display: "block", fontSize: 11, color: "var(--on-surface-variant)" }}>
-                          접속할 때마다 다른 자리에 나타남 (숨은 그림 찾기 이벤트용)
-                        </span>
+
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer", marginTop: 8 }}>
+                    <input type="checkbox" checked={form.position === "random"}
+                      onChange={(e) => setForm((f) => ({ ...f, position: e.target.checked ? "random" : "bottom-right" }))}
+                      style={{ width: 14, height: 14, cursor: "pointer", marginTop: 2 }} />
+                    <span>
+                      랜덤 위치
+                      <span style={{ display: "block", fontSize: 11, color: "var(--on-surface-variant)" }}>
+                        접속할 때마다 다른 자리에 나타남 (숨은 그림 찾기 이벤트용)
                       </span>
-                    </label>
-                  </div>
+                    </span>
+                  </label>
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
@@ -593,6 +660,14 @@ export default function PopupManager() {
             {error && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#dc2626" }}>{error}</p>}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button onClick={() => setPreviewOpen(true)} disabled={!form.image_url && !form.content.trim()}
+                style={{
+                  padding: "7px 16px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                  background: "transparent", color: "var(--on-surface)", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                  opacity: !form.image_url && !form.content.trim() ? 0.4 : 1, marginRight: "auto",
+                }}>
+                미리보기
+              </button>
               <button onClick={() => setShowModal(false)}
                 style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}>
                 취소
@@ -605,6 +680,76 @@ export default function PopupManager() {
           </div>
         </div>
       )}
+
+      {/* 저장 전 실제 크기·위치 미리보기 */}
+      {previewOpen && (() => {
+        const isFloatingPreview = form.display_type === "floating";
+        const place = resolvePreviewPlace(form.position, form.pos_x, form.pos_y, 20, 110);
+        const media = form.image_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={form.image_url} alt="미리보기" style={{ display: "block", width: "100%", height: "auto" }} />
+        ) : isFloatingPreview ? (
+          <span style={{
+            display: "block", padding: "12px 18px", fontSize: "0.85rem", fontWeight: 700,
+            color: "#fff", background: "var(--primary)", borderRadius: 999, whiteSpace: "nowrap",
+          }}>
+            {form.content}
+          </span>
+        ) : (
+          <p style={{ margin: 0, padding: "18px 20px", fontSize: "0.9rem", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "#fff" }}>
+            {form.content}
+          </p>
+        );
+
+        return (
+          <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.6)" }}>
+            <div style={{
+              position: "absolute", top: 16, left: 16, zIndex: 2001,
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "8px 14px", borderRadius: 8, background: "#fff",
+            }}>
+              <span style={{ fontSize: 13, fontWeight: 700 }}>미리보기</span>
+              {form.position === "random" && (
+                <span style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
+                  랜덤 위치는 매번 다른 자리에 나타나므로 가운데에 예시로 표시했습니다
+                </span>
+              )}
+              <button onClick={() => setPreviewOpen(false)}
+                style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                닫기
+              </button>
+            </div>
+
+            {isFloatingPreview ? (
+              <div style={{
+                position: "fixed", ...place, zIndex: 2000,
+                width: `min(${form.size_px}px, 80vw)`,
+                filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
+              }}>
+                {media}
+              </div>
+            ) : (
+              <div style={{
+                position: "fixed", ...place, zIndex: 2000,
+                background: "#fff", borderRadius: 12, overflow: "hidden",
+                width: `min(${form.size_px}px, calc(100vw - 40px))`,
+                maxHeight: "90vh", overflowY: "auto",
+                boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+              }}>
+                {media}
+                <div style={{
+                  display: "flex", alignItems: "center", justifyContent: "space-between",
+                  padding: "10px 14px", borderTop: "1px solid var(--surface-container-high)",
+                  background: "var(--surface-container-low)", fontSize: "0.78rem", color: "var(--on-surface-variant)",
+                }}>
+                  <span>오늘 하루 보지 않기</span>
+                  <span>닫기</span>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
 
     {/* 숨은 그림 찾기 이벤트 — 찾기 코드가 붙은 팝업들을 묶어서 관리 */}
