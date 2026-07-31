@@ -1896,7 +1896,7 @@ export default function QualityDashboard({ news, events }: Props) {
           뉴스 DB와 행사 데이터의 품질을 점검하고 관리합니다. 수치가 높을수록 콘텐츠 노출 품질에 직접 영향을 줍니다.
         </p>
 
-        <Section title="📰 뉴스 정합성 탭">
+        <Section n={1} title="📰 뉴스 정합성 탭">
           <Def term="빠진 필드">
             카테고리 또는 요약(summary_short)이 없는 기사입니다. 뉴스룸 리스트·검색에서 빈 카드로 노출될 수 있습니다.
             (이미지 없음은 로고 자동 대체되므로 이슈 아님)
@@ -1909,7 +1909,7 @@ export default function QualityDashboard({ news, events }: Props) {
           <Item text="URL 중복은 news_original_url_unique 제약으로 DB 단에서 아예 발생하지 않아 별도 체크가 필요 없습니다." />
         </Section>
 
-        <Section title="📊 사업영역 커버리지">
+        <Section n={2} title="📊 사업영역 커버리지">
           <Item text="발행 기사가 EZPMP 7개 사업영역(스마트립·글로컬 관광·AI 관광·MICE Tech·ATT·MEeT·AXDX) 중 어디에 해당하는지 비율로 표시합니다." />
           <Def term="분류 방식">
             키워드로 본문을 사후 스캔하지 않고, 큐레이션 시 AI가 기사 생성과 동시에 직접 판단해 저장한 값(business_domains)을
@@ -1923,7 +1923,7 @@ export default function QualityDashboard({ news, events }: Props) {
           <Item text="하나의 기사가 여러 도메인에 중복 카운트될 수 있습니다 (합계 100% 초과 가능)." />
         </Section>
 
-        <Section title="📅 행사 관리 탭">
+        <Section n={3} title="📅 행사 관리 탭">
           <Item text="⚠️ 아이콘이 있는 행은 주최기관 없음·이름 짧음(데이터 짤림 의심)·카테고리 없음 중 하나 이상의 이슈가 있습니다." />
           <Item text="공개/비공개 버튼으로 뉴스룸 행사 섹션 노출 여부를 즉시 전환합니다." />
           <Def term="인라인 편집">
@@ -1932,7 +1932,7 @@ export default function QualityDashboard({ news, events }: Props) {
           </Def>
         </Section>
 
-        <Section title="🔬 콘텐츠 품질 감사">
+        <Section n={4} title="🔬 콘텐츠 품질 감사">
           <Item text="사업영역 분류가 '맞는 카테고리에 넣었는가'를 본다면, 이건 '글 자체가 원문에 충실한가'를 봅니다 — 서로 다른 검증입니다." />
           <Item text="원문(original_url)을 다시 가져와 생성된 제목·요약·본문과 대조, 할루시네이션(원문에 없는 내용)·과장·왜곡 여부를 AI로 재판단합니다." />
           <Item text="이미 감사한 기사는 건너뛰므로 여러 번 실행해도 비용이 중복되지 않고, 시간예산 초과로 다 못 돈 나머지는 다음 실행에서 이어서 처리됩니다." />
@@ -1946,7 +1946,7 @@ export default function QualityDashboard({ news, events }: Props) {
           <Item text="새 기사가 발행될 때(큐레이션 실행 직후, 또는 '기사 작성'에서 URL로 직접 발행 시) 감사가 자동으로 실행됩니다. '감사 실행' 버튼은 놓친 것을 몰아서 처리하는 보조 수단입니다." />
         </Section>
 
-        <Section title="🛠 수동 관리">
+        <Section n={5} title="🛠 수동 관리">
           <Def term="행사 데이터 수집">
             쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤
             새로고침하면 결과를 확인할 수 있습니다.

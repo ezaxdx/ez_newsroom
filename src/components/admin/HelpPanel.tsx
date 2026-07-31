@@ -162,11 +162,13 @@ export default function HelpPanel({ title, children, open, onOpenChange }: HelpP
 // 밀도 높은 "굵은 라벨 — 긴 설명문" 문단 대신, 큰 섹션 제목 아래 항목별로
 // 굵은 소제목(한 줄) + 가는 본문(그 아래)을 분리해 가독성을 맞추는 용도.
 
-/** 카드 하나 = 매뉴얼의 한 단계/섹션. 제목은 굵게 크게, 내용은 세로로 쌓임 */
-export function Section({ title, children }: { title: string; children: React.ReactNode }) {
+/** 카드 하나 = 매뉴얼의 한 단계/섹션. 제목은 굵게 크게, 내용은 세로로 쌓임. n을 주면 "n. 제목"으로 번호가 붙음 */
+export function Section({ title, n, children }: { title: string; n?: number; children: React.ReactNode }) {
   return (
     <div style={{ background: "var(--surface-container)", borderRadius: 10, padding: "18px 20px", marginBottom: 14 }}>
-      <p style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "var(--on-surface)" }}>{title}</p>
+      <p style={{ margin: "0 0 12px", fontSize: 15, fontWeight: 700, color: "var(--on-surface)" }}>
+        {n != null ? `${n}. ${title}` : title}
+      </p>
       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>{children}</div>
     </div>
   );

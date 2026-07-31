@@ -547,19 +547,19 @@ export default function NewArticlePage() {
           AI 자동 생성 또는 직접 작성으로 기사를 개별 등록합니다.
         </p>
 
-        <Section title="AI 생성 탭">
+        <Section n={1} title="AI 생성 탭">
           <Item text="기사 URL 입력 시 Gemini가 제목·요약·분석·시사점을 자동 생성합니다." />
           <Item text="생성 후 내용을 직접 수정할 수 있습니다." />
           <Item text="카테고리·레벨 선택 후 대기 저장 또는 즉시 발행할 수 있습니다." />
         </Section>
 
-        <Section title="직접 작성 탭">
+        <Section n={2} title="직접 작성 탭">
           <Item text="제목, 요약(120자 이내), 본문, 시사점을 수동 입력합니다." />
           <Item text="이미지 URL, 원문 URL은 선택 입력입니다." />
           <Item text="대기 상태로 저장하거나 즉시 발행을 선택할 수 있습니다." />
         </Section>
 
-        <Section title="레벨 기준">
+        <Section n={3} title="레벨 기준">
           <Def term="Beginner">업계 입문자 대상, 배경지식 없이 이해 가능합니다.</Def>
           <Def term="Intermediate">실무 담당자 대상, 기본 지식 보유자를 가정합니다.</Def>
           <Def term="Advanced">전략·기획자 대상, 심층 분석입니다.</Def>

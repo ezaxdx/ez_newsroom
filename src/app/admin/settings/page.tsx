@@ -692,7 +692,7 @@ export default function SettingsPage() {
           AI 큐레이션의 전체 동작 방식을 설정합니다. 저장 후 다음 큐레이션 실행부터 반영됩니다.
         </p>
 
-        <Section title="카테고리 관리">
+        <Section n={1} title="카테고리 관리">
           <Def term="추가">새 카테고리를 뉴스룸 네비게이션에 즉시 반영합니다.</Def>
           <Def term="삭제">
             네비게이션에서만 숨겨지며, 기사·설정은 DB에 그대로 보존됩니다.
@@ -700,14 +700,14 @@ export default function SettingsPage() {
           </Def>
         </Section>
 
-        <Section title="카테고리별 AI 설정">
+        <Section n={2} title="카테고리별 AI 설정">
           <Def term="타겟 독자">카테고리 독자층 설명입니다(AI 생성 방향에 반영).</Def>
           <Def term="AI 페르소나">기사 작성 스타일 프롬프트입니다. 프리셋 버튼으로 빠르게 전환할 수 있습니다.</Def>
           <Def term="강조 키워드">분석 시 우선 언급할 키워드입니다(순서 조정 가능).</Def>
           <Def term="레벨별 지침">Beginner / Intermediate / Advanced 별 문체·관점 지침입니다.</Def>
         </Section>
 
-        <Section title="현재 품질 기준 (1~10점)">
+        <Section n={3} title="현재 품질 기준 (1~10점)">
           <Def term={`${qualityThresholds.auto_publish}점 이상 → 자동 발행`}>
             관련성·완성도가 높은 기사입니다. 큐레이션 직후 뉴스룸에 즉시 게시됩니다.
           </Def>
@@ -722,7 +722,7 @@ export default function SettingsPage() {
           </p>
         </Section>
 
-        <Section title="자동 큐레이션 스케줄">
+        <Section n={4} title="자동 큐레이션 스케줄">
           <Item text="설정한 요일에 자동으로 AI 큐레이션이 실행됩니다." />
           <Item text="Vercel Hobby 플랜 특성상 실행 시각은 최대 1시간 오차가 있을 수 있습니다." />
           <Item text="스케줄 OFF 시에도 큐레이션 보드에서 수동 실행할 수 있습니다." />

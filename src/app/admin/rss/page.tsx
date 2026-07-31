@@ -629,7 +629,7 @@ export default function RssPage() {
           콘텐츠 수집 소스를 등록·관리합니다. 등록된 소스는 큐레이션 실행 시 자동으로 수집됩니다.
         </p>
 
-        <Section title="소스 타입">
+        <Section n={1} title="소스 타입">
           <Def term="RSS 피드">URL 등록 시 최신 기사 최대 10개를 자동 수집합니다(언론사 전체 피드는 키워드 필터 권장).</Def>
           <Def term="직접 URL">특정 기사 1건만 분석·등록합니다.</Def>
           <Def term="네이버뉴스 검색">검색어(예: MICE) 매칭 기사를 자동 수집합니다. IP 차단 없는 정식 API입니다.</Def>
@@ -637,12 +637,12 @@ export default function RssPage() {
           <Def term="공공 API">한국관광공사 등 공공데이터와 연동합니다(고급).</Def>
         </Section>
 
-        <Section title="중요도">
+        <Section n={2} title="중요도">
           <Item text="중요/보통/낮음 — 높을수록 품질 점수에 가산됩니다." />
           <Item text="공고·홍보성 소스는 낮음, 분석·인사이트 소스는 중요로 설정하는 것을 권장합니다." />
         </Section>
 
-        <Section title="활성/비활성">
+        <Section n={3} title="활성/비활성">
           <Item text="토글 OFF 시 큐레이션에서 해당 소스를 건너뜁니다." />
           <Item text="소스를 삭제하지 않고 임시 중단할 때 활용하세요." />
         </Section>

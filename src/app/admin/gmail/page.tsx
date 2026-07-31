@@ -113,17 +113,17 @@ export default function GmailPage() {
           OAuth2 인증은 1회 설정으로 지속 유지됩니다.
         </p>
 
-        <Section title="현재 상태">
+        <Section n={1} title="현재 상태">
           <Item text="✅ Gmail 연동 완료 (2026년 5월 22일 인증)" />
           <Item text="등록된 뉴스레터: 요즘IT, MICE人" />
         </Section>
 
-        <Section title="토큰 만료 시">
+        <Section n={2} title="토큰 만료 시">
           <Item text="큐레이션 실행 시 Gmail 소스 수집이 실패합니다." />
           <Item text="이 페이지에서 [다시 인증] 버튼으로 재연동하세요." />
         </Section>
 
-        <Section title="뉴스레터 추가 방법">
+        <Section n={3} title="뉴스레터 추가 방법">
           <Item text="뉴스레터 수신 확인 후 Gmail 발신자 이메일 주소를 확인합니다." />
           <Item text="/admin/rss → 소스 추가 → 타입: Gmail 뉴스레터" />
           <Item text="발신자 이메일 입력 후 저장합니다." />
