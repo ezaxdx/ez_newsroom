@@ -20,6 +20,7 @@ type Popup = {
   pages: string[];
   random_page: boolean;
   hunt_code: string | null;
+  size_px: number | null;
   created_at: string;
 };
 
@@ -36,6 +37,13 @@ type FormState = {
   pages: string[];
   random_page: boolean;
   hunt_code: string;
+  size_px: number;
+};
+
+// 표시 방식별 사이즈 슬라이더 범위/기본값 — API의 SIZE_RANGE와 동일하게 유지
+const SIZE_RANGE: Record<string, { min: number; max: number; default: number }> = {
+  floating: { min: 60, max: 400, default: 150 },
+  modal: { min: 240, max: 640, default: 420 },
 };
 
 const EMPTY_FORM: FormState = {
@@ -43,6 +51,7 @@ const EMPTY_FORM: FormState = {
   image_url: "", link_url: "", content: "", is_active: true,
   display_type: "floating", position: "bottom-right",
   pages: ["home"], random_page: false, hunt_code: "",
+  size_px: SIZE_RANGE.floating.default,
 };
 
 const todayKST = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -110,6 +119,7 @@ export default function PopupManager() {
       pages: p.pages?.length ? p.pages : ["home"],
       random_page: p.random_page ?? false,
       hunt_code: p.hunt_code ?? "",
+      size_px: p.size_px ?? SIZE_RANGE[p.display_type ?? "modal"]?.default ?? 420,
     });
     setError(null);
     setShowModal(true);
@@ -220,6 +230,10 @@ export default function PopupManager() {
               <p style={{ margin: "0 0 10px" }}>
                 <b>이미지</b> — 고정은 300×300px 정사각형(배경 투명 PNG 권장), 팝업은 400×500px가 적당합니다.
                 어떤 비율로 올려도 화면 크기에 맞춰 자동으로 축소됩니다.
+              </p>
+              <p style={{ margin: "0 0 10px" }}>
+                <b>크기</b> — 슬라이더로 실제 화면에 보이는 크기를 조절합니다. 이미지를 올리면 바로 아래에 그 크기로 미리보기가 나오니,
+                너무 작거나 크면 여기서 조절하세요.
               </p>
               <p style={{ margin: "0 0 10px" }}>
                 <b>링크 URL</b> — 입력하면 클릭 시 새 탭으로 이동합니다(구글폼 등). 비워두면 클릭해도 이동하지 않습니다.
@@ -371,7 +385,11 @@ export default function PopupManager() {
                 ] as const).map(({ key, label, desc }) => {
                   const on = form.display_type === key;
                   return (
-                    <button key={key} onClick={() => setForm((f) => ({ ...f, display_type: key }))}
+                    <button key={key} onClick={() => setForm((f) => ({
+                        ...f, display_type: key,
+                        // 다른 방식으로 바꾸면 이전 방식 기준 크기가 안 맞을 수 있어 그 방식의 기본값으로 리셋
+                        size_px: SIZE_RANGE[key].default,
+                      }))}
                       style={{
                         flex: 1, padding: "8px 10px", borderRadius: 6, cursor: "pointer", textAlign: "left",
                         border: `1px solid ${on ? "var(--primary)" : "var(--surface-container-highest)"}`,
@@ -383,6 +401,38 @@ export default function PopupManager() {
                   );
                 })}
               </div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>
+                크기 <span style={{ fontWeight: 400 }}>({form.size_px}px{form.display_type === "floating" ? " · 폭 기준" : " · 최대 폭"})</span>
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input
+                  type="range"
+                  min={SIZE_RANGE[form.display_type].min}
+                  max={SIZE_RANGE[form.display_type].max}
+                  value={form.size_px}
+                  onChange={(e) => setForm((f) => ({ ...f, size_px: Number(e.target.value) }))}
+                  style={{ flex: 1, cursor: "pointer" }}
+                />
+                <span style={{ fontSize: 11, color: "var(--on-surface-variant)", width: 70, textAlign: "right" }}>
+                  {SIZE_RANGE[form.display_type].min}~{SIZE_RANGE[form.display_type].max}px
+                </span>
+              </div>
+              {form.image_url && (
+                <div style={{
+                  marginTop: 8, padding: 10, borderRadius: 6, background: "var(--surface-container-low)",
+                  display: "flex", justifyContent: form.display_type === "floating" ? "flex-start" : "center",
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={form.image_url} alt="미리보기"
+                    style={{
+                      width: form.display_type === "floating" ? form.size_px : Math.min(form.size_px, 260),
+                      height: "auto", display: "block",
+                    }} />
+                </div>
+              )}
             </div>
 
             <div style={{ marginBottom: 10 }}>

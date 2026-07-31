@@ -19,7 +19,7 @@ export type EventSettings = {
 };
 
 const POPUP_SELECT =
-  "id, title, image_url, link_url, content, display_type, position, pages, random_page, hunt_code";
+  "id, title, image_url, link_url, content, display_type, position, pages, random_page, hunt_code, size_px";
 
 /**
  * 오늘 노출 가능한 팝업 전체 — 게시기간 안 + 사용중.

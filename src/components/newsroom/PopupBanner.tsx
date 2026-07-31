@@ -13,7 +13,10 @@ export type PopupData = {
   pages: string[];       // 노출 페이지 목록
   random_page: boolean;  // true면 pages 중 한 곳에만 랜덤 노출
   hunt_code?: string | null; // 값이 있으면 찾기 이벤트 대상 — 클릭 시 링크 대신 코드를 알려주고 사라짐
+  size_px?: number | null;   // 없으면 표시 방식별 기본값(고정 150 / 팝업 420)
 };
+
+const DEFAULT_SIZE = { floating: 150, modal: 420 } as const;
 
 // "오늘 하루 보지 않기"는 팝업별로 기억 — 다른 팝업으로 교체되면 다시 노출됨
 const dismissKey = (id: string) => `popup_dismissed_${id}`;
@@ -33,6 +36,7 @@ export default function PopupBanner({
 }) {
   const isFloating = popup.display_type === "floating";
   const huntCode = popup.hunt_code || null;
+  const sizePx = popup.size_px || DEFAULT_SIZE[isFloating ? "floating" : "modal"];
 
   // SSR 시엔 항상 닫힌 상태로 시작 — localStorage는 클라이언트에서만 읽을 수 있어 hydration 불일치 방지
   const [open, setOpen] = useState(false);
@@ -164,7 +168,7 @@ export default function PopupBanner({
       <div
         style={{
           position: "fixed", ...place, zIndex: 900,
-          width: "min(150px, 35vw)",
+          width: `min(${sizePx}px, 80vw)`,
           filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
         }}
       >
@@ -205,7 +209,7 @@ export default function PopupBanner({
           borderRadius: 12,
           overflow: "hidden",
           width: "100%",
-          maxWidth: 420,
+          maxWidth: sizePx,
           maxHeight: "90vh",
           overflowY: "auto",
           boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
