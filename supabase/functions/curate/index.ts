@@ -263,17 +263,17 @@ function extractOgImage(html: string): string | null {
   return null;
 }
 
-/* ── 원문 1회 fetch로 본문+이미지 동시 추출 (기사당 요청 2회→1회) ── */
-async function fetchArticleData(url: string): Promise<{ text: string; image_url: string | null }> {
+/* ── 원문 1회 fetch로 본문+이미지+발행일 동시 추출 (기사당 요청 2회→1회) ── */
+async function fetchArticleData(url: string): Promise<{ text: string; image_url: string | null; published_at: string | null }> {
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; MonolithBot/1.0)" },
       signal: AbortSignal.timeout(7000),
     });
     const html = await res.text();
-    return { text: extractText(html), image_url: extractOgImage(html) };
+    return { text: extractText(html), image_url: extractOgImage(html), published_at: extractPublishedDate(html) };
   } catch {
-    return { text: "", image_url: null };
+    return { text: "", image_url: null, published_at: null };
   }
 }
 
@@ -297,6 +297,51 @@ function safeDateISO(raw: string | undefined | null): string {
   } catch {
     return new Date().toISOString();
   }
+}
+
+/**
+ * 화/목(설정된 요일) 스케줄 기준 "지난 실행 이후 ~ 이번 실행까지" 발행 창(window) 계산.
+ * 예: 목요일 실행 → 화요일 9시 ~ 목요일 9시 사이 발행된 기사만 대상.
+ * beforeOrAt 이하 중 스케줄 요일·시각과 일치하는 가장 최근 시점(ms)을 반환.
+ */
+function calcScheduledRun(days: number[], hourKST: number, beforeOrAt: number): number {
+  if (!days || days.length === 0) return beforeOrAt - 7 * 24 * 60 * 60 * 1000;
+  const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+  for (let i = 0; i <= 7; i++) {
+    const check = new Date(beforeOrAt - i * 24 * 60 * 60 * 1000);
+    check.setUTCHours(hourKST - 9, 0, 0, 0);
+    const kstDay = new Date(check.getTime() + KST_OFFSET_MS).getUTCDay();
+    if (days.includes(kstDay) && check.getTime() <= beforeOrAt) return check.getTime();
+  }
+  return beforeOrAt - 7 * 24 * 60 * 60 * 1000;
+}
+
+/** 기사 발행일이 이번 실행의 발행 창(window) 안인지 판정 */
+function checkWindow(pubDate: string | null | undefined, windowStart: number, windowEnd: number): "in" | "too_old" | "too_new" | "unknown" {
+  if (!pubDate) return "unknown";
+  const t = new Date(pubDate).getTime();
+  if (isNaN(t)) return "unknown";
+  if (t < windowStart) return "too_old";
+  if (t > windowEnd) return "too_new";
+  return "in";
+}
+
+/** HTML meta 태그에서 발행일 추출 — RSS/API처럼 항목별 날짜가 없는 소스(source_type="url")용 */
+function extractPublishedDate(html: string): string | null {
+  const patterns = [
+    /<meta[^>]+property=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']article:published_time["']/i,
+    /<meta[^>]+name=["']article:published_time["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+property=["']og:article:published_time["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+name=["']date["'][^>]+content=["']([^"']+)["']/i,
+    /<meta[^>]+name=["']pubdate["'][^>]+content=["']([^"']+)["']/i,
+    /<time[^>]+datetime=["']([^"']+)["']/i,
+  ];
+  for (const p of patterns) {
+    const m = html.match(p);
+    if (m?.[1]) return m[1];
+  }
+  return null;
 }
 
 /* ── 공공 API 데이터 fetch ── */
@@ -703,8 +748,17 @@ Deno.serve(async (req) => {
   const sources = [...sourcesRaw].sort((a, b) => (b.weight ?? 0) - (a.weight ?? 0));
 
   const { data: settings } = await supabase
-    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords, business_domain_examples, content_quality_notes")
+    .from("curation_settings").select("category_settings, level_prompts, quality_thresholds, company_context, focus_keywords, business_domain_examples, content_quality_notes, auto_schedule")
     .limit(1).single();
+
+  // 화/목(설정된 요일) 9시 스케줄 기준 발행 창(window) — 예: 목요일 실행 시 화요일 9시~목요일 9시.
+  // 소스 타입과 무관하게 전 카테고리에 동일 적용. 수동 실행이어도 스케줄 정의 자체는 그대로 사용.
+  const schedule = settings?.auto_schedule ?? {};
+  const scheduleDays: number[] = schedule.days?.length ? schedule.days : [2, 4]; // 기본: 화·목
+  const scheduleHour: number = schedule.hour ?? 9;
+  const windowEnd = calcScheduledRun(scheduleDays, scheduleHour, Date.now());
+  const windowStart = calcScheduledRun(scheduleDays, scheduleHour, windowEnd - 1);
+  console.log(`[발행 창] ${new Date(windowStart).toISOString()} ~ ${new Date(windowEnd).toISOString()}`);
   const catSettings: Record<string, { audience: string; persona: string; keywords: string[] }> = settings?.category_settings ?? {};
   const allLevelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const qualityThresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
@@ -812,6 +866,22 @@ Deno.serve(async (req) => {
         keywords: [],
       };
       const catLevelPrompts = allLevelPrompts[cat] ?? {};
+      // 발행 창(window) 밖이면 스킵 — 화/목 스케줄 기준 "지난 실행 이후 ~ 이번 실행까지"만 대상.
+      // 너무 오래됨(too_old) → 앞으로도 어떤 창에도 안 걸리므로 영구 스킵(dedup 등록).
+      // 너무 최신(too_new) → 다음 실행 창에 걸릴 것이므로 dedup 등록 안 하고 이번만 건너뜀.
+      // 날짜를 못 읽으면(unknown, 주로 source_type=url/api) 기존처럼 통과시켜 콘텐츠 손실 방지.
+      const windowVerdict = checkWindow(pubDate, windowStart, windowEnd);
+      if (windowVerdict === "too_old") {
+        console.log(`[SKIP] 발행 창 이전 (${pubDate}): ${url}`);
+        results.skipped++; stat.skipped++;
+        existingUrls.add(url);
+        return;
+      }
+      if (windowVerdict === "too_new") {
+        console.log(`[SKIP] 발행 창 이후 — 다음 실행 대상 (${pubDate}): ${url}`);
+        results.skipped++; stat.skipped++;
+        return;
+      }
       // 원문이 너무 짧으면 (봇 차단·접근 불가) 스킵 — 환각 기사 방지
       if (articleText.length < 200) {
         console.log(`[SKIP] 원문 너무 짧음 (${articleText.length}자): ${url}`);
@@ -872,8 +942,9 @@ Deno.serve(async (req) => {
 
     if (source.source_type === "url") {
       if (existingUrls.has(source.url)) { results.skipped++; continue; }
-      const { text: articleText, image_url } = await fetchArticleData(source.url);
-      await insertArticle(articleText, source.url, image_url);
+      // RSS/API처럼 항목별 날짜가 없으므로 HTML meta 태그(published_time 등)에서 발행일 추출 시도
+      const { text: articleText, image_url, published_at } = await fetchArticleData(source.url);
+      await insertArticle(articleText, source.url, image_url, published_at ?? undefined);
       continue;
     }
 
@@ -916,13 +987,14 @@ Deno.serve(async (req) => {
         for (const item of naverItems) {
           if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
           if (existingUrls.has(item.link)) { results.skipped++; continue; }
-          const { text: scraped, image_url } = await fetchArticleData(item.link);
+          const { text: scraped, image_url, published_at } = await fetchArticleData(item.link);
           // 원문 스크래핑이 짧게 잡히면 API가 준 요약문으로 폴백
           const articleText = scraped.length >= 200 ? scraped
             : (item.description.length > scraped.length ? item.description : scraped);
           // 검색어 기반 소스라 실제 제목 내용으로 카테고리 재배정 (RSS와 동일 원칙)
           const categoryOverride = resolveArticleCategory(item.title, category);
-          await insertArticle(articleText, item.link, image_url, item.pubDate, categoryOverride);
+          // API가 주는 pubDate 우선, 없으면 원문 HTML에서 추출한 발행일로 폴백
+          await insertArticle(articleText, item.link, image_url, item.pubDate || published_at || undefined, categoryOverride);
         }
       } catch (e) {
         console.error(`[네이버뉴스 실패] ${source.source_name}:`, e);
@@ -958,7 +1030,7 @@ Deno.serve(async (req) => {
       for (const item of resolved) {
         if (overBudget()) { budgetExceeded = true; console.log(`[시간예산 초과] ${source.source_name} 처리 중 중단`); break; }
         if (existingUrls.has(item.link)) { results.skipped++; continue; }
-        const { text: scraped, image_url } = await fetchArticleData(item.link);
+        const { text: scraped, image_url, published_at } = await fetchArticleData(item.link);
         // 원문 스크래핑이 봇 차단 등으로 짧게 잡히면 RSS 본문(description/content:encoded)으로 폴백
         const articleText = scraped.length >= 200 ? scraped
           : (item.description.length > scraped.length ? item.description : scraped);
@@ -966,7 +1038,8 @@ Deno.serve(async (req) => {
         // (예: "Google News_MICE Tech"처럼 키워드 필터 없는 소스도 AI 기사를 물어올 수 있음 —
         //  소스 유형과 무관하게 항상 내용 기준으로 분류해야 MICE/AI가 섞이지 않음)
         const categoryOverride = resolveArticleCategory(item.title, category);
-        await insertArticle(articleText, item.link, image_url, item.pubDate, categoryOverride);
+        // RSS의 pubDate 우선, 없으면 원문 HTML에서 추출한 발행일로 폴백
+        await insertArticle(articleText, item.link, image_url, item.pubDate || published_at || undefined, categoryOverride);
       }
     } catch (e) {
       console.error(`[RSS 실패] ${source.source_name}:`, e);
