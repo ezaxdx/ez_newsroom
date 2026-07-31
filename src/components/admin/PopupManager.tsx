@@ -74,6 +74,11 @@ const COL_KO: Record<string, string> = { left: "왼쪽", center: "가운데", ri
 function pageLabel(key: string) {
   return POPUP_PAGES.find((p) => p.key === key)?.label ?? key;
 }
+// 미리보기에서 배경으로 띄울 실제 페이지 — 노출 페이지 중 첫 번째 선택 기준
+const PREVIEW_PAGE_URL: Record<string, string> = {
+  home: "/", category: "/category/mice", events: "/events", archive: "/newsletter/archive",
+};
+
 // 실제 노출 로직(PopupBanner)과 동일한 위치 계산 — 저장 전 미리보기용
 function resolvePreviewPlace(position: string, posX: number, posY: number, margin: number, topOffset: number): React.CSSProperties {
   if (position === "custom") {
@@ -681,10 +686,11 @@ export default function PopupManager() {
         </div>
       )}
 
-      {/* 저장 전 실제 크기·위치 미리보기 */}
+      {/* 저장 전 실제 크기·위치 미리보기 — 실제 뉴스룸 화면을 배경으로 그 위에 겹쳐서 보여줌 */}
       {previewOpen && (() => {
         const isFloatingPreview = form.display_type === "floating";
         const place = resolvePreviewPlace(form.position, form.pos_x, form.pos_y, 20, 110);
+        const previewUrl = PREVIEW_PAGE_URL[form.pages[0]] ?? "/";
         const media = form.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={form.image_url} alt="미리보기" style={{ display: "block", width: "100%", height: "auto" }} />
@@ -702,18 +708,29 @@ export default function PopupManager() {
         );
 
         return (
-          <div style={{ position: "fixed", inset: 0, zIndex: 2000, background: "rgba(0,0,0,0.6)" }}>
+          <div style={{ position: "fixed", inset: 0, zIndex: 2000 }}>
+            {/* 실제 뉴스룸 화면을 배경으로 — 관리자 화면이 비치지 않도록 실제 페이지를 그대로 로드 */}
+            <iframe
+              src={previewUrl}
+              title="미리보기 배경"
+              style={{ position: "fixed", inset: 0, width: "100%", height: "100%", border: "none", zIndex: 2000 }}
+            />
+            {/* 팝업형은 실제로도 배경을 어둡게 깔고 뜨므로 동일하게 재현 */}
+            {!isFloatingPreview && (
+              <div style={{ position: "fixed", inset: 0, zIndex: 2001, background: "rgba(0,0,0,0.5)" }} />
+            )}
+
             <div style={{
-              position: "absolute", top: 16, left: 16, zIndex: 2001,
+              position: "fixed", top: 16, left: 16, zIndex: 2100,
               display: "flex", alignItems: "center", gap: 10,
               padding: "8px 14px", borderRadius: 8, background: "#fff",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
             }}>
               <span style={{ fontSize: 13, fontWeight: 700 }}>미리보기</span>
-              {form.position === "random" && (
-                <span style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
-                  랜덤 위치는 매번 다른 자리에 나타나므로 가운데에 예시로 표시했습니다
-                </span>
-              )}
+              <span style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
+                {POPUP_PAGES.find((p) => p.key === form.pages[0])?.label ?? "홈"} 화면 기준
+                {form.position === "random" && " · 랜덤 위치는 가운데에 예시로 표시"}
+              </span>
               <button onClick={() => setPreviewOpen(false)}
                 style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                 닫기
@@ -722,7 +739,7 @@ export default function PopupManager() {
 
             {isFloatingPreview ? (
               <div style={{
-                position: "fixed", ...place, zIndex: 2000,
+                position: "fixed", ...place, zIndex: 2050,
                 width: `min(${form.size_px}px, 80vw)`,
                 filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
               }}>
@@ -730,7 +747,7 @@ export default function PopupManager() {
               </div>
             ) : (
               <div style={{
-                position: "fixed", ...place, zIndex: 2000,
+                position: "fixed", ...place, zIndex: 2050,
                 background: "#fff", borderRadius: 12, overflow: "hidden",
                 width: `min(${form.size_px}px, calc(100vw - 40px))`,
                 maxHeight: "90vh", overflowY: "auto",
