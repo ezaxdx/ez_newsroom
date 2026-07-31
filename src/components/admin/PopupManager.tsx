@@ -328,21 +328,15 @@ export default function PopupManager() {
                 어떤 비율로 올려도 화면 크기에 맞춰 자동으로 축소됩니다.
               </p>
               <p style={{ margin: "0 0 10px" }}>
-                <b>크기</b> — 슬라이더로 실제 화면에 보이는 크기를 조절합니다. 이미지를 올리면 바로 아래에 그 크기로 미리보기가 나오니,
-                너무 작거나 크면 여기서 조절하세요.
+                <b>노출 페이지</b> — 팝업이 뜰 페이지 하나를 고릅니다(기본값 홈).
               </p>
               <p style={{ margin: "0 0 10px" }}>
-                <b>링크 URL</b> — 입력하면 클릭 시 새 탭으로 이동합니다(구글폼 등). 비워두면 클릭해도 이동하지 않습니다.
-              </p>
-              <p style={{ margin: "0 0 10px" }}>
-                <b>노출 위치</b> — 미니 화면 미리보기를 원하는 자리에 클릭하면 그 지점에 뜹니다.
-                랜덤 위치를 켜면 클릭한 지점은 무시되고 접속할 때마다 다른 자리에 나타납니다.
+                <b>위치·크기</b> — 별도 입력란 없이 <b>&quot;미리보기에서 위치·크기 조정&quot;</b> 버튼을 눌러 실제 화면에서 직접 끌어다 놓고,
+                모서리를 드래그해 크기를 조절하세요. <b>랜덤 위치</b>를 켜면 조정한 위치는 무시되고 접속할 때마다 다른 자리에 나타납니다
+                (숨은 그림 찾기 이벤트용).
               </p>
               <p style={{ margin: 0 }}>
-                <b>노출 페이지</b> — 여러 곳을 선택하면 기본적으로 모든 선택 페이지에 노출됩니다.
-                <b> 한 곳에만 랜덤 노출</b>을 켜면 방문자마다 숨는 페이지가 무작위로 정해져,
-                그 페이지를 찾아 들어가야만 볼 수 있습니다(숨은 그림 찾기 이벤트용).
-                숨은 위치는 한 번의 방문(브라우저 탭을 닫기 전까지) 동안 유지됩니다.
+                <b>링크 URL</b> — 입력하면 클릭 시 새 탭으로 이동합니다(구글폼 등). 비워두면 클릭해도 이동하지 않습니다.
               </p>
             </SectionInfoModal>
           </p>
@@ -376,7 +370,7 @@ export default function PopupManager() {
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--surface-container-high)" }}>
-                {["No", "제목", "방식", "게시기간", "사용", "등록일", ""].map((h, i) => (
+                {["No", "제목", "방식", "게시기간", "등록일", "사용", ""].map((h, i) => (
                   <th key={h || i} style={{
                     padding: "8px 12px", textAlign: i === 0 || i >= 4 ? "center" : "left",
                     fontSize: "0.68rem", fontWeight: 700, letterSpacing: "0.04em",
@@ -421,6 +415,9 @@ export default function PopupManager() {
                     <td style={{ padding: "9px 12px", color: "var(--on-surface-variant)" }}>
                       {fmtDate(p.start_date)} ~ {fmtDate(p.end_date)}
                     </td>
+                    <td style={{ padding: "9px 12px", textAlign: "center", color: "var(--on-surface-variant)", fontSize: "0.72rem" }}>
+                      {new Date(p.created_at).toLocaleDateString("ko-KR")}
+                    </td>
                     <td style={{ padding: "9px 12px", textAlign: "center" }}>
                       <button
                         onClick={() => toggleActive(p)}
@@ -435,9 +432,6 @@ export default function PopupManager() {
                       >
                         {p.is_active ? "ON" : "OFF"}
                       </button>
-                    </td>
-                    <td style={{ padding: "9px 12px", textAlign: "center", color: "var(--on-surface-variant)", fontSize: "0.72rem" }}>
-                      {new Date(p.created_at).toLocaleDateString("ko-KR")}
                     </td>
                     <td style={{ padding: "9px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                       <button onClick={() => openEdit(p)}
@@ -489,7 +483,7 @@ export default function PopupManager() {
                         ...f, display_type: key,
                         // 다른 방식으로 바꾸면 이전 방식 기준 크기가 안 맞을 수 있어 그 방식의 기본값으로 리셋
                         size_px: SIZE_RANGE[key].default,
-                        // 팝업은 기본이 정가운데, 고정은 기본이 오른쪽 아래 — 방식 바꿀 때 위치도 그에 맞게
+                        // 팝업은 기본이 정가운데, 고정은 기본이 오른쪽 아래 — 방식 바꿀 때 위치도 그에 맞게 (직접 지정한 경우는 유지)
                         position: f.position === "bottom-right" || f.position === "middle-center"
                           ? (key === "modal" ? "middle-center" : "bottom-right")
                           : f.position,
@@ -504,153 +498,6 @@ export default function PopupManager() {
                     </button>
                   );
                 })}
-              </div>
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>
-                크기 <span style={{ fontWeight: 400 }}>({form.size_px}px{form.display_type === "floating" ? " · 폭 기준" : " · 최대 폭"})</span>
-              </label>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <input
-                  type="range"
-                  min={SIZE_RANGE[form.display_type].min}
-                  max={SIZE_RANGE[form.display_type].max}
-                  value={form.size_px}
-                  onChange={(e) => setForm((f) => ({ ...f, size_px: Number(e.target.value) }))}
-                  style={{ flex: 1, cursor: "pointer" }}
-                />
-                <span style={{ fontSize: 11, color: "var(--on-surface-variant)", width: 70, textAlign: "right" }}>
-                  {SIZE_RANGE[form.display_type].min}~{SIZE_RANGE[form.display_type].max}px
-                </span>
-              </div>
-              {form.image_url && (
-                <div style={{
-                  marginTop: 8, padding: 10, borderRadius: 6, background: "var(--surface-container-low)",
-                  display: "flex", justifyContent: form.display_type === "floating" ? "flex-start" : "center",
-                }}>
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={form.image_url} alt="미리보기"
-                    style={{
-                      width: form.display_type === "floating" ? form.size_px : Math.min(form.size_px, 260),
-                      height: "auto", display: "block",
-                    }} />
-                </div>
-              )}
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>노출 페이지 *</label>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {POPUP_PAGES.map(({ key, label }) => {
-                  const on = form.pages.includes(key);
-                  return (
-                    <button key={key} type="button"
-                      onClick={() => setForm((f) => ({
-                        ...f,
-                        pages: on ? f.pages.filter((p) => p !== key) : [...f.pages, key],
-                      }))}
-                      style={{
-                        padding: "5px 12px", borderRadius: 20, fontSize: 12, fontWeight: 600, cursor: "pointer",
-                        border: `1px solid ${on ? "var(--primary)" : "var(--surface-container-highest)"}`,
-                        background: on ? "var(--primary)" : "transparent",
-                        color: on ? "#fff" : "var(--on-surface-variant)",
-                      }}>
-                      {label}
-                    </button>
-                  );
-                })}
-              </div>
-              {form.pages.length > 1 && (
-                <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer", marginTop: 8 }}>
-                  <input type="checkbox" checked={form.random_page}
-                    onChange={(e) => setForm((f) => ({ ...f, random_page: e.target.checked }))}
-                    style={{ width: 14, height: 14, cursor: "pointer", marginTop: 2 }} />
-                  <span>
-                    선택한 페이지 중 <b>한 곳에만</b> 랜덤 노출
-                    <span style={{ display: "block", fontSize: 11, color: "var(--on-surface-variant)" }}>
-                      끄면 선택한 모든 페이지에 노출됩니다. 켜면 방문할 때마다 숨는 페이지가 바뀝니다.
-                    </span>
-                  </span>
-                </label>
-              )}
-            </div>
-
-            {(() => {
-              const marker = form.position === "custom"
-                ? { x: form.pos_x, y: form.pos_y }
-                : PRESET_PCT[form.position] ?? PRESET_PCT["bottom-right"];
-
-              function handlePreviewClick(e: React.MouseEvent<HTMLDivElement>) {
-                const rect = e.currentTarget.getBoundingClientRect();
-                const x = Math.round(((e.clientX - rect.left) / rect.width) * 100);
-                const y = Math.round(((e.clientY - rect.top) / rect.height) * 100);
-                setForm((f) => ({
-                  ...f,
-                  position: "custom",
-                  pos_x: Math.min(96, Math.max(4, x)),
-                  pos_y: Math.min(96, Math.max(4, y)),
-                }));
-              }
-
-              return (
-                <div style={{ marginBottom: 10 }}>
-                  <label style={labelStyle}>
-                    노출 위치 <span style={{ fontWeight: 400 }}>(화면을 클릭해서 위치를 찍으세요)</span>
-                  </label>
-                  <div
-                    onClick={form.position === "random" ? undefined : handlePreviewClick}
-                    style={{
-                      position: "relative", width: "100%", maxWidth: 320, aspectRatio: "16 / 10",
-                      borderRadius: 8, overflow: "hidden",
-                      border: "1px solid var(--surface-container-highest)",
-                      background: "var(--surface)",
-                      cursor: form.position === "random" ? "not-allowed" : "crosshair",
-                      opacity: form.position === "random" ? 0.4 : 1,
-                    }}
-                  >
-                    {/* 실제 화면을 흉내낸 미니 목업 — 상단바 + 히어로 2단 + 사이드 컬럼 */}
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "14%", background: "var(--on-surface)" }} />
-                    <div style={{ position: "absolute", top: "20%", left: "4%", width: "58%", height: "34%", background: "var(--surface-container-high)", borderRadius: 3 }} />
-                    <div style={{ position: "absolute", top: "56%", left: "4%", width: "58%", height: "34%", background: "var(--surface-container-high)", borderRadius: 3 }} />
-                    <div style={{ position: "absolute", top: "20%", right: "4%", width: "30%", height: "70%", background: "var(--surface-container-low)", borderRadius: 3, border: "1px solid var(--surface-container-highest)" }} />
-
-                    {form.position !== "random" && (
-                      <div style={{
-                        position: "absolute", top: `${marker.y}%`, left: `${marker.x}%`,
-                        transform: "translate(-50%, -50%)",
-                        width: 18, height: 18, borderRadius: "50%",
-                        background: "var(--primary)", border: "2px solid #fff",
-                        boxShadow: "0 1px 4px rgba(0,0,0,0.4)", pointerEvents: "none",
-                      }} />
-                    )}
-                  </div>
-
-                  <label style={{ display: "flex", alignItems: "flex-start", gap: 6, fontSize: 13, cursor: "pointer", marginTop: 8 }}>
-                    <input type="checkbox" checked={form.position === "random"}
-                      onChange={(e) => setForm((f) => ({ ...f, position: e.target.checked ? "random" : "bottom-right" }))}
-                      style={{ width: 14, height: 14, cursor: "pointer", marginTop: 2 }} />
-                    <span>
-                      랜덤 위치
-                      <span style={{ display: "block", fontSize: 11, color: "var(--on-surface-variant)" }}>
-                        접속할 때마다 다른 자리에 나타남 (숨은 그림 찾기 이벤트용)
-                      </span>
-                    </span>
-                  </label>
-                </div>
-              );
-            })()}
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>시작일 *</label>
-                <input type="date" value={form.start_date}
-                  onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} style={inputStyle} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <label style={labelStyle}>종료일 *</label>
-                <input type="date" value={form.end_date}
-                  onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} style={inputStyle} />
               </div>
             </div>
 
@@ -682,6 +529,49 @@ export default function PopupManager() {
             </div>
 
             <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>노출 페이지 *</label>
+              <select
+                value={form.pages[0] ?? "home"}
+                onChange={(e) => setForm((f) => ({ ...f, pages: [e.target.value] }))}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                {POPUP_PAGES.map(({ key, label }) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+
+            <div style={{ marginBottom: 10, display: "flex", alignItems: "center", gap: 10 }}>
+              <button onClick={() => setPreviewOpen(true)} disabled={!form.image_url && !form.content.trim()}
+                style={{
+                  padding: "8px 16px", borderRadius: 6, border: "none",
+                  background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                  opacity: !form.image_url && !form.content.trim() ? 0.4 : 1,
+                }}>
+                미리보기에서 위치·크기 조정
+              </button>
+              <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, cursor: "pointer", color: "var(--on-surface-variant)" }}>
+                <input type="checkbox" checked={form.position === "random"}
+                  onChange={(e) => setForm((f) => ({ ...f, position: e.target.checked ? "random" : "bottom-right" }))}
+                  style={{ width: 14, height: 14, cursor: "pointer" }} />
+                랜덤 위치 (숨은 그림 찾기용)
+              </label>
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>시작일 *</label>
+                <input type="date" value={form.start_date}
+                  onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} style={inputStyle} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label style={labelStyle}>종료일 *</label>
+                <input type="date" value={form.end_date}
+                  onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} style={inputStyle} />
+              </div>
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
               <label style={labelStyle}>
                 링크 URL <span style={{ fontWeight: 400 }}>(클릭 시 이동 · 구글폼 등)</span>
               </label>
@@ -696,18 +586,18 @@ export default function PopupManager() {
             </div>
 
             <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>내용 <span style={{ fontWeight: 400 }}>(선택 · 이미지 없이 텍스트만 띄울 때)</span></label>
+              <textarea value={form.content} rows={3}
+                onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
+                style={{ ...inputStyle, height: "auto", padding: "8px 10px", resize: "vertical" }} />
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
               <label style={labelStyle}>
                 찾기 코드 <span style={{ fontWeight: 400 }}>(입력하면 숨은 그림 찾기 이벤트 대상이 됨)</span>
               </label>
               <input value={form.hunt_code} placeholder="예: 관광길 (비워두면 일반 팝업)"
                 onChange={(e) => setForm((f) => ({ ...f, hunt_code: e.target.value }))} style={inputStyle} />
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>내용 <span style={{ fontWeight: 400 }}>(선택 · 이미지 없이 텍스트만 띄울 때)</span></label>
-              <textarea value={form.content} rows={3}
-                onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
-                style={{ ...inputStyle, height: "auto", padding: "8px 10px", resize: "vertical" }} />
             </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>
@@ -720,14 +610,6 @@ export default function PopupManager() {
             {error && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#dc2626" }}>{error}</p>}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-              <button onClick={() => setPreviewOpen(true)} disabled={!form.image_url && !form.content.trim()}
-                style={{
-                  padding: "7px 16px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
-                  background: "transparent", color: "var(--on-surface)", cursor: "pointer", fontSize: 13, fontWeight: 600,
-                  opacity: !form.image_url && !form.content.trim() ? 0.4 : 1, marginRight: "auto",
-                }}>
-                미리보기
-              </button>
               <button onClick={() => setShowModal(false)}
                 style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}>
                 취소
