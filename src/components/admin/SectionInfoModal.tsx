@@ -32,8 +32,8 @@ export default function SectionInfoModal({ title, children }: { title: string; c
             className="rounded-xl p-6"
             style={{ background: "#ffffff", width: "90%", maxWidth: 460, boxShadow: "0 8px 32px rgba(0,0,0,0.25)" }}
           >
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-bold text-sm m-0" style={{ color: "#1a1a1a" }}>{title}</p>
+            <div className="flex items-center justify-between mb-4">
+              <p className="font-bold m-0" style={{ color: "#1a1a1a", fontSize: 18 }}>{title}</p>
               <button
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-center rounded"
@@ -42,7 +42,7 @@ export default function SectionInfoModal({ title, children }: { title: string; c
                 <X size={13} />
               </button>
             </div>
-            <div className="text-sm" style={{ color: "#333", lineHeight: 1.7 }}>
+            <div style={{ color: "#333", fontSize: 13.5, lineHeight: 1.6 }}>
               {children}
             </div>
           </div>
