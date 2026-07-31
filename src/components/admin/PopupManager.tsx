@@ -116,6 +116,61 @@ export default function PopupManager() {
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  // 미리보기 화면에서 팝업을 직접 드래그로 옮기거나 모서리로 크기 조절할 때의 드래그 상태
+  const [dragState, setDragState] = useState<{
+    mode: "move" | "resize";
+    startClientX: number; startClientY: number;
+    startPosX: number; startPosY: number; startSize: number;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!dragState) return;
+    function onMove(e: MouseEvent) {
+      if (!dragState) return;
+      const dx = e.clientX - dragState.startClientX;
+      const dy = e.clientY - dragState.startClientY;
+      if (dragState.mode === "move") {
+        const xPct = dragState.startPosX + (dx / window.innerWidth) * 100;
+        const yPct = dragState.startPosY + (dy / window.innerHeight) * 100;
+        setForm((f) => ({
+          ...f, position: "custom",
+          pos_x: Math.min(97, Math.max(3, xPct)),
+          pos_y: Math.min(97, Math.max(3, yPct)),
+        }));
+      } else {
+        const range = SIZE_RANGE[form.display_type];
+        // 모서리를 오른쪽 아래로 끌면 커지도록 — x/y 이동량 중 큰 쪽을 기준으로 사용
+        const delta = Math.abs(dx) > Math.abs(dy) ? dx : dy;
+        const nextSize = Math.round(dragState.startSize + delta);
+        setForm((f) => ({ ...f, size_px: Math.min(range.max, Math.max(range.min, nextSize)) }));
+      }
+    }
+    function onUp() { setDragState(null); }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragState]);
+
+  function startDrag(mode: "move" | "resize", e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    // 프리셋/랜덤 위치에서 드래그를 시작하면, 지금 실제로 보이는 지점을 기준 좌표로 채택
+    const basis = form.position === "custom"
+      ? { x: form.pos_x, y: form.pos_y }
+      : PRESET_PCT[form.position] ?? { x: 50, y: 50 };
+    setDragState({
+      mode,
+      startClientX: e.clientX, startClientY: e.clientY,
+      startPosX: basis.x, startPosY: basis.y, startSize: form.size_px,
+    });
+    if (form.position !== "custom") {
+      setForm((f) => ({ ...f, position: "custom", pos_x: basis.x, pos_y: basis.y }));
+    }
+  }
 
   const fetchPopups = useCallback(async () => {
     setLoading(true);
@@ -713,7 +768,11 @@ export default function PopupManager() {
             <iframe
               src={previewUrl}
               title="미리보기 배경"
-              style={{ position: "fixed", inset: 0, width: "100%", height: "100%", border: "none", zIndex: 2000 }}
+              style={{
+                position: "fixed", inset: 0, width: "100%", height: "100%", border: "none", zIndex: 2000,
+                // 드래그 중엔 iframe이 마우스 이벤트를 가로채 드래그가 끊기므로 잠깐 꺼둠
+                pointerEvents: dragState ? "none" : "auto",
+              }}
             />
             {/* 팝업형은 실제로도 배경을 어둡게 깔고 뜨므로 동일하게 재현 */}
             {!isFloatingPreview && (
@@ -730,6 +789,7 @@ export default function PopupManager() {
               <span style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
                 {POPUP_PAGES.find((p) => p.key === form.pages[0])?.label ?? "홈"} 화면 기준
                 {form.position === "random" && " · 랜덤 위치는 가운데에 예시로 표시"}
+                {" · 끌어서 이동, 모서리로 크기 조절"}
               </span>
               <button onClick={() => setPreviewOpen(false)}
                 style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
@@ -738,30 +798,54 @@ export default function PopupManager() {
             </div>
 
             {isFloatingPreview ? (
-              <div style={{
-                position: "fixed", ...place, zIndex: 2050,
-                width: `min(${form.size_px}px, 80vw)`,
-                filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
-              }}>
+              <div
+                onMouseDown={(e) => startDrag("move", e)}
+                style={{
+                  position: "fixed", ...place, zIndex: 2050,
+                  width: `min(${form.size_px}px, 80vw)`,
+                  filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
+                  cursor: dragState?.mode === "move" ? "grabbing" : "grab",
+                }}>
                 {media}
+                <div
+                  onMouseDown={(e) => startDrag("resize", e)}
+                  title="드래그해서 크기 조절"
+                  style={{
+                    position: "absolute", right: -6, bottom: -6, width: 18, height: 18,
+                    borderRadius: "50%", background: "var(--primary)", border: "2px solid #fff",
+                    cursor: "nwse-resize", boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+                  }}
+                />
               </div>
             ) : (
-              <div style={{
-                position: "fixed", ...place, zIndex: 2050,
-                background: "#fff", borderRadius: 12, overflow: "hidden",
-                width: `min(${form.size_px}px, calc(100vw - 40px))`,
-                maxHeight: "90vh", overflowY: "auto",
-                boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
-              }}>
-                {media}
-                <div style={{
-                  display: "flex", alignItems: "center", justifyContent: "space-between",
-                  padding: "10px 14px", borderTop: "1px solid var(--surface-container-high)",
-                  background: "var(--surface-container-low)", fontSize: "0.78rem", color: "var(--on-surface-variant)",
-                }}>
-                  <span>오늘 하루 보지 않기</span>
-                  <span>닫기</span>
+              <div style={{ position: "fixed", ...place, zIndex: 2050, width: `min(${form.size_px}px, calc(100vw - 40px))` }}>
+                <div
+                  onMouseDown={(e) => startDrag("move", e)}
+                  style={{
+                    background: "#fff", borderRadius: 12, overflow: "hidden",
+                    maxHeight: "90vh", overflowY: "auto",
+                    boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
+                    cursor: dragState?.mode === "move" ? "grabbing" : "grab",
+                  }}>
+                  {media}
+                  <div style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "10px 14px", borderTop: "1px solid var(--surface-container-high)",
+                    background: "var(--surface-container-low)", fontSize: "0.78rem", color: "var(--on-surface-variant)",
+                  }}>
+                    <span>오늘 하루 보지 않기</span>
+                    <span>닫기</span>
+                  </div>
                 </div>
+                <div
+                  onMouseDown={(e) => startDrag("resize", e)}
+                  title="드래그해서 크기 조절"
+                  style={{
+                    position: "absolute", right: -6, bottom: -6, width: 18, height: 18,
+                    borderRadius: "50%", background: "var(--primary)", border: "2px solid #fff",
+                    cursor: "nwse-resize", boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
+                  }}
+                />
               </div>
             )}
           </div>
