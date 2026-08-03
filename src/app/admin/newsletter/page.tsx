@@ -492,20 +492,25 @@ export default function NewsletterPage() {
   }
 
   // 정렬은 글자가 아니라 커서가 있는 줄(블록) 전체에 적용
-  // root의 자식들을 "줄" 단위로 묶는다 — 엔터로 생긴 <div>는 그 자체가 한 줄, 아직 엔터 없이
-  // 풀려있는 인라인 노드들은 다음/이전 <div> 전까지 하나의 줄로 취급
-  function getEditorialLineGroups(root: HTMLElement): ({ kind: "block"; el: HTMLElement } | { kind: "loose"; nodes: ChildNode[] })[] {
-    const groups: ({ kind: "block"; el: HTMLElement } | { kind: "loose"; nodes: ChildNode[] })[] = [];
+  // root의 자식들을 "줄" 단위로 묶는다 — 엔터는 <br>만 남기게 했으므로(아래 onKeyDown 참고), 보통은
+  // <br>로 구분된 "풀린" 텍스트 구간이 한 줄이고, 그중 정렬을 적용한 줄만 자기만의 <div>로 승격됨
+  type EditorialLineGroup = { kind: "block"; el: HTMLElement } | { kind: "br"; el: HTMLElement } | { kind: "loose"; nodes: ChildNode[] };
+  function getEditorialLineGroups(root: HTMLElement): EditorialLineGroup[] {
+    const groups: EditorialLineGroup[] = [];
     let loose: ChildNode[] = [];
+    const flushLoose = () => { if (loose.length) { groups.push({ kind: "loose", nodes: loose }); loose = []; } };
     for (const child of Array.from(root.childNodes)) {
       if (child instanceof HTMLElement && child.tagName === "DIV") {
-        if (loose.length) { groups.push({ kind: "loose", nodes: loose }); loose = []; }
+        flushLoose();
         groups.push({ kind: "block", el: child });
+      } else if (child instanceof HTMLElement && child.tagName === "BR") {
+        flushLoose();
+        groups.push({ kind: "br", el: child });
       } else {
         loose.push(child);
       }
     }
-    if (loose.length) groups.push({ kind: "loose", nodes: loose });
+    flushLoose();
     return groups;
   }
 
@@ -518,17 +523,24 @@ export default function NewsletterPage() {
     const range = sel.getRangeAt(0);
     const groups = getEditorialLineGroups(root);
     let touchedAny = false;
-    for (const g of groups) {
+    const brsToRemove = new Set<HTMLElement>();
+    groups.forEach((g, i) => {
       if (g.kind === "block") {
         if (range.intersectsNode(g.el)) { g.el.style.textAlign = align; touchedAny = true; }
-      } else if (g.nodes.some((n) => range.intersectsNode(n))) {
+      } else if (g.kind === "loose" && g.nodes.some((n) => range.intersectsNode(n))) {
         const wrapper = document.createElement("div");
         wrapper.style.textAlign = align;
         root.insertBefore(wrapper, g.nodes[0]);
         g.nodes.forEach((n) => wrapper.appendChild(n));
         touchedAny = true;
+        // 새 div 자체가 줄바꿈 역할을 하므로, 원래 그 역할이던 양옆 <br>은 남기면 빈 줄이 생김 — 제거
+        const prev = groups[i - 1];
+        const next = groups[i + 1];
+        if (prev?.kind === "br") brsToRemove.add(prev.el);
+        if (next?.kind === "br") brsToRemove.add(next.el);
       }
-    }
+    });
+    brsToRemove.forEach((br) => br.remove());
     if (!touchedAny) root.style.textAlign = align;
     handleEditorialInput();
   }
@@ -1211,6 +1223,15 @@ export default function NewsletterPage() {
                   contentEditable
                   suppressContentEditableWarning
                   onInput={handleEditorialInput}
+                  onKeyDown={(e) => {
+                    // 엔터가 새 <div>(문단)를 만들면 줄마다 여백이 생겨 "한 칸만 띄웠는데 크게 벌어짐" 문제가 생김 —
+                    // 항상 <br>만 삽입해 한 줄 띄우기를 원래 기대(딱 그만큼만)대로 유지
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      document.execCommand("insertLineBreak");
+                      handleEditorialInput();
+                    }
+                  }}
                   onMouseUp={captureEditorialSelection}
                   onKeyUp={captureEditorialSelection}
                   onFocus={() => setEditorialFocused(true)}
