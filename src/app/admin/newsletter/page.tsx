@@ -44,15 +44,22 @@ export default function NewsletterPage() {
 
   // ── Send tab state ──
   const [editorialText, setEditorialText] = useState("");
+  // 인사말 서식(정렬·글씨크기·글씨체) 툴바 — contentEditable은 React가 매 렌더마다 innerHTML을
+  // 덮어쓰면 커서가 튀므로 비제어(uncontrolled)로 두고, 외부에서 값이 바뀔 때만(AI 생성 등) 수동 동기화
+  const editorialRef = useRef<HTMLDivElement>(null);
+  const editorialOwnValueRef = useRef(""); // 에디터 자신의 입력으로 마지막에 반영된 값 — 이 값과 다를 때만 innerHTML 강제 동기화
+  const editorialLastRangeRef = useRef<Range | null>(null); // 툴바(select 등) 클릭으로 포커스가 빠지기 전 선택 영역 캐시
+  const [editorialFocused, setEditorialFocused] = useState(false);
   const [skipEzpmp, setSkipEzpmp] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
   const [subjectOverride, setSubjectOverride] = useState(""); // 비워두면 기본 제목([EZ Letter] Vol.N · 날짜) 그대로 발송
-  const [headerImages, setHeaderImages] = useState<{ label: string; url: string; flap_url?: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
+  const [headerImages, setHeaderImages] = useState<{ label: string; url: string; flap_url?: string; box_color?: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
   const [headerImageLabel, setHeaderImageLabel] = useState("기본");
   const [newHeaderLabel, setNewHeaderLabel] = useState("");
   const [newHeaderFile, setNewHeaderFile] = useState<File | null>(null);
   const [newHeaderFlapFile, setNewHeaderFlapFile] = useState<File | null>(null);
+  const [newHeaderBoxColor, setNewHeaderBoxColor] = useState("");
   const [addingHeaderImage, setAddingHeaderImage] = useState(false);
   const [addHeaderImageError, setAddHeaderImageError] = useState<string | null>(null);
   const [showImageSettings, setShowImageSettings] = useState(false); // 매일 쓰는 설정이 아니라 기본은 접어둠
@@ -64,6 +71,18 @@ export default function NewsletterPage() {
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null);
   const [sendProgress, setSendProgress] = useState<{ totalSent: number; targetCount: number; remainingCount: number; round: number } | null>(null);
   const [activeCount, setActiveCount] = useState<number | null>(null);
+
+  // ── 하단 상시 배너 (발송마다 고르는 게 아니라 켜두면 계속 노출되는 단일 설정) ──
+  const [bannerOpen, setBannerOpen] = useState(false);
+  const [bannerLoaded, setBannerLoaded] = useState(false);
+  const [bannerEnabled, setBannerEnabled] = useState(false);
+  const [bannerImageUrl, setBannerImageUrl] = useState("");
+  const [bannerLinkUrl, setBannerLinkUrl] = useState("");
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [bannerSaving, setBannerSaving] = useState(false);
+  const [bannerSaved, setBannerSaved] = useState(false);
+  const [bannerError, setBannerError] = useState<string | null>(null);
 
   // ── Subscribers tab state ──
   const [subscribers, setSubscribers] = useState<Subscriber[]>([]);
@@ -167,6 +186,7 @@ export default function NewsletterPage() {
     prefetchEditorialContext();
     fetchSendProgress();
     fetchHeaderImages();
+    fetchFooterBanner();
   }, []);
 
   async function fetchHeaderImages() {
@@ -176,6 +196,59 @@ export default function NewsletterPage() {
       if (json.data) setHeaderImages(json.data);
     } catch {
       // 기본값 유지
+    }
+  }
+
+  async function fetchFooterBanner() {
+    try {
+      const res = await fetch("/api/admin/newsletter/footer-banner");
+      const json = await res.json();
+      if (json.data) {
+        setBannerEnabled(json.data.enabled === true);
+        setBannerImageUrl(json.data.image_url ?? "");
+        setBannerLinkUrl(json.data.link_url ?? "");
+      }
+    } catch {
+      // 기본값 유지
+    } finally {
+      setBannerLoaded(true);
+    }
+  }
+
+  async function handleSaveFooterBanner(next?: { enabled?: boolean }) {
+    setBannerSaving(true);
+    setBannerError(null);
+    setBannerSaved(false);
+    try {
+      let image_url = bannerImageUrl;
+      if (bannerFile) {
+        setBannerUploading(true);
+        image_url = await uploadImageFile(bannerFile);
+        setBannerImageUrl(image_url);
+        setBannerFile(null);
+        setBannerUploading(false);
+      }
+      const enabled = next?.enabled ?? bannerEnabled;
+      const res = await fetch("/api/admin/newsletter/footer-banner", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ image_url, link_url: bannerLinkUrl, enabled }),
+      });
+      const json = await res.json();
+      if (json.data) {
+        setBannerEnabled(json.data.enabled === true);
+        setBannerImageUrl(json.data.image_url ?? "");
+        setBannerLinkUrl(json.data.link_url ?? "");
+        setBannerSaved(true);
+        setTimeout(() => setBannerSaved(false), 2000);
+      } else {
+        setBannerError(json.error ?? "저장 실패");
+      }
+    } catch (e) {
+      setBannerError(e instanceof Error ? e.message : "저장 실패");
+    } finally {
+      setBannerSaving(false);
+      setBannerUploading(false);
     }
   }
 
@@ -195,11 +268,12 @@ export default function NewsletterPage() {
     try {
       const url = await uploadImageFile(newHeaderFile);
       const flap_url = newHeaderFlapFile ? await uploadImageFile(newHeaderFlapFile) : undefined;
+      const box_color = newHeaderBoxColor.trim() || undefined;
 
       const res = await fetch("/api/admin/newsletter/header-images", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ label: newHeaderLabel.trim(), url, ...(flap_url ? { flap_url } : {}) }),
+        body: JSON.stringify({ label: newHeaderLabel.trim(), url, ...(flap_url ? { flap_url } : {}), ...(box_color ? { box_color } : {}) }),
       });
       const json = await res.json();
       if (json.data) {
@@ -207,6 +281,7 @@ export default function NewsletterPage() {
         setNewHeaderLabel("");
         setNewHeaderFile(null);
         setNewHeaderFlapFile(null);
+        setNewHeaderBoxColor("");
       } else {
         setAddHeaderImageError(json.error ?? "추가 실패");
       }
@@ -338,7 +413,10 @@ export default function NewsletterPage() {
       });
       const json = await res.json();
       if (res.ok && json.editorial) {
-        setEditorialText(json.editorial);
+        // AI는 일반 텍스트(줄바꿈 \n)로 응답 — 서식 에디터(HTML)에 줄바꿈이 보이도록 <br>로 변환
+        const escaped = (json.editorial as string)
+          .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        setEditorialText(escaped.replace(/\n/g, "<br>"));
       } else {
         setEditorialError(json.error ?? "AI 생성 실패");
       }
@@ -347,6 +425,111 @@ export default function NewsletterPage() {
     } finally {
       setGeneratingEditorial(false);
     }
+  }
+
+  // 인사말 contentEditable은 비제어라 React state와 값이 어긋날 수 있음 — AI 생성 등
+  // "에디터 밖에서" editorialText가 바뀐 경우에만 innerHTML을 강제로 덮어써서 동기화.
+  // (사용자가 직접 타이핑한 경우는 onInput이 이미 최신값이라 여기서 덮어쓰면 커서가 튐)
+  useEffect(() => {
+    const el = editorialRef.current;
+    if (!el) return;
+    if (editorialText !== editorialOwnValueRef.current) {
+      el.innerHTML = editorialText;
+      editorialOwnValueRef.current = editorialText;
+    }
+  }, [editorialText]);
+
+  function handleEditorialInput() {
+    const el = editorialRef.current;
+    if (!el) return;
+    editorialOwnValueRef.current = el.innerHTML;
+    setEditorialText(el.innerHTML);
+  }
+
+  // 툴바(select 등)를 클릭하면 포커스가 에디터 밖으로 빠지면서 선택 영역이 사라지므로,
+  // 에디터 안에서 마지막으로 잡힌 선택 영역을 캐시해뒀다가 서식 적용 직전에 복원
+  function captureEditorialSelection() {
+    const sel = window.getSelection();
+    if (!sel || sel.rangeCount === 0 || !editorialRef.current) return;
+    const range = sel.getRangeAt(0);
+    if (editorialRef.current.contains(range.commonAncestorContainer)) {
+      editorialLastRangeRef.current = range.cloneRange();
+    }
+  }
+
+  function restoreEditorialSelection(): Selection | null {
+    const el = editorialRef.current;
+    const range = editorialLastRangeRef.current;
+    if (!el) return null;
+    el.focus();
+    const sel = window.getSelection();
+    if (sel && range) {
+      sel.removeAllRanges();
+      sel.addRange(range);
+    }
+    return sel;
+  }
+
+  // 선택한 글자만 span으로 감싸 인라인 스타일(글씨크기·글씨체·굵기) 적용
+  function applyEditorialInlineStyle(style: Partial<CSSStyleDeclaration>) {
+    const sel = restoreEditorialSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    const range = sel.getRangeAt(0);
+    const text = range.toString();
+    if (!text) return;
+    const span = document.createElement("span");
+    Object.assign(span.style, style);
+    span.textContent = text;
+    range.deleteContents();
+    range.insertNode(span);
+    sel.removeAllRanges();
+    const after = document.createRange();
+    after.setStartAfter(span);
+    after.collapse(true);
+    sel.addRange(after);
+    handleEditorialInput();
+  }
+
+  // 정렬은 글자가 아니라 커서가 있는 줄(블록) 전체에 적용
+  // root의 자식들을 "줄" 단위로 묶는다 — 엔터로 생긴 <div>는 그 자체가 한 줄, 아직 엔터 없이
+  // 풀려있는 인라인 노드들은 다음/이전 <div> 전까지 하나의 줄로 취급
+  function getEditorialLineGroups(root: HTMLElement): ({ kind: "block"; el: HTMLElement } | { kind: "loose"; nodes: ChildNode[] })[] {
+    const groups: ({ kind: "block"; el: HTMLElement } | { kind: "loose"; nodes: ChildNode[] })[] = [];
+    let loose: ChildNode[] = [];
+    for (const child of Array.from(root.childNodes)) {
+      if (child instanceof HTMLElement && child.tagName === "DIV") {
+        if (loose.length) { groups.push({ kind: "loose", nodes: loose }); loose = []; }
+        groups.push({ kind: "block", el: child });
+      } else {
+        loose.push(child);
+      }
+    }
+    if (loose.length) groups.push({ kind: "loose", nodes: loose });
+    return groups;
+  }
+
+  // 드래그로 여러 줄에 걸쳐 선택했으면, 그 선택 범위가 걸쳐있는 모든 줄에 정렬을 적용
+  // (커서만 있는 경우엔 그 줄 하나에만 적용돼 기존과 동일하게 동작)
+  function applyEditorialAlign(align: "left" | "center" | "right") {
+    const sel = restoreEditorialSelection();
+    const root = editorialRef.current;
+    if (!sel || sel.rangeCount === 0 || !root) return;
+    const range = sel.getRangeAt(0);
+    const groups = getEditorialLineGroups(root);
+    let touchedAny = false;
+    for (const g of groups) {
+      if (g.kind === "block") {
+        if (range.intersectsNode(g.el)) { g.el.style.textAlign = align; touchedAny = true; }
+      } else if (g.nodes.some((n) => range.intersectsNode(n))) {
+        const wrapper = document.createElement("div");
+        wrapper.style.textAlign = align;
+        root.insertBefore(wrapper, g.nodes[0]);
+        g.nodes.forEach((n) => wrapper.appendChild(n));
+        touchedAny = true;
+      }
+    }
+    if (!touchedAny) root.style.textAlign = align;
+    handleEditorialInput();
   }
 
   async function handlePreview() {
@@ -361,6 +544,7 @@ export default function NewsletterPage() {
           editorial_text: editorialText, dry_run: true, skip_ezpmp: skipEzpmp,
           header_image_url: selectedHeaderImage.url,
           ...(selectedHeaderImage.flap_url ? { editorial_flap_url: selectedHeaderImage.flap_url } : {}),
+          ...(selectedHeaderImage.box_color ? { editorial_box_color: selectedHeaderImage.box_color } : {}),
         }),
       });
       const json = await res.json();
@@ -408,6 +592,7 @@ export default function NewsletterPage() {
           ...(subjectOverride.trim() ? { subject_override: subjectOverride.trim() } : {}),
           header_image_url: selectedHeaderImage.url,
           ...(selectedHeaderImage.flap_url ? { editorial_flap_url: selectedHeaderImage.flap_url } : {}),
+          ...(selectedHeaderImage.box_color ? { editorial_box_color: selectedHeaderImage.box_color } : {}),
           ...(previewHtml && previewMeta ? {
             cached_html: previewHtml,
             cached_vol: previewMeta.vol_number,
@@ -964,24 +1149,86 @@ export default function NewsletterPage() {
               {editorialError && (
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "#c0392b" }}>{editorialError}</p>
               )}
-              <textarea
-                value={editorialText}
-                onChange={(e) => setEditorialText(e.target.value)}
-                placeholder="이번 호 에디터 인사말을 입력하거나 AI로 생성하세요..."
-                rows={5}
-                style={{
-                  width: "100%",
-                  resize: "vertical",
-                  padding: "10px 12px",
-                  borderRadius: 6,
-                  border: "1px solid var(--surface-container-highest)",
-                  background: "var(--surface-container-low)",
-                  color: "var(--on-surface)",
-                  fontSize: 14,
-                  lineHeight: 1.6,
-                  boxSizing: "border-box",
-                }}
-              />
+              {/* 서식 툴바 — 정렬/글씨크기/글씨체는 선택한 영역(또는 커서가 있는 줄)에 적용됨 */}
+              <div style={{
+                display: "flex", alignItems: "center", gap: 6, marginBottom: 6, flexWrap: "wrap",
+                padding: "6px 8px", borderRadius: "6px 6px 0 0",
+                background: "var(--surface-container-low)",
+                border: "1px solid var(--surface-container-highest)", borderBottom: "none",
+              }}>
+                {([
+                  { key: "left", label: "◀︎ 왼쪽" },
+                  { key: "center", label: "▬ 가운데" },
+                  { key: "right", label: "오른쪽 ▶︎" },
+                ] as const).map(({ key, label }) => (
+                  <button key={key}
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => applyEditorialAlign(key)}
+                    style={{ padding: "4px 8px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, cursor: "pointer", color: "var(--on-surface)" }}
+                  >{label}</button>
+                ))}
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyEditorialInlineStyle({ fontWeight: "700" })}
+                  style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "var(--on-surface)" }}
+                >B 굵게</button>
+                <select
+                  defaultValue=""
+                  onMouseDown={captureEditorialSelection}
+                  onChange={(e) => { if (e.target.value) applyEditorialInlineStyle({ fontSize: `${e.target.value}px` }); e.target.value = ""; }}
+                  style={{ padding: "4px 6px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, color: "var(--on-surface)", cursor: "pointer" }}
+                >
+                  <option value="" disabled>글씨 크기</option>
+                  <option value="12">작게 (12px)</option>
+                  <option value="15">기본 (15px)</option>
+                  <option value="18">크게 (18px)</option>
+                  <option value="22">아주 크게 (22px)</option>
+                </select>
+                <select
+                  defaultValue=""
+                  onMouseDown={captureEditorialSelection}
+                  onChange={(e) => { if (e.target.value) applyEditorialInlineStyle({ fontFamily: e.target.value }); e.target.value = ""; }}
+                  style={{ padding: "4px 6px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, color: "var(--on-surface)", cursor: "pointer" }}
+                >
+                  <option value="" disabled>글씨체</option>
+                  <option value="'Pretendard', 'Apple SD Gothic Neo', sans-serif">기본 (고딕)</option>
+                  <option value="Georgia, 'Playfair Display', serif">세리프</option>
+                </select>
+              </div>
+              <div style={{ position: "relative" }}>
+                {editorialText === "" && !editorialFocused && (
+                  <span style={{
+                    position: "absolute", top: 10, left: 12, fontSize: 14, color: "var(--on-surface-variant)",
+                    pointerEvents: "none",
+                  }}>
+                    이번 호 에디터 인사말을 입력하거나 AI로 생성하세요...
+                  </span>
+                )}
+                <div
+                  ref={editorialRef}
+                  contentEditable
+                  suppressContentEditableWarning
+                  onInput={handleEditorialInput}
+                  onMouseUp={captureEditorialSelection}
+                  onKeyUp={captureEditorialSelection}
+                  onFocus={() => setEditorialFocused(true)}
+                  onBlur={() => setEditorialFocused(false)}
+                  style={{
+                    width: "100%",
+                    minHeight: 110,
+                    padding: "10px 12px",
+                    borderRadius: "0 0 6px 6px",
+                    border: "1px solid var(--surface-container-highest)",
+                    background: "var(--surface-container-low)",
+                    color: "var(--on-surface)",
+                    fontSize: 14,
+                    lineHeight: 1.6,
+                    boxSizing: "border-box",
+                    outline: "none",
+                    overflowY: "auto",
+                  }}
+                />
+              </div>
             </div>
 
             <button
@@ -1102,6 +1349,21 @@ export default function NewsletterPage() {
                       style={{ display: "none" }}
                     />
                   </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <input
+                      type="text" placeholder="테두리 박스 색상 hex (예: B1D482, 선택사항)"
+                      value={newHeaderBoxColor} onChange={(e) => setNewHeaderBoxColor(e.target.value)}
+                      style={{ flex: 1, padding: "8px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                        background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontSize: 13 }}
+                    />
+                    {newHeaderBoxColor.trim() && (
+                      <span style={{
+                        display: "inline-block", width: 24, height: 24, borderRadius: 5,
+                        border: "1px solid var(--surface-container-highest)",
+                        background: newHeaderBoxColor.trim().startsWith("#") ? newHeaderBoxColor.trim() : `#${newHeaderBoxColor.trim()}`,
+                      }} />
+                    )}
+                  </div>
                   {addHeaderImageError && (
                     <p style={{ margin: 0, fontSize: 12, color: "#c0392b" }}>{addHeaderImageError}</p>
                   )}
@@ -1379,6 +1641,80 @@ export default function NewsletterPage() {
                       ))}
                     </div>
                   )}
+                </div>
+              )}
+            </div>
+
+            {/* ── 하단 상시 배너 아코디언 (발송마다 고르는 게 아니라 켜두면 계속 노출) ── */}
+            <div style={{ ...cardStyle, marginTop: 8 }}>
+              <button
+                onClick={() => {
+                  const next = !bannerOpen;
+                  setBannerOpen(next);
+                  if (next && !bannerLoaded) fetchFooterBanner();
+                }}
+                style={{
+                  display: "flex", alignItems: "center", gap: 6,
+                  width: "100%", background: "none", border: "none", cursor: "pointer",
+                  fontSize: 13, fontWeight: 600, color: "var(--on-surface)", padding: 0,
+                }}
+              >
+                <span style={{ display: "inline-block", transform: bannerOpen ? "rotate(90deg)" : "none", transition: "transform 0.15s" }}>▸</span>
+                <span>하단 상시 배너</span>
+              </button>
+
+              {bannerOpen && (
+                <div style={{ marginTop: 16, display: "flex", flexDirection: "column", gap: 10, maxWidth: 460 }}>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+                    발송마다 고르는 게 아니라, 켜두면 다음 발송부터 계속 노출됩니다. 시즌마다 이미지만 교체하면 됩니다.
+                    권장 사이즈: 가로 560px, 세로는 자유(보통 120~160px), PNG/JPG.
+                  </p>
+
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", userSelect: "none", width: "fit-content" }}
+                    onClick={() => { const next = !bannerEnabled; setBannerEnabled(next); handleSaveFooterBanner({ enabled: next }); }}>
+                    {bannerEnabled ? <ToggleRight size={22} color="var(--primary)" /> : <ToggleLeft size={22} color="var(--on-surface-variant)" />}
+                    <span style={{ fontSize: 13, fontWeight: 600 }}>{bannerEnabled ? "노출 중" : "꺼짐"}</span>
+                  </label>
+
+                  {bannerImageUrl && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={bannerImageUrl} alt="" style={{ width: "100%", maxWidth: 300, borderRadius: 6, border: "1px solid var(--surface-container-highest)" }} />
+                  )}
+
+                  <label style={{
+                    display: "block", padding: "10px 12px", borderRadius: 6,
+                    border: `1px dashed ${bannerFile ? "var(--primary)" : "var(--surface-container-highest)"}`,
+                    background: "var(--surface-container-lowest)", cursor: "pointer",
+                  }}>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface)" }}>
+                      📎 배너 이미지 {bannerFile ? `선택됨: ${bannerFile.name}` : "교체하기"}
+                    </span>
+                    <input
+                      type="file" accept="image/png,image/jpeg,image/webp"
+                      onChange={(e) => setBannerFile(e.target.files?.[0] ?? null)}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+
+                  <input
+                    type="text" placeholder="클릭 시 이동할 링크 (선택사항)"
+                    value={bannerLinkUrl} onChange={(e) => setBannerLinkUrl(e.target.value)}
+                    style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                      background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontSize: 13 }}
+                  />
+
+                  {bannerError && <p style={{ margin: 0, fontSize: 12, color: "#c0392b" }}>{bannerError}</p>}
+
+                  <button
+                    onClick={() => handleSaveFooterBanner()}
+                    disabled={bannerSaving}
+                    style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--primary)",
+                      background: bannerSaving ? "var(--surface-container-highest)" : (bannerSaved ? "#D4EDDA" : "var(--primary)"),
+                      color: bannerSaving ? "var(--on-surface-variant)" : (bannerSaved ? "#155724" : "#fff"),
+                      fontWeight: 600, fontSize: 13, cursor: bannerSaving ? "not-allowed" : "pointer", width: "fit-content" }}
+                  >
+                    {bannerUploading ? "업로드 중..." : bannerSaving ? "저장 중..." : bannerSaved ? "저장됨 ✓" : "저장"}
+                  </button>
                 </div>
               )}
             </div>
@@ -2406,6 +2742,13 @@ export default function NewsletterPage() {
               <Item text="자동으로 찾으려면 🔄 자동 버튼 클릭 (네이버 이미지 자동 검색)" />
               <Item text="목록에는 오늘 이후 행사 중 과거에 발송된 적 없는 행사만 표시됩니다. 이미 EZ Letter에 포함된 행사는 자동으로 제외됩니다." />
               <Note>이미지 우선순위: 직접 등록 URL → 네이버 검색 → 홈페이지 og:image → EZ 로고</Note>
+            </Section>
+
+            <Section title="하단 상시 배너">
+              <Item text="발송 탭 → '하단 상시 배너'에서 이미지 업로드 + 클릭 링크(선택) 입력 후 켜기" />
+              <Item text="발송마다 고르는 게 아니라, 켜두면 다음 발송부터 계속 노출됩니다." />
+              <Item text="시즌이 바뀌면 이미지만 새로 올리고 저장하면 됩니다 (링크·켜짐 상태는 그대로 유지)." />
+              <Note>권장 사이즈: 가로 560px, 세로는 자유(보통 120~160px). 끄면 다음 발송부터 바로 사라집니다.</Note>
             </Section>
 
           </div>

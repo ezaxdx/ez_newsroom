@@ -50,7 +50,7 @@ export default function Footer() {
               className="text-sm transition-colors hover:text-black"
               style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
             >
-              지난호 보기
+              뉴스레터 지난호 보기
             </Link>
             {NAV_LINKS.map((item) => (
               <a

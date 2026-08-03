@@ -35,6 +35,8 @@ export type NewsletterData = {
   is_email?: boolean; // true이면 이미지 프록시 우회 (실제 발송용)
   header_image_url?: string; // 헤더 배경 이미지 — 절대 URL 또는 "/images/.."처럼 site_url 기준 상대경로. 없으면 기본 헤더 사용
   editorial_flap_url?: string; // 인사말 박스 위 봉투 뚜껑 장식(이벤트용) — 없으면 장식 없이 기본 박스만
+  editorial_box_color?: string; // 이벤트 지붕 장식과 짝을 이루는 테두리 박스 색상 — 있으면 흰 박스를 감싸는 색상 프레임으로 렌더링
+  footer_banner?: { image_url?: string; link_url?: string; enabled?: boolean } | null; // 하단 상시 배너 — 발송마다 고르는 게 아니라 curation_settings에 저장된 값을 항상 그대로 노출
 };
 
 // ── 팔레트 ─────────────────────────────────────────────────
@@ -119,19 +121,9 @@ function linkifyEditorial(text: string): string {
   return out.replace(/\u0000(\d+)\u0000/g, (_m, i) => anchors[Number(i)]);
 }
 
-// 이번 주(7/28)까지는 기존대로 데이터허브, 다음 주 화요일(8/4)부터 뉴스룸 딥링크로 전환.
-// KST 기준으로 비교 — 발송이 보통 자정 직후 실행되므로 UTC 그대로 비교하면 하루 어긋날 수 있음.
-const NEWSROOM_LINK_CUTOVER = "2026-08-04";
-const LEGACY_DATAHUB_LINK = "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do";
-function isNewsroomLinkLive(): boolean {
-  const kstDateStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().split("T")[0];
-  return kstDateStr >= NEWSROOM_LINK_CUTOVER;
-}
-
 // 뉴스 카드 → 뉴스룸 해당 기사 모달 딥링크 (?news=id) — 아카이브된 기사도 열리도록 홈에서 별도 조회.
-// 전환일 이전엔 기존 데이터허브 링크 유지(이번 주 발송은 지금까지와 동일해야 함).
 function newsDeepLink(id: string, site_url: string): string {
-  return isNewsroomLinkLive() ? `${site_url}/?news=${id}` : LEGACY_DATAHUB_LINK;
+  return `${site_url}/?news=${id}`;
 }
 
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
@@ -246,13 +238,20 @@ function newsSection(label: string, items: NewsCard[], vol: number, site_url: st
 export function generateNewsletterHTML(data: NewsletterData): string {
   const { vol_number: vol, send_date, editorial_text,
           mice_news, tourism_news, ai_news, ezpmp_news,
-          featured_events, upcoming_events, site_url, is_email = false, header_image_url, editorial_flap_url } = data;
+          featured_events, upcoming_events, site_url, is_email = false, header_image_url, editorial_flap_url, editorial_box_color, footer_banner } = data;
 
   const headerImageSrc = header_image_url
     ? (header_image_url.startsWith("http") ? header_image_url : `${site_url}${header_image_url}`)
     : `${site_url}/images/ez-letter-header.png`;
   const editorialFlapSrc = editorial_flap_url
     ? (editorial_flap_url.startsWith("http") ? editorial_flap_url : `${site_url}${editorial_flap_url}`)
+    : null;
+  // 색상 hex 입력 시 "#" 누락돼도 안전하게 처리 (관리자가 "B1D482"처럼 # 없이 입력하는 경우 대응)
+  const editorialBoxColor = editorial_box_color
+    ? (editorial_box_color.startsWith("#") ? editorial_box_color : `#${editorial_box_color}`)
+    : undefined;
+  const footerBannerSrc = footer_banner?.enabled && footer_banner.image_url
+    ? (footer_banner.image_url.startsWith("http") ? footer_banner.image_url : `${site_url}${footer_banner.image_url}`)
     : null;
 
   // Pick 4개 → 2행
@@ -303,27 +302,43 @@ export function generateNewsletterHTML(data: NewsletterData): string {
       </td>
     </tr>
 
-    <!-- ── EDITORIAL (베이지 박스, 이벤트 시 박스 안쪽 상단에 봉투 뚜껑 장식) ── -->
+    <!-- ── EDITORIAL (베이지 박스, 이벤트 시 박스 안쪽 상단에 봉투 뚜껑 장식 + 색상 프레임) ── -->
     <tr>
       <td style="background:${C.white};padding:24px 20px;">
         <table cellpadding="0" cellspacing="0" width="100%">
           <tr>
-            <td style="background:#F5EDE3;border-radius:15px;padding:0;">
+            <td style="background:${editorialBoxColor ?? "#F5EDE3"};border-radius:${editorial_box_color ? "0" : "15px"};padding:0;">
               <table cellpadding="0" cellspacing="0" width="100%">
                 ${editorialFlapSrc ? `
                 <tr>
                   <td style="padding:0;line-height:0;font-size:0;">
-                    <img src="${editorialFlapSrc}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;border-radius:15px 15px 0 0;">
+                    <img src="${editorialFlapSrc}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;margin-bottom:${editorial_box_color ? "-12px" : "0"};border-radius:${editorial_box_color ? "0" : "15px 15px 0 0"};">
                   </td>
                 </tr>` : ""}
                 <tr>
-                  <td style="padding:24px 28px;">
-                    ${editorialFlapSrc ? `
-                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
-                    <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+                  <td style="padding:${editorial_box_color ? "0 40px 20px" : "0"};">
+                    ${editorial_box_color ? `
+                    <table cellpadding="0" cellspacing="0" width="100%">
+                      <tr>
+                        <td style="background:#FFFFFF;border-radius:10px;padding:24px 28px;">
+                          ${editorialFlapSrc ? `
+                          <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                          <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+                          ` : `
+                          <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+                          <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                          `}
+                        </td>
+                      </tr>
+                    </table>
                     ` : `
-                    <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-                    <p style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</p>
+                    ${editorialFlapSrc ? `
+                    <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                    <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+                    ` : `
+                    <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
+                    <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                    `}
                     `}
                   </td>
                 </tr>
@@ -371,6 +386,16 @@ export function generateNewsletterHTML(data: NewsletterData): string {
         </table>
       </td>
     </tr>
+
+    ${footerBannerSrc ? `
+    <!-- ── 하단 상시 배너 (시즌마다 관리자가 이미지만 교체) ── -->
+    <tr>
+      <td style="background:${C.white};padding:0 32px 24px;text-align:center;">
+        ${footer_banner?.link_url
+          ? `<a href="${withUTM(footer_banner.link_url, vol)}" style="display:block;text-decoration:none;"><img src="${footerBannerSrc}" alt="" style="display:block;width:100%;max-width:536px;height:auto;margin:0 auto;border-radius:8px;"></a>`
+          : `<img src="${footerBannerSrc}" alt="" style="display:block;width:100%;max-width:536px;height:auto;margin:0 auto;border-radius:8px;">`}
+      </td>
+    </tr>` : ""}
 
     <!-- ── FOOTER ── -->
     <tr>

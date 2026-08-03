@@ -16,9 +16,60 @@ export type PopupData = {
   size_px?: number | null;   // 없으면 표시 방식별 기본값(고정 150 / 팝업 420)
   pos_x?: number | null;     // position="custom"일 때만 사용 — 관리자가 미리보기를 클릭해 찍은 위치(%)
   pos_y?: number | null;
+  effect?: string | null;   // 이미지 위 장식 효과: none|sparkle|hearts|bounce|shake (없으면 none)
 };
 
 const DEFAULT_SIZE = { floating: 150, modal: 420 } as const;
+
+// 이미지 위 장식 효과 — 관리자가 팝업 등록 시 고를 수 있음
+export const EFFECT_LABELS: Record<string, string> = {
+  none: "없음", sparkle: "반짝반짝 ✨", hearts: "하트 뿅뿅 💗", bounce: "통통 튕기기", shake: "살짝 흔들기",
+};
+export const EFFECT_KEYFRAMES = `
+  @keyframes popup-fx-sparkle { 0%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); } 50% { opacity: 1; transform: scale(1) rotate(20deg); } }
+  @keyframes popup-fx-heart   { 0% { opacity: 0; transform: translateY(0) scale(0.6); } 15% { opacity: 1; } 100% { opacity: 0; transform: translateY(-60px) scale(1.1); } }
+  @keyframes popup-fx-bounce  { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+  @keyframes popup-fx-shake   { 0%, 100% { transform: rotate(0deg); } 25% { transform: rotate(-6deg); } 75% { transform: rotate(6deg); } }
+`;
+// 이미지 위에 얹는 오버레이 요소(스팬)들 — sparkle/hearts용, 위치 배치용 순수 함수
+export function EffectOverlay({ effect }: { effect: string }) {
+  if (effect === "sparkle") {
+    return (
+      <>
+        {[
+          { top: "-10%", left: "-8%", delay: "0s", size: 16 },
+          { top: "-6%", left: "88%", delay: "0.5s", size: 12 },
+          { top: "78%", left: "-10%", delay: "1s", size: 12 },
+          { top: "85%", left: "90%", delay: "1.5s", size: 16 },
+        ].map((s, i) => (
+          <span key={i} style={{
+            position: "absolute", top: s.top, left: s.left, fontSize: s.size,
+            pointerEvents: "none", zIndex: 902,
+            animation: `popup-fx-sparkle 2.2s ease-in-out ${s.delay} infinite`,
+          }}>✨</span>
+        ))}
+      </>
+    );
+  }
+  if (effect === "hearts") {
+    return (
+      <>
+        {[
+          { left: "10%", delay: "0s", size: 14 },
+          { left: "45%", delay: "0.7s", size: 18 },
+          { left: "75%", delay: "1.4s", size: 14 },
+        ].map((s, i) => (
+          <span key={i} style={{
+            position: "absolute", bottom: "0%", left: s.left, fontSize: s.size,
+            pointerEvents: "none", zIndex: 902,
+            animation: `popup-fx-heart 2.4s ease-in ${s.delay} infinite`,
+          }}>💗</span>
+        ))}
+      </>
+    );
+  }
+  return null;
+}
 
 // "오늘 하루 보지 않기"는 팝업별로 기억 — 다른 팝업으로 교체되면 다시 노출됨
 const dismissKey = (id: string) => `popup_dismissed_${id}`;
@@ -42,6 +93,8 @@ export default function PopupBanner({
 
   // SSR 시엔 항상 닫힌 상태로 시작 — localStorage는 클라이언트에서만 읽을 수 있어 hydration 불일치 방지
   const [open, setOpen] = useState(false);
+  // 고정형(floating) 이미지는 content가 화면에 안 보이므로, 호버 시 설명을 툴팁으로 노출
+  const [hovering, setHovering] = useState(false);
   // 랜덤 위치는 접속할 때마다 새로 뽑음 (고양이 찾기 같은 이벤트용).
   // 서버에서 정하면 캐시·hydration 문제가 생기므로 클라이언트에서만 계산
   const [randomPos, setRandomPos] = useState<{ top: string; left: string } | null>(null);
@@ -161,12 +214,18 @@ export default function PopupBanner({
     // 랜덤 위치가 아직 안 정해졌으면(첫 렌더) 그리지 않음 — 왼쪽 위에 잠깐 튀는 것 방지
     if (popup.position === "random" && !randomPos) return null;
     const place = resolvePlace(20, 110);
+    const effect = popup.effect || "none";
+    // bounce/shake는 배치용 transform(translate 등)과 겹치면 안 되므로, 이미지를 감싸는 안쪽 래퍼에만 건다
+    const effectAnimation =
+      effect === "bounce" ? "popup-fx-bounce 1.2s ease-in-out infinite"
+      : effect === "shake" ? "popup-fx-shake 1.6s ease-in-out infinite"
+      : undefined;
     const inner = popup.image_url ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={popup.image_url}
         alt={popup.title}
-        style={{ display: "block", width: "100%", height: "auto" }}
+        style={{ display: "block", width: "100%", height: "auto", animation: effectAnimation }}
       />
     ) : (
       <span style={{
@@ -179,12 +238,32 @@ export default function PopupBanner({
 
     return (
       <div
+        onMouseEnter={() => setHovering(true)}
+        onMouseLeave={() => setHovering(false)}
         style={{
           position: "fixed", ...place, zIndex: 900,
           width: `min(${sizePx}px, 80vw)`,
           filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
         }}
       >
+        {popup.image_url && effect !== "none" && (
+          <>
+            <style>{EFFECT_KEYFRAMES}</style>
+            <EffectOverlay effect={effect} />
+          </>
+        )}
+        {popup.image_url && popup.content && hovering && (
+          <div style={{
+            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
+            marginBottom: 8, padding: "8px 12px", maxWidth: 220,
+            background: "rgba(0,0,0,0.85)", color: "#fff",
+            fontSize: "0.78rem", lineHeight: 1.5, borderRadius: 8,
+            whiteSpace: "pre-wrap", textAlign: "center",
+            pointerEvents: "none", zIndex: 901,
+          }}>
+            {popup.content}
+          </div>
+        )}
         {huntCode ? (
           // 찾기 이벤트: 링크로 보내지 않고 코드를 알려준 뒤 사라짐
           <button

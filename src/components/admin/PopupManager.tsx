@@ -5,6 +5,7 @@ import { Loader2, Plus } from "lucide-react";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { POPUP_PAGES } from "@/lib/popup";
 import EventHuntManager from "@/components/admin/EventHuntManager";
+import { EFFECT_LABELS, EFFECT_KEYFRAMES, EffectOverlay } from "@/components/newsroom/PopupBanner";
 
 type Popup = {
   id: string;
@@ -23,6 +24,7 @@ type Popup = {
   size_px: number | null;
   pos_x: number | null;
   pos_y: number | null;
+  effect: string | null;
   created_at: string;
 };
 
@@ -42,6 +44,7 @@ type FormState = {
   size_px: number;
   pos_x: number;
   pos_y: number;
+  effect: string;
 };
 
 // 표시 방식별 사이즈 슬라이더 범위/기본값 — API의 SIZE_RANGE와 동일하게 유지
@@ -57,6 +60,7 @@ const EMPTY_FORM: FormState = {
   pages: ["home"], random_page: false, hunt_code: "",
   size_px: SIZE_RANGE.floating.default,
   pos_x: 90, pos_y: 90,
+  effect: "none",
 };
 
 // 프리셋 위치("top-left" 등)를 미리보기 화면 안 대략적인 %로 변환 — 마커 표시용
@@ -232,6 +236,7 @@ export default function PopupManager() {
       size_px: p.size_px ?? SIZE_RANGE[p.display_type ?? "modal"]?.default ?? 420,
       pos_x: p.pos_x ?? 90,
       pos_y: p.pos_y ?? 90,
+      effect: p.effect ?? "none",
     });
     setError(null);
     setShowModal(true);
@@ -519,7 +524,7 @@ export default function PopupManager() {
               <div style={{ display: "flex", gap: 6 }}>
                 {([
                   { key: "floating", label: "고정", desc: "구석에 상시 노출 · 닫기 없음" },
-                  { key: "modal", label: "팝업", desc: "가운데 노출 · 닫기 가능" },
+                  { key: "modal", label: "팝업", desc: "닫기 가능" },
                 ] as const).map(({ key, label, desc }) => {
                   const on = form.display_type === key;
                   return (
@@ -602,6 +607,20 @@ export default function PopupManager() {
               </label>
             </div>
 
+            {form.display_type === "floating" && (
+              <div style={{ marginBottom: 10 }}>
+                <label style={labelStyle}>이미지 효과</label>
+                <select value={form.effect}
+                  onChange={(e) => setForm((f) => ({ ...f, effect: e.target.value }))}
+                  style={{ ...inputStyle, cursor: "pointer" }}
+                >
+                  {Object.entries(EFFECT_LABELS).map(([key, label]) => (
+                    <option key={key} value={key}>{label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
                 <label style={labelStyle}>시작일 *</label>
@@ -672,9 +691,14 @@ export default function PopupManager() {
         const isFloatingPreview = form.display_type === "floating";
         const place = resolvePreviewPlace(form.position, form.pos_x, form.pos_y, 20, 110);
         const previewUrl = PREVIEW_PAGE_URL[form.pages[0]] ?? "/";
+        const previewEffect = isFloatingPreview ? (form.effect || "none") : "none";
+        const previewEffectAnimation =
+          previewEffect === "bounce" ? "popup-fx-bounce 1.2s ease-in-out infinite"
+          : previewEffect === "shake" ? "popup-fx-shake 1.6s ease-in-out infinite"
+          : undefined;
         const media = form.image_url ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={form.image_url} alt="미리보기" style={{ display: "block", width: "100%", height: "auto" }} />
+          <img src={form.image_url} alt="미리보기" style={{ display: "block", width: "100%", height: "auto", animation: previewEffectAnimation }} />
         ) : isFloatingPreview ? (
           <span style={{
             display: "block", padding: "12px 18px", fontSize: "0.85rem", fontWeight: 700,
@@ -732,6 +756,12 @@ export default function PopupManager() {
                   filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
                   cursor: dragState?.mode === "move" ? "grabbing" : "grab",
                 }}>
+                {previewEffect !== "none" && (
+                  <>
+                    <style>{EFFECT_KEYFRAMES}</style>
+                    <EffectOverlay effect={previewEffect} />
+                  </>
+                )}
                 {media}
                 <div
                   onMouseDown={(e) => startDrag("resize", e)}
