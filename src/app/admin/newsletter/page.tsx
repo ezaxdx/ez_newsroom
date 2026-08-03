@@ -1232,6 +1232,32 @@ export default function NewsletterPage() {
                       handleEditorialInput();
                     }
                   }}
+                  onPaste={(e) => {
+                    // 워드·노션·구글독스 등에서 붙여넣으면 원본의 글머리 기호(<li>)·문단 여백(<p>)이
+                    // 그대로 딸려 들어와 "친 적 없는 점"·"과한 줄간격"의 원인이 됨 — 서식 다 버리고 줄바꿈만 유지한 순수 텍스트로 붙여넣기
+                    e.preventDefault();
+                    const text = e.clipboardData.getData("text/plain");
+                    const sel = window.getSelection();
+                    if (!sel || sel.rangeCount === 0) return;
+                    const range = sel.getRangeAt(0);
+                    range.deleteContents();
+                    const frag = document.createDocumentFragment();
+                    const lines = text.split(/\r\n|\r|\n/);
+                    lines.forEach((line, i) => {
+                      if (i > 0) frag.appendChild(document.createElement("br"));
+                      if (line) frag.appendChild(document.createTextNode(line));
+                    });
+                    const lastNode = frag.lastChild;
+                    range.insertNode(frag);
+                    if (lastNode) {
+                      const after = document.createRange();
+                      after.setStartAfter(lastNode);
+                      after.collapse(true);
+                      sel.removeAllRanges();
+                      sel.addRange(after);
+                    }
+                    handleEditorialInput();
+                  }}
                   onMouseUp={captureEditorialSelection}
                   onKeyUp={captureEditorialSelection}
                   onFocus={() => setEditorialFocused(true)}
