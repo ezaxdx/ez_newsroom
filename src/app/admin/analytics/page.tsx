@@ -317,7 +317,7 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
     <div className="p-5 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
       <p className="text-[0.7rem] font-semibold tracking-[0.05em] uppercase m-0 mb-1"
         style={{ color: "var(--on-surface-variant)" }}>{label}</p>
-      <p className="text-3xl font-bold tracking-tight m-0">{value.toLocaleString()}</p>
+      <p className="text-3xl font-bold tracking-tight m-0 break-words">{value.toLocaleString()}</p>
       {sub && <p className="text-xs mt-1 m-0" style={{ color: "var(--on-surface-variant)" }}>{sub}</p>}
     </div>
   );
@@ -422,7 +422,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       </div>
 
       {/* ── KPI 카드 ── */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="총 접속 수" value={totals.view} />
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />

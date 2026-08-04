@@ -550,21 +550,19 @@ export default function RssPage() {
           등록된 소스가 없습니다.
         </div>
       ) : (
-        <div className="rounded-lg overflow-x-auto" style={{ border: "1px solid var(--surface-container-highest)" }}>
-          <div style={{ minWidth: 420 }}>
-            {/* 테이블 헤더 */}
-            <div className="grid items-center gap-3 px-4 py-2"
-              style={{ gridTemplateColumns: "28px 1fr 90px 64px 40px 76px", background: "var(--surface-container)" }}>
-              {["", "소스", "카테고리", "중요도", "", ""].map((h, i) => (
-                <span key={i} className="text-[0.65rem] font-semibold uppercase tracking-wide"
-                  style={{ color: "var(--on-surface-variant)" }}>{h}</span>
-              ))}
-            </div>
-            <div className="flex flex-col">
-              {filteredSources.map((source) => (
-                <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-              ))}
-            </div>
+        <div className="rounded-lg" style={{ border: "1px solid var(--surface-container-highest)" }}>
+          {/* 테이블 헤더 (데스크톱 전용) */}
+          <div className="hidden sm:grid items-center gap-3 px-4 py-2"
+            style={{ gridTemplateColumns: "28px 1fr 90px 64px 40px 76px", background: "var(--surface-container)" }}>
+            {["", "소스", "카테고리", "중요도", "", ""].map((h, i) => (
+              <span key={i} className="text-[0.65rem] font-semibold uppercase tracking-wide"
+                style={{ color: "var(--on-surface-variant)" }}>{h}</span>
+            ))}
+          </div>
+          <div className="flex flex-col">
+            {filteredSources.map((source) => (
+              <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
+            ))}
           </div>
         </div>
       )}
@@ -787,8 +785,64 @@ function SourceCard({
         </div>
       )}
 
-      {/* ── 테이블 행 ── */}
-      <div className="grid items-center gap-3 px-4 py-2.5"
+      {/* ── 테이블 행 (모바일: 카드형 스택) ── */}
+      <div className="flex sm:hidden flex-col gap-2 px-4 py-3"
+        style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+        <div className="flex items-start gap-2.5">
+          <div className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
+            style={{ background: TYPE_META[type].bg }} title={TYPE_META[type].label}>
+            <Icon size={13} style={{ color: TYPE_META[type].color }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <p className="font-semibold text-sm m-0 break-words">{editForm.source_name}</p>
+              {source.keyword_filter && (
+                <span title="관심 키워드 매칭 기사만 수집" style={{ color: "#2563eb", fontSize: "0.7rem", flexShrink: 0 }}>🔍</span>
+              )}
+            </div>
+            <a
+              href={editForm.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs truncate block transition-opacity hover:opacity-60"
+              style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
+              title={editForm.url}
+            >
+              {editForm.url}{type === "api" && source.api_config && "endpoint" in source.api_config ? source.api_config.endpoint : ""}
+            </a>
+          </div>
+          <button onClick={() => onToggle(source)} style={{ background: "transparent", border: "none", cursor: "pointer", flexShrink: 0 }}>
+            {source.is_active
+              ? <ToggleRight size={20} style={{ color: "var(--primary)" }} />
+              : <ToggleLeft size={20} style={{ color: "var(--on-surface-variant)" }} />}
+          </button>
+        </div>
+        <div className="flex items-center justify-between pl-9">
+          <div className="flex items-center gap-3">
+            <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>{editForm.default_category}</span>
+            <span className="text-xs font-semibold" style={{ color: weight >= 7 ? "var(--primary)" : "var(--on-surface-variant)" }}>
+              {weightLabel(weight)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => { setEditing(!editing); setEditForm({ source_name: source.source_name, url: source.url, default_category: source.default_category, weight: source.weight, keyword_filter: source.keyword_filter ?? false }); }}
+              className="p-1.5 rounded transition-colors"
+              title="수정"
+              style={{ background: editing ? "var(--surface-container-highest)" : "transparent", border: "none", cursor: "pointer" }}
+            >
+              <Pencil size={14} style={{ color: editing ? "var(--primary)" : "var(--on-surface-variant)" }} />
+            </button>
+            <button onClick={() => onRemove(source.id)} className="p-1.5 rounded"
+              style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+              <Trash2 size={14} style={{ color: "#dc2626" }} />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ── 테이블 행 (데스크톱: 그리드) ── */}
+      <div className="hidden sm:grid items-center gap-3 px-4 py-2.5"
         style={{
           gridTemplateColumns: "28px 1fr 90px 64px 40px 76px",
           borderTop: "1px solid var(--surface-container-highest)",
