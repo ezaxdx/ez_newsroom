@@ -565,7 +565,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
   return (
     <div>
       {/* 통계 카드 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 28 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: 12, marginBottom: 28 }}>
         {statCards.map(({ label, value, color, desc }) => (
           <div key={label} style={{ padding: "14px 16px", borderRadius: 10,
             background: "var(--surface-container-lowest)",
@@ -579,7 +579,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24, marginBottom: 28 }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2" style={{ gap: 24, marginBottom: 28 }}>
         {/* 사업영역 커버리지 */}
         <div style={{ padding: 20, borderRadius: 12,
           background: "var(--surface-container-lowest)",
@@ -1035,8 +1035,8 @@ function ManualOpsPanel() {
       </button>
 
       {open && (
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16,
+        <div className="grid grid-cols-1 sm:grid-cols-2" style={{
+          gap: 16,
           padding: 20, borderRadius: 12,
           border: "1px solid var(--surface-container-high)",
           background: "var(--surface-container-lowest)",
@@ -1589,7 +1589,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       </div>
 
       {/* 통계 — 클릭 시 해당 필터 적용 */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, marginBottom: 20 }}>
+      <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: 12, marginBottom: 20 }}>
         {([
           { key: "all",        label: "전체",        value: stats.total,      color: "var(--on-surface)", desc: "" },
           { key: "published",  label: "공개",        value: stats.published,  color: "#2563eb", desc: "" },
@@ -1729,8 +1729,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       </div>
 
       {/* 테이블 */}
-      <div style={{ borderRadius: 10, overflow: "hidden",
+      <div className="overflow-x-auto" style={{ borderRadius: 10,
         border: "1px solid var(--surface-container-high)" }}>
+        <div style={{ minWidth: 600 }}>
         {/* 헤더 */}
         <div style={{
           display: "grid",
@@ -1838,6 +1839,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               </button>
             </div>
           ))}
+        </div>
         </div>
       </div>
     </div>

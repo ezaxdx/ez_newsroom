@@ -1074,12 +1074,14 @@ export default function NewsletterPage() {
   }
 
   const tabStyle = (t: Tab): React.CSSProperties => ({
-    padding: "8px 20px",
+    padding: "8px 16px",
     borderRadius: "6px 6px 0 0",
     border: "none",
     cursor: "pointer",
     fontWeight: tab === t ? 700 : 400,
     fontSize: "14px",
+    whiteSpace: "nowrap",
+    flexShrink: 0,
     background: tab === t ? "var(--surface-container)" : "transparent",
     color: tab === t ? "var(--on-surface)" : "var(--on-surface-variant)",
     borderBottom: tab === t ? "2px solid var(--primary)" : "2px solid transparent",
@@ -1109,14 +1111,14 @@ export default function NewsletterPage() {
     && issues.some((i) => (i.sent_at ?? i.created_at).slice(0, 10) < twoWeeksAgoStr);
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 900 }}>
+    <div className="px-4 sm:px-8" style={{ paddingTop: 28, paddingBottom: 28, maxWidth: 900 }}>
       <h1 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2" style={{ marginBottom: 24 }}>
         뉴스레터 관리
         <HelpTrigger onClick={() => setHelpOpen(true)} />
       </h1>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 4, marginBottom: 0, borderBottom: "1px solid var(--surface-container-highest)" }}>
+      {/* Tabs (좁은 화면에서 가로 스크롤) */}
+      <div style={{ display: "flex", gap: 4, marginBottom: 0, borderBottom: "1px solid var(--surface-container-highest)", overflowX: "auto" }}>
         <button style={tabStyle("send")} onClick={() => setTab("send")}>발송</button>
         <button style={tabStyle("settings")} onClick={() => setTab("settings")}>발송 설정</button>
         <button style={tabStyle("history")} onClick={() => setTab("history")}>이력</button>

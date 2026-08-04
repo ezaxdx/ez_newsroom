@@ -314,19 +314,19 @@ export default function CurationBoard({
 
   return (
     <div>
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      {/* Header (좁은 화면에서는 세로로 쌓이고 버튼이 줄바꿈됨) */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
           <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">큐레이션 보드 <HelpTriggerConnected /></h2>
           <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
             드래그로 순서를 조정하고 발행 상태를 관리합니다
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleRunCuration}
             disabled={running}
-            className="flex items-center gap-2 h-9 px-4 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
+            className="flex items-center gap-2 h-9 px-4 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}
           >
             {running ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />}
@@ -335,7 +335,7 @@ export default function CurationBoard({
           <button
             onClick={handleSave}
             disabled={saving}
-            className="h-9 px-5 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80"
+            className="h-9 px-5 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
           >
             {saving ? "저장 중..." : hasPendingChanges ? "변경사항 저장 •" : "변경사항 저장"}
@@ -639,7 +639,7 @@ function ArticleCard({
       onDragEnter={isDraggable ? () => onDragEnter(idx) : undefined}
       onDragEnd={isDraggable ? onDragEnd : undefined}
       onDragOver={isDraggable ? (e) => e.preventDefault() : undefined}
-      className="flex items-start gap-3 p-4 rounded-lg transition-shadow"
+      className="flex flex-wrap items-start gap-3 p-4 rounded-lg transition-shadow"
       style={{
         background: isTopNews ? "rgba(var(--primary-rgb, 26,115,232),0.04)" : "var(--surface-container-lowest)",
         boxShadow: isTopNews ? "0 0 0 1.5px var(--primary)" : "0 1px 3px rgba(26,28,29,0.04)",
@@ -665,8 +665,8 @@ function ArticleCard({
       )}
 
       {/* content */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 mb-1">
+      <div className="flex-1 min-w-[200px]">
+        <div className="flex items-center gap-1.5 mb-1 flex-wrap">
           {isTopNews && (
             <span
               className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
@@ -750,7 +750,7 @@ function ArticleCard({
       </div>
 
       {/* actions */}
-      <div className="flex items-center gap-1 flex-shrink-0">
+      <div className="flex items-center gap-1 flex-shrink-0 ml-auto">
         {tab === "live" && (
           <>
             <button title="위로" onClick={() => onMove(item.id, -1)}

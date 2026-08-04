@@ -99,7 +99,7 @@ function LevelPicker({
       <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--on-surface-variant)" }}>
         독자 레벨 선택
       </span>
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         {LEVELS.map((l) => {
           const m = LEVEL_META[l];
           const selected = value === l;
@@ -167,7 +167,7 @@ function Fields({
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="grid gap-4" style={{ gridTemplateColumns: "1fr 1fr" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Category */}
         <label className="flex flex-col gap-1.5">
           <span className="text-xs font-semibold tracking-wide uppercase" style={{ color: "var(--on-surface-variant)" }}>

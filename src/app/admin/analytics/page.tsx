@@ -337,9 +337,9 @@ function FunnelBlock({ title, steps }: { title: string; steps: FunnelStep[] }) {
             style={{ background: "var(--primary)", color: "#fff" }}>
             {idx + 1}
           </div>
-          <div className="flex-1">
-            <div className="flex items-center justify-between mb-1.5">
-              <span className="text-sm font-medium">{step.label}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between mb-1.5 gap-2">
+              <span className="text-sm font-medium truncate">{step.label}</span>
               <span className="text-sm font-bold">{step.count.toLocaleString()}
                 <span className="text-xs font-normal ml-1.5" style={{ color: "var(--on-surface-variant)" }}>
                   ({step.pct}%)
@@ -432,7 +432,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       </div>
 
       {/* ── 유입 경로 + UTM 캠페인 ── */}
-      <div className="grid grid-cols-2 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {/* 유입 경로 */}
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
           <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
@@ -444,9 +444,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           )}
           <div className="flex flex-col gap-3">
             {referrers.map((r) => (
-              <div key={r.source}>
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm">
+              <div key={r.source} className="min-w-0">
+                <div className="flex items-center justify-between mb-1 gap-2">
+                  <span className="text-sm truncate">
                     {r.source}
                     {r.source === "봇/크롤러(자동수집)" && (
                       <span className="text-xs ml-1.5" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
@@ -459,7 +459,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                       </span>
                     )}
                   </span>
-                  <span className="text-sm font-semibold">{r.count.toLocaleString()}</span>
+                  <span className="text-sm font-semibold flex-shrink-0">{r.count.toLocaleString()}</span>
                 </div>
                 <div className="h-1.5 rounded-full overflow-hidden" style={{ background: "var(--surface-container-highest)" }}>
                   <div
@@ -526,7 +526,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             </p>
           </SectionInfoModal>
         </div>
-        <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-2 gap-8" : ""}>
+        <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-1 sm:grid-cols-2 gap-8" : ""}>
           <FunnelBlock title="탐색형 (직접 클릭)" steps={exploreFunnel} />
           {deeplinkFunnel[0].count > 0 && <FunnelBlock title="딥링크 (자동 오픈)" steps={deeplinkFunnel} />}
         </div>

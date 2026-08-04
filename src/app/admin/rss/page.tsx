@@ -550,19 +550,21 @@ export default function RssPage() {
           등록된 소스가 없습니다.
         </div>
       ) : (
-        <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--surface-container-highest)" }}>
-          {/* 테이블 헤더 */}
-          <div className="grid items-center gap-3 px-4 py-2"
-            style={{ gridTemplateColumns: "28px 1fr 90px 64px 40px 76px", background: "var(--surface-container)" }}>
-            {["", "소스", "카테고리", "중요도", "", ""].map((h, i) => (
-              <span key={i} className="text-[0.65rem] font-semibold uppercase tracking-wide"
-                style={{ color: "var(--on-surface-variant)" }}>{h}</span>
-            ))}
-          </div>
-          <div className="flex flex-col">
-            {filteredSources.map((source) => (
-              <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
-            ))}
+        <div className="rounded-lg overflow-x-auto" style={{ border: "1px solid var(--surface-container-highest)" }}>
+          <div style={{ minWidth: 420 }}>
+            {/* 테이블 헤더 */}
+            <div className="grid items-center gap-3 px-4 py-2"
+              style={{ gridTemplateColumns: "28px 1fr 90px 64px 40px 76px", background: "var(--surface-container)" }}>
+              {["", "소스", "카테고리", "중요도", "", ""].map((h, i) => (
+                <span key={i} className="text-[0.65rem] font-semibold uppercase tracking-wide"
+                  style={{ color: "var(--on-surface-variant)" }}>{h}</span>
+              ))}
+            </div>
+            <div className="flex flex-col">
+              {filteredSources.map((source) => (
+                <SourceCard key={source.id} source={source} categories={categories} onToggle={toggleActive} onRemove={remove} onUpdate={(s) => setSources((prev) => prev.map((p) => p.id === s.id ? s : p))} />
+              ))}
+            </div>
           </div>
         </div>
       )}
