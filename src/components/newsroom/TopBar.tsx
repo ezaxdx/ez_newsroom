@@ -84,20 +84,6 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
             행사 캘린더
           </Link>
 
-          <a
-            href="https://docs.google.com/forms/d/1sRet6VjDP2VyPr60Jgpc-W9lzBX0ZJ1j7sTAQ0fFUDg/viewform"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
-            style={{
-              background: "var(--surface-container)",
-              color: "var(--on-surface)",
-              border: "1px solid var(--surface-container-high)",
-            }}
-          >
-            뉴스소스 모집
-          </a>
-
           <Link
             href="/admin"
             className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
