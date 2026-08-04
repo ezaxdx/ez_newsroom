@@ -124,14 +124,14 @@ export default function CategoryArchive({ category, items: initialItems }: Props
           />
         </label>
 
-        {/* Date range */}
-        <div className="flex items-center gap-2">
+        {/* Date range (좁은 화면에서 네이티브 date input 최소폭 때문에 살짝 넘치던 것 방지용 폭 제한) */}
+        <div className="flex items-center gap-2 flex-wrap">
           <Calendar size={14} style={{ color: "var(--on-surface-variant)" }} />
           <input
             type="date"
             value={dateFrom}
             onChange={(e) => setDateFrom(e.target.value)}
-            className="h-9 px-3 rounded-md text-sm outline-none"
+            className="h-9 px-3 rounded-md text-sm outline-none w-[130px] sm:w-auto"
             style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
@@ -141,7 +141,7 @@ export default function CategoryArchive({ category, items: initialItems }: Props
             type="date"
             value={dateTo}
             onChange={(e) => setDateTo(e.target.value)}
-            className="h-9 px-3 rounded-md text-sm outline-none"
+            className="h-9 px-3 rounded-md text-sm outline-none w-[130px] sm:w-auto"
             style={{ background: "var(--surface-container-lowest)", border: "1px solid transparent", color: "var(--on-surface)" }}
             onFocus={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
             onBlur={(e) => (e.currentTarget.style.borderColor = "transparent")}
@@ -216,7 +216,7 @@ export default function CategoryArchive({ category, items: initialItems }: Props
                 </span>
               </div>
 
-              <div className="grid gap-6" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+              <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {dayItems.map((item) => (
                   <article
                     key={item.id}

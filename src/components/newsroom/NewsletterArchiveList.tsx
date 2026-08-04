@@ -19,6 +19,12 @@ function formatDate(iso: string | null) {
   return new Date(iso).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", year: "numeric", month: "long", day: "numeric" });
 }
 
+// 인사말 에디터가 서식 있는 HTML(<div>·<br>·<span> 등)로 저장하므로, 목록 미리보기에선 태그를 걷어내고
+// 순수 텍스트만 보여줌 — 안 그러면 카드에 "<div style=...>" 같은 마크업이 그대로 노출됨
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+}
+
 function monthLabel(ym: string) {
   const [y, m] = ym.split("-");
   return `${y}년 ${Number(m)}월`;
@@ -95,7 +101,7 @@ export default function NewsletterArchiveList({ issues }: Props) {
                 {formatDate(issue.sent_at)}
               </p>
               <p className="text-sm line-clamp-3" style={{ color: "var(--on-surface)" }}>
-                {issue.editorial_text?.trim() || "이번 호 EZ Letter를 확인해보세요."}
+                {stripHtml(issue.editorial_text ?? "") || "이번 호 EZ Letter를 확인해보세요."}
               </p>
             </div>
           </Link>

@@ -171,11 +171,11 @@ export default function EventsClient({ events }: Props) {
         </p>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "340px 1fr", gap: 32 }}>
+      <div className="grid grid-cols-1 md:grid-cols-[340px_1fr]" style={{ gap: 32 }}>
 
-        {/* ── 왼쪽: 캘린더 + EZPMP Picks ── */}
+        {/* ── 왼쪽: 캘린더 + EZPMP Picks (sticky는 좌우 2단일 때만 의미가 있어 md 이상에서만 적용) ── */}
         <div>
-          <div style={{ position: "sticky", top: 100 }}>
+          <div className="md:sticky md:top-[100px]">
           <div style={{ background: "var(--surface-container-lowest)",
             border: "1px solid var(--surface-container-high)",
             borderRadius: 16, padding: "20px 16px" }}>
