@@ -431,37 +431,6 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
       </div>
 
-      {/* ── 인게이지먼트 퍼널 (탐색형 vs 딥링크 분리) ── */}
-      <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-        <div className="flex items-center gap-2 mb-5">
-          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
-            style={{ color: "var(--on-surface-variant)" }}>
-            인게이지먼트 퍼널
-          </p>
-          <SectionInfoModal title="인게이지먼트 퍼널이란?">
-            <p className="m-0 mb-3">
-              방문자가 접속 → 기사 클릭 → 원문 클릭까지 얼마나 이어지는지 보여주는 단계별 전환 지표입니다.
-            </p>
-            <p className="m-0 mb-1">
-              딥링크(뉴스레터 개별 기사 클릭 등)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까움. 그래서 실제로 홈에서 직접 기사를 골라 클릭한 &ldquo;탐색형&rdquo; 여정과 분리하여 집계
-            </p>
-            <p className="m-0 mb-3" style={{ paddingLeft: 14 }}>
-              → 뉴스레터를 통해 자동으로 열린 것과 진짜 클릭한 것이 섞여서 전환율이 왜곡 가능성 有
-            </p>
-            <p className="m-0 mb-1">
-              ※ 탐색형은 &ldquo;뉴스레터가 아닌 유입&rdquo;이라는 뜻이 아님. 홈으로 들어와서 직접 기사를 고른 사람들 전체를 뜻하고 뉴스레터의 EZ 뉴스룸 바로가기처럼 홈으로 연결되는 링크도 여기 포함
-            </p>
-            <p className="m-0" style={{ paddingLeft: 14 }}>
-              → 뉴스레터를 통한 개별 기사 딥링크(모달 자동 오픈)만 따로 지표 수집
-            </p>
-          </SectionInfoModal>
-        </div>
-        <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-2 gap-8" : ""}>
-          <FunnelBlock title="탐색형 (직접 클릭)" steps={exploreFunnel} />
-          {deeplinkFunnel[0].count > 0 && <FunnelBlock title="딥링크 (자동 오픈)" steps={deeplinkFunnel} />}
-        </div>
-      </section>
-
       {/* ── 유입 경로 + UTM 캠페인 ── */}
       <div className="grid grid-cols-2 gap-5">
         {/* 유입 경로 */}
@@ -531,6 +500,37 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </div>
         </section>
       </div>
+
+      {/* ── 인게이지먼트 퍼널 (탐색형 vs 딥링크 분리) ── */}
+      <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
+        <div className="flex items-center gap-2 mb-5">
+          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
+            style={{ color: "var(--on-surface-variant)" }}>
+            인게이지먼트 퍼널
+          </p>
+          <SectionInfoModal title="인게이지먼트 퍼널이란?">
+            <p className="m-0 mb-3">
+              방문자가 접속 → 기사 클릭 → 원문 클릭까지 얼마나 이어지는지 보여주는 단계별 전환 지표입니다.
+            </p>
+            <p className="m-0 mb-1">
+              딥링크(뉴스레터 개별 기사 클릭 등)는 도착 즉시 모달이 자동으로 열려 &ldquo;기사 클릭&rdquo;이 항상 100%에 가까움. 그래서 실제로 홈에서 직접 기사를 골라 클릭한 &ldquo;탐색형&rdquo; 여정과 분리하여 집계
+            </p>
+            <p className="m-0 mb-3" style={{ paddingLeft: 14 }}>
+              → 뉴스레터를 통해 자동으로 열린 것과 진짜 클릭한 것이 섞여서 전환율이 왜곡 가능성 有
+            </p>
+            <p className="m-0 mb-1">
+              ※ 탐색형은 &ldquo;뉴스레터가 아닌 유입&rdquo;이라는 뜻이 아님. 홈으로 들어와서 직접 기사를 고른 사람들 전체를 뜻하고 뉴스레터의 EZ 뉴스룸 바로가기처럼 홈으로 연결되는 링크도 여기 포함
+            </p>
+            <p className="m-0" style={{ paddingLeft: 14 }}>
+              → 뉴스레터를 통한 개별 기사 딥링크(모달 자동 오픈)만 따로 지표 수집
+            </p>
+          </SectionInfoModal>
+        </div>
+        <div className={deeplinkFunnel[0].count > 0 ? "grid grid-cols-2 gap-8" : ""}>
+          <FunnelBlock title="탐색형 (직접 클릭)" steps={exploreFunnel} />
+          {deeplinkFunnel[0].count > 0 && <FunnelBlock title="딥링크 (자동 오픈)" steps={deeplinkFunnel} />}
+        </div>
+      </section>
 
       {/* ── 카테고리별 성과 ── */}
       <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
@@ -744,11 +744,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           <Def term="전체 전환율">메인 접속 대비 원문 클릭 비율입니다(접속 → 원문 클릭).</Def>
         </Section>
 
-        <Section title="2. 인게이지먼트 퍼널">
-          <Item text="탐색형/딥링크 여정 구분 및 상세 설명은 해당 섹션 제목 옆 ⓘ 아이콘을 참고하세요." />
-        </Section>
-
-        <Section title="3. 트래픽 소스">
+        <Section title="2. 트래픽 소스">
           <Item text="UTM 파라미터가 있으면 우선 사용합니다(카카오톡, 뉴스레터, SNS 등)." />
           <Item text="UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별합니다 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘." />
           <Indent>링크 예시: ?utm_source=kakao&amp;utm_campaign=weekly</Indent>
@@ -765,6 +761,10 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             카카오톡·슬랙·카카오뷰 등에 링크를 공유하면 메신저 서버가 미리보기용으로 한 번 접속(링크 미리보기 봇) ·
             사이트가 살아있는지 주기적으로 확인하는 모니터링/업타임 체크 봇 · Playwright·Puppeteer 등 SEO 크롤러·자동화 테스트 툴
           </Indent>
+        </Section>
+
+        <Section title="3. 인게이지먼트 퍼널">
+          <Item text="탐색형/딥링크 여정 구분 및 상세 설명은 해당 섹션 제목 옆 ⓘ 아이콘을 참고하세요." />
         </Section>
 
         <Section title="4. 아카이브 카테고리별 기사 반응">
