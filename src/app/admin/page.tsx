@@ -114,8 +114,8 @@ export default async function AdminPage() {
         {curationLogs.length === 0 ? (
           <p className="text-sm" style={{ color: "var(--on-surface-variant)" }}>아직 실행 기록이 없습니다.</p>
         ) : (
-          <div className="rounded-lg overflow-hidden" style={{ border: "1px solid var(--outline-variant)" }}>
-            <table className="w-full text-sm">
+          <div className="rounded-lg overflow-x-auto" style={{ border: "1px solid var(--outline-variant)" }}>
+            <table className="w-full text-sm" style={{ minWidth: 560 }}>
               <thead>
                 <tr style={{ background: "var(--surface-container-lowest)" }}>
                   {["실행 시각", "가져옴", "발행", "대기", "스킵", "실패", "소요"].map((h) => (

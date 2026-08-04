@@ -2054,24 +2054,26 @@ export default function NewsletterPage() {
                       <p style={{ margin: 0, padding: "14px 16px 8px", fontSize: 12, fontWeight: 600, color: "var(--on-surface-variant)" }}>
                         최근 수신거부 (최대 10건)
                       </p>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                        <thead>
-                          <tr style={{ background: "var(--surface-container-high)" }}>
-                            <th style={thStyle}>이메일</th>
-                            <th style={thStyle}>이름</th>
-                            <th style={thStyle}>수신거부일</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {recentUnsub.map((s) => (
-                            <tr key={s.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
-                              <td style={tdStyle}>{s.email}</td>
-                              <td style={tdStyle}>{s.name ?? "-"}</td>
-                              <td style={tdStyle}>{new Date(s.unsubscribed_at!).toLocaleDateString("ko-KR")}</td>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", minWidth: 420, borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ background: "var(--surface-container-high)" }}>
+                              <th style={thStyle}>이메일</th>
+                              <th style={thStyle}>이름</th>
+                              <th style={thStyle}>수신거부일</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {recentUnsub.map((s) => (
+                              <tr key={s.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                                <td style={tdStyle}>{s.email}</td>
+                                <td style={tdStyle}>{s.name ?? "-"}</td>
+                                <td style={tdStyle}>{new Date(s.unsubscribed_at!).toLocaleDateString("ko-KR")}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
                   )}
                 </>
@@ -2148,8 +2150,8 @@ export default function NewsletterPage() {
                 불러오는 중...
               </div>
             ) : (
-              <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <div style={{ ...cardStyle, padding: 0, overflowX: "auto" }}>
+                <table style={{ width: "100%", minWidth: 640, borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "var(--surface-container-high)" }}>
                       <th style={{ ...thStyle, textAlign: "center", width: 36 }}>
@@ -2327,8 +2329,8 @@ export default function NewsletterPage() {
                     {filteredIssues.length}건 표시 중 (전체 {issues.length}건)
                   </span>
                 </div>
-                <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <div style={{ ...cardStyle, padding: 0, overflowX: "auto" }}>
+                  <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={{ background: "var(--surface-container-high)" }}>
                         <th style={thStyle}>Vol</th>
@@ -2609,38 +2611,40 @@ export default function NewsletterPage() {
                     ) : issueLogs.length === 0 ? (
                       <p style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>로그가 없습니다.</p>
                     ) : (
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                        <thead>
-                          <tr style={{ background: "var(--surface-container-high)" }}>
-                            <th style={{ ...thStyle, fontSize: 12 }}>이메일</th>
-                            <th style={{ ...thStyle, fontSize: 12, textAlign: "center" }}>상태</th>
-                            {logMode === "all" && <th style={{ ...thStyle, fontSize: 12 }}>오류</th>}
-                            <th style={{ ...thStyle, fontSize: 12 }}>시간</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {issueLogs.map(log => (
-                            <tr key={log.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
-                              <td style={{ ...tdStyle, fontSize: 12 }}>{log.email}</td>
-                              <td style={{ ...tdStyle, fontSize: 12, textAlign: "center" }}>
-                                <span style={{
-                                  display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                                  background: log.status === "success" ? "#D4EDDA" : "#F8D7DA",
-                                  color: log.status === "success" ? "#155724" : "#721C24",
-                                }}>
-                                  {log.status === "success" ? "성공" : "실패"}
-                                </span>
-                              </td>
-                              {logMode === "all" && (
-                                <td style={{ ...tdStyle, fontSize: 12, color: "#c0392b" }}>{log.error_message ?? "-"}</td>
-                              )}
-                              <td style={{ ...tdStyle, fontSize: 12, whiteSpace: "nowrap" }}>
-                                {log.sent_at ? new Date(log.sent_at).toLocaleString("ko-KR") : "-"}
-                              </td>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", minWidth: 480, borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ background: "var(--surface-container-high)" }}>
+                              <th style={{ ...thStyle, fontSize: 12 }}>이메일</th>
+                              <th style={{ ...thStyle, fontSize: 12, textAlign: "center" }}>상태</th>
+                              {logMode === "all" && <th style={{ ...thStyle, fontSize: 12 }}>오류</th>}
+                              <th style={{ ...thStyle, fontSize: 12 }}>시간</th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {issueLogs.map(log => (
+                              <tr key={log.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                                <td style={{ ...tdStyle, fontSize: 12 }}>{log.email}</td>
+                                <td style={{ ...tdStyle, fontSize: 12, textAlign: "center" }}>
+                                  <span style={{
+                                    display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600,
+                                    background: log.status === "success" ? "#D4EDDA" : "#F8D7DA",
+                                    color: log.status === "success" ? "#155724" : "#721C24",
+                                  }}>
+                                    {log.status === "success" ? "성공" : "실패"}
+                                  </span>
+                                </td>
+                                {logMode === "all" && (
+                                  <td style={{ ...tdStyle, fontSize: 12, color: "#c0392b" }}>{log.error_message ?? "-"}</td>
+                                )}
+                                <td style={{ ...tdStyle, fontSize: 12, whiteSpace: "nowrap" }}>
+                                  {log.sent_at ? new Date(log.sent_at).toLocaleString("ko-KR") : "-"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 )}
@@ -2676,28 +2680,30 @@ export default function NewsletterPage() {
                   아직 기록이 없습니다. 명단을 전체 삭제하면 그 시점 기록이 여기 남습니다.
                 </p>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: "var(--surface-container-high)" }}>
-                      <th style={thStyle}>날짜</th>
-                      <th style={{ ...thStyle, textAlign: "center" }}>총원</th>
-                      <th style={{ ...thStyle, textAlign: "center" }}>수신거부</th>
-                      <th style={{ ...thStyle, textAlign: "center" }}>거부율</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {snapshots.map((snap) => (
-                      <tr key={snap.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
-                        <td style={tdStyle}>{new Date(snap.snapshot_date).toLocaleDateString("ko-KR")}</td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>{snap.total_count.toLocaleString()}</td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>{snap.unsubscribed_count.toLocaleString()}</td>
-                        <td style={{ ...tdStyle, textAlign: "center" }}>
-                          {snap.total_count ? Math.round((snap.unsubscribed_count / snap.total_count) * 100) : 0}%
-                        </td>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", minWidth: 380, borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ background: "var(--surface-container-high)" }}>
+                        <th style={thStyle}>날짜</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>총원</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>수신거부</th>
+                        <th style={{ ...thStyle, textAlign: "center" }}>거부율</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {snapshots.map((snap) => (
+                        <tr key={snap.id} style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
+                          <td style={tdStyle}>{new Date(snap.snapshot_date).toLocaleDateString("ko-KR")}</td>
+                          <td style={{ ...tdStyle, textAlign: "center" }}>{snap.total_count.toLocaleString()}</td>
+                          <td style={{ ...tdStyle, textAlign: "center" }}>{snap.unsubscribed_count.toLocaleString()}</td>
+                          <td style={{ ...tdStyle, textAlign: "center" }}>
+                            {snap.total_count ? Math.round((snap.unsubscribed_count / snap.total_count) * 100) : 0}%
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>

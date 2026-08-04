@@ -445,8 +445,8 @@ export default function PopupManager() {
           {popups.length === 0 ? "등록된 팝업이 없습니다." : "이 기간에 게시되는 팝업이 없습니다."}
         </p>
       ) : (
-        <div style={{ borderRadius: 8, overflow: "hidden", border: "1px solid var(--surface-container-high)" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div style={{ borderRadius: 8, border: "1px solid var(--surface-container-high)", overflowX: "auto" }}>
+          <table style={{ width: "100%", minWidth: 560, borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr style={{ background: "var(--surface-container-high)" }}>
                 {["No", "제목", "방식", "게시기간", "등록일", "사용", ""].map((h, i) => (
