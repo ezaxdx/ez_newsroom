@@ -22,9 +22,8 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
 
   return (
     <div
+      className={cols === 1 ? "grid grid-cols-1" : "grid grid-cols-1 md:grid-cols-2"}
       style={{
-        display: "grid",
-        gridTemplateColumns: `repeat(${cols}, 1fr)`,
         gridTemplateRows: `repeat(${rows}, 1fr)`,
         minHeight: rows === 1 ? 480 : 520,
       }}

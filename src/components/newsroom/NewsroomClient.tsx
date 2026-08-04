@@ -120,12 +120,11 @@ export default function NewsroomClient({
     <>
       <div style={{ display: "flex", flexDirection: "column" }}>
 
-        {/* ── 2단 메인 그리드 ── */}
+        {/* ── 2단 메인 그리드 (좁은 화면에서는 세로로 쌓임) ── */}
         <div className="max-w-[1280px] mx-auto w-full">
           <div
+            className="grid grid-cols-1 md:grid-cols-[1fr_260px]"
             style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 260px",
               borderTop: "1px solid var(--surface-container-high)",
               borderBottom: "1px solid var(--surface-container-high)",
             }}
@@ -143,7 +142,7 @@ export default function NewsroomClient({
         </div>
 
         {/* ── 카테고리 피드 ── */}
-        <div className="max-w-[1280px] mx-auto w-full" style={{ padding: "32px 32px 16px" }}>
+        <div className="max-w-[1280px] mx-auto w-full" style={{ padding: "32px 16px 16px" }}>
           {/* 레벨 필터 */}
           <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 24 }}>
             <div

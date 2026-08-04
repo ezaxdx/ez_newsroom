@@ -270,7 +270,8 @@ export default function PopupBanner({
         onMouseLeave={() => setHovering(false)}
         style={{
           position: "fixed", ...place, zIndex: 900,
-          width: `min(${sizePx}px, 80vw)`,
+          // vw 기준이라 데스크톱(화면 자체가 넓음)엔 사실상 영향 없고, 좁은 모바일 화면에서만 더 작게 축소됨
+          width: `min(${sizePx}px, 55vw)`,
           filter: "drop-shadow(0 4px 16px rgba(0,0,0,0.2))",
         }}
       >

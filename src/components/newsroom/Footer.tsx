@@ -17,8 +17,7 @@ export default function Footer() {
     <footer style={{ background: "var(--surface-container-low)" }}>
       {/* ── Top section ── */}
       <div
-        className="max-w-[1280px] mx-auto px-8 py-12 grid gap-12"
-        style={{ gridTemplateColumns: "1fr 1fr 1fr" }}
+        className="max-w-[1280px] mx-auto px-8 py-12 grid gap-12 grid-cols-1 sm:grid-cols-3"
       >
         {/* Brand */}
         <div className="flex flex-col gap-4">

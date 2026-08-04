@@ -30,8 +30,8 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
         WebkitBackdropFilter: "blur(16px)",
       }}
     >
-      {/* ── Row 1: branding + actions ── */}
-      <div className="max-w-[1280px] mx-auto px-8 pt-3 pb-2 flex items-center justify-between gap-4">
+      {/* ── Row 1: branding + actions (좁은 화면에서는 세로로 쌓이고, 액션은 줄바꿈됨) ── */}
+      <div className="max-w-[1280px] mx-auto px-4 sm:px-8 pt-3 pb-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <Link href="/" style={{ textDecoration: "none", color: "inherit" }}>
           <p
             className="m-0 text-[0.75rem] font-semibold tracking-[0.05em] uppercase"
@@ -47,8 +47,8 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
           </h1>
         </Link>
 
-        <div className="flex items-center gap-3">
-          <label className="relative flex items-center">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
+          <label className="relative flex items-center flex-1 sm:flex-initial min-w-[140px]">
             <Search
               size={14}
               className="absolute left-2.5 pointer-events-none"
@@ -61,7 +61,7 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={handleSearch}
-              className="h-8 w-56 rounded-md pl-8 pr-3 text-sm outline-none"
+              className="h-8 w-full sm:w-56 rounded-md pl-8 pr-3 text-sm outline-none"
               style={{
                 background: "var(--surface-container-low)",
                 color: "var(--on-surface)",
@@ -74,7 +74,7 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
 
           <Link
             href="/events"
-            className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
+            className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{
               background: "var(--surface-container)",
               color: "var(--on-surface)",
@@ -86,7 +86,7 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
 
           <Link
             href="/admin"
-            className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
+            className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{
               background: "linear-gradient(135deg, #000000, #1c1b1d)",
               color: "#ffffff",
@@ -97,17 +97,17 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
         </div>
       </div>
 
-      {/* ── Row 2: category nav ── */}
+      {/* ── Row 2: category nav (좁은 화면에서는 가로 스크롤) ── */}
       {navCategories.length > 0 && (
         <div
-          className="max-w-[1280px] mx-auto px-8 pb-2 flex items-center gap-6"
+          className="max-w-[1280px] mx-auto px-4 sm:px-8 pb-2 flex items-center gap-4 sm:gap-6 overflow-x-auto"
           style={{ borderTop: "1px solid var(--surface-container-highest)" }}
         >
           {navCategories.map((cat) => (
             <Link
               key={cat}
               href={`/category/${cat.toLowerCase()}`}
-              className="py-2 text-[0.72rem] font-semibold tracking-[0.05em] uppercase transition-colors hover:text-black"
+              className="py-2 text-[0.72rem] font-semibold tracking-[0.05em] uppercase transition-colors hover:text-black whitespace-nowrap flex-shrink-0"
               style={{ color: "var(--on-surface-variant)", textDecoration: "none" }}
             >
               {cat}

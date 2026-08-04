@@ -24,13 +24,8 @@ export default function FeedBlock({ label, items, onOpen }: Props) {
         </p>
       </div>
 
-      {/* Horizontal article grid */}
-      <div
-        className="grid gap-6"
-        style={{
-          gridTemplateColumns: "repeat(3, 1fr)",
-        }}
-      >
+      {/* Horizontal article grid (좁은 화면에서는 1~2열로 줄어듦) */}
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
         {items.map((item) => (
           <article
             key={item.id}
