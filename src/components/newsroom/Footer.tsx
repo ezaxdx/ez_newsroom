@@ -4,6 +4,7 @@ import { Rss, Mail } from "lucide-react";
 const NAV_LINKS = [
   { label: "EZ데이터허브", href: "https://micedx.ezpmp.co.kr/MICEDX/72238/index.do" },
   { label: "EZ人의 AI 도구 완전 정복", href: "https://www.notion.so/EZ-AI-27d90afe6d18804085fcd34edbe0bfb4" },
+  { label: "뉴스소스 모집", href: "https://docs.google.com/forms/d/1sRet6VjDP2VyPr60Jgpc-W9lzBX0ZJ1j7sTAQ0fFUDg/viewform" },
 ];
 const SUPPORT_LINKS = [
   { label: "Ezpmp Co., Ltd.", href: "https://www.ezpmp.co.kr/EZPMPHOME/99999/index.do" },
