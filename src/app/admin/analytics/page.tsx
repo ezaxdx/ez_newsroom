@@ -312,11 +312,14 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
   }
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({ label, value, sub, info }: { label: string; value: string | number; sub?: string; info?: React.ReactNode }) {
   return (
     <div className="p-5 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-      <p className="text-[0.7rem] font-semibold tracking-[0.05em] uppercase m-0 mb-1"
-        style={{ color: "var(--on-surface-variant)" }}>{label}</p>
+      <div className="flex items-center gap-1.5 mb-1">
+        <p className="text-[0.7rem] font-semibold tracking-[0.05em] uppercase m-0"
+          style={{ color: "var(--on-surface-variant)" }}>{label}</p>
+        {info && <SectionInfoModal title={`${label}란?`}>{info}</SectionInfoModal>}
+      </div>
       <p className="text-3xl font-bold tracking-tight m-0 break-words">{value.toLocaleString()}</p>
       {sub && <p className="text-xs mt-1 m-0" style={{ color: "var(--on-surface-variant)" }}>{sub}</p>}
     </div>
@@ -423,7 +426,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
       {/* ── KPI 카드 ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard label="총 접속 수" value={totals.view} />
+        <StatCard label="총 접속 수" value={totals.view} info={
+          <>
+            <p className="m-0 mb-2">뉴스룸 홈 화면 진입 + 카테고리 아카이브 페이지 방문을 합친 수치입니다.</p>
+            <p className="m-0" style={{ opacity: 0.75 }}>
+              같은 사람이 여러 번 들어오면 그만큼 여러 번 집계됩니다(순 방문자 수가 아닌 방문 건수). 관리자 프리뷰 배포 테스트 접속도 포함된 수치입니다.
+            </p>
+          </>
+        } />
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
