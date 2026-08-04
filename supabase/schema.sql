@@ -245,7 +245,8 @@ create table if not exists public.newsroom_popups (
   end_date    timestamptz not null,   -- 게시 종료 일시(시각까지 지정 가능)
   image_url   text,
   link_url    text,                   -- 클릭 시 이동할 주소 (구글폼 등). 없으면 클릭 불가
-  content     text,                   -- 이미지 없이 텍스트만 띄우고 싶을 때
+  content     text,                   -- 이미지 없이 텍스트만 띄우고 싶을 때 · 호버 설명의 기본값
+  content_overrides jsonb default '[]', -- 특정 날짜(KST)에만 content 대신 보여줄 문구 [{date:"YYYY-MM-DD", text}] — 이벤트 중 공백일 안내 등
   is_active   boolean default true not null,
   display_type text default 'modal' not null,        -- modal(가운데 팝업·닫기 가능) | floating(구석 고정·상시 노출)
   position     text default 'bottom-right' not null, -- 3×3 위치(top/middle/bottom-left/center/right) 또는 random
@@ -268,6 +269,7 @@ alter table public.newsroom_popups add column if not exists size_px integer;
 alter table public.newsroom_popups add column if not exists pos_x numeric;
 alter table public.newsroom_popups add column if not exists pos_y numeric;
 alter table public.newsroom_popups add column if not exists effect text default 'none' not null;
+alter table public.newsroom_popups add column if not exists content_overrides jsonb default '[]';
 
 -- start_date/end_date를 date → timestamptz로 전환(팝업 게시기간에 시각까지 지정 가능하게).
 -- 이미 date로 만들어진 기존 테이블에서만 실행되고, 이미 timestamptz면 조용히 스킵됨.

@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-const SELECT = "id, title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y, effect, created_at";
+const SELECT = "id, title, start_date, end_date, image_url, link_url, content, content_overrides, is_active, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y, effect, created_at";
 
 const VALID_EFFECTS = new Set(["none", "sparkle", "hearts", "bounce", "shake"]);
 function normalizeEffect(effect: unknown): string {
   return typeof effect === "string" && VALID_EFFECTS.has(effect) ? effect : "none";
+}
+
+// 특정 날짜(KST, YYYY-MM-DD)에만 기본 "내용"을 대신 보여줄 문구 목록 — 예: 이벤트 중 공백일에 안내 문구
+type ContentOverride = { date: string; text: string };
+function normalizeContentOverrides(input: unknown): ContentOverride[] {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((o): o is { date?: unknown; text?: unknown } => !!o && typeof o === "object")
+    .map((o) => ({ date: String(o.date ?? "").slice(0, 10), text: String(o.text ?? "").trim() }))
+    .filter((o) => /^\d{4}-\d{2}-\d{2}$/.test(o.date) && o.text.length > 0);
 }
 
 const VALID_PAGES = new Set(["home", "category", "events", "archive"]);
@@ -59,7 +69,7 @@ export async function POST(req: NextRequest) {
   if (unauth) return unauth;
 
   const body = await req.json();
-  const { title, start_date, end_date, image_url, link_url, content, is_active, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y, effect } = body;
+  const { title, start_date, end_date, image_url, link_url, content, content_overrides, is_active, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y, effect } = body;
   if (!title?.trim() || !start_date || !end_date) {
     return NextResponse.json({ error: "제목, 게시기간은 필수입니다." }, { status: 400 });
   }
@@ -79,6 +89,7 @@ export async function POST(req: NextRequest) {
       image_url: image_url || null,
       link_url: link_url?.trim() || null,
       content: content?.trim() || null,
+      content_overrides: normalizeContentOverrides(content_overrides),
       is_active: is_active ?? true,
       display_type: resolvedType,
       position: resolvedPosition,
@@ -105,12 +116,13 @@ export async function PATCH(req: NextRequest) {
   const { id, ...fields } = body;
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
-  const ALLOWED = ["title", "start_date", "end_date", "image_url", "link_url", "content", "is_active", "display_type", "position", "pages", "random_page", "hunt_code", "size_px", "pos_x", "pos_y", "effect"];
+  const ALLOWED = ["title", "start_date", "end_date", "image_url", "link_url", "content", "content_overrides", "is_active", "display_type", "position", "pages", "random_page", "hunt_code", "size_px", "pos_x", "pos_y", "effect"];
   const updates: Record<string, unknown> = {};
   for (const key of ALLOWED) {
     if (key in fields) updates[key] = fields[key];
   }
   if ("effect" in updates) updates.effect = normalizeEffect(updates.effect);
+  if ("content_overrides" in updates) updates.content_overrides = normalizeContentOverrides(updates.content_overrides);
   if ("pages" in updates) updates.pages = normalizePages(updates.pages);
   if ("random_page" in updates) updates.random_page = !!updates.random_page;
   if ("size_px" in updates) {

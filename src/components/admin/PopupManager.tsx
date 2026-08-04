@@ -15,6 +15,7 @@ type Popup = {
   image_url: string | null;
   link_url: string | null;
   content: string | null;
+  content_overrides: { date: string; text: string }[] | null;
   is_active: boolean;
   display_type: string;
   position: string;
@@ -35,6 +36,7 @@ type FormState = {
   image_url: string;
   link_url: string;
   content: string;
+  content_overrides: { date: string; text: string }[];
   is_active: boolean;
   display_type: string;
   position: string;
@@ -55,7 +57,7 @@ const SIZE_RANGE: Record<string, { min: number; max: number; default: number }> 
 
 const EMPTY_FORM: FormState = {
   title: "", start_date: "", end_date: "",
-  image_url: "", link_url: "", content: "", is_active: true,
+  image_url: "", link_url: "", content: "", content_overrides: [], is_active: true,
   display_type: "floating", position: "bottom-right",
   pages: ["home"], random_page: false, hunt_code: "",
   size_px: SIZE_RANGE.floating.default,
@@ -245,6 +247,7 @@ export default function PopupManager() {
       image_url: p.image_url ?? "",
       link_url: p.link_url ?? "",
       content: p.content ?? "",
+      content_overrides: p.content_overrides ?? [],
       is_active: p.is_active,
       display_type: p.display_type ?? "modal",
       position: p.position ?? "bottom-right",
@@ -676,6 +679,45 @@ export default function PopupManager() {
               <textarea value={form.content} rows={3}
                 onChange={(e) => setForm((f) => ({ ...f, content: e.target.value }))}
                 style={{ ...inputStyle, height: "auto", padding: "8px 10px", resize: "vertical" }} />
+            </div>
+
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>
+                날짜별 문구 오버라이드 <span style={{ fontWeight: 400 }}>(선택 · 특정 날짜만 위 내용 대신 다른 문구를 보여줌)</span>
+              </label>
+              <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--on-surface-variant)" }}>
+                예: 게시기간이 8/4~8/6이고 실제 참여는 4일·6일만 가능하면, 8/5에만 &quot;6일부터 다시 참여 가능합니다&quot;처럼 다르게 띄울 수 있음
+              </p>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                {form.content_overrides.map((o, i) => (
+                  <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                    <input type="date" value={o.date}
+                      onChange={(e) => setForm((f) => ({
+                        ...f,
+                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, date: e.target.value } : row),
+                      }))}
+                      style={{ ...inputStyle, width: "auto", height: 30 }} />
+                    <input type="text" value={o.text} placeholder="이 날짜에 보여줄 문구"
+                      onChange={(e) => setForm((f) => ({
+                        ...f,
+                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, text: e.target.value } : row),
+                      }))}
+                      style={{ ...inputStyle, flex: 1, height: 30 }} />
+                    <button
+                      onClick={() => setForm((f) => ({ ...f, content_overrides: f.content_overrides.filter((_, j) => j !== i) }))}
+                      title="삭제"
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--on-surface-variant)", padding: "0 4px" }}
+                    >×</button>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={() => setForm((f) => ({ ...f, content_overrides: [...f.content_overrides, { date: "", text: "" }] }))}
+                style={{ padding: "5px 10px", borderRadius: 6, border: "1px dashed var(--surface-container-highest)",
+                  background: "var(--surface-container-lowest)", color: "var(--on-surface-variant)", fontSize: 12, cursor: "pointer" }}
+              >
+                + 날짜별 문구 추가
+              </button>
             </div>
 
             <div style={{ marginBottom: 10 }}>

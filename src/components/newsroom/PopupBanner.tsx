@@ -17,7 +17,15 @@ export type PopupData = {
   pos_x?: number | null;     // position="custom"일 때만 사용 — 관리자가 미리보기를 클릭해 찍은 위치(%)
   pos_y?: number | null;
   effect?: string | null;   // 이미지 위 장식 효과: none|sparkle|hearts|bounce|shake (없으면 none)
+  content_overrides?: { date: string; text: string }[] | null; // 특정 날짜(KST)에만 content 대신 보여줄 문구
 };
+
+// 오늘(KST) 날짜에 맞는 문구 오버라이드가 있으면 그걸, 없으면 기본 content를 사용
+function resolveEffectiveContent(popup: PopupData): string | null {
+  const todayKstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const override = popup.content_overrides?.find((o) => o.date === todayKstStr);
+  return override?.text ?? popup.content;
+}
 
 const DEFAULT_SIZE = { floating: 150, modal: 420 } as const;
 
@@ -90,6 +98,8 @@ export default function PopupBanner({
   const isFloating = popup.display_type === "floating";
   const huntCode = popup.hunt_code || null;
   const sizePx = popup.size_px || DEFAULT_SIZE[isFloating ? "floating" : "modal"];
+  // 오늘(KST) 날짜에 맞는 문구 오버라이드가 있으면 그걸, 없으면 기본 내용을 사용 — 호버 설명·고정형 텍스트 등 모든 표시에 공통 적용
+  const effectiveContent = resolveEffectiveContent(popup);
 
   // SSR 시엔 항상 닫힌 상태로 시작 — localStorage는 클라이언트에서만 읽을 수 있어 hydration 불일치 방지
   const [open, setOpen] = useState(false);
@@ -198,7 +208,7 @@ export default function PopupBanner({
             alt={popup.title}
             style={{ display: "block", width: "100%", height: "auto" }}
           />
-          {popup.content && hovering && (
+          {effectiveContent && hovering && (
             <div style={{
               position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
               marginBottom: 8, padding: "8px 12px", maxWidth: "90%",
@@ -207,12 +217,12 @@ export default function PopupBanner({
               whiteSpace: "pre-wrap", textAlign: "center",
               pointerEvents: "none", zIndex: 901,
             }}>
-              {popup.content}
+              {effectiveContent}
             </div>
           )}
         </div>
       )}
-      {popup.content && (
+      {effectiveContent && (
         <p style={{
           margin: 0,
           padding: "18px 20px",
@@ -221,7 +231,7 @@ export default function PopupBanner({
           color: "var(--on-surface)",
           whiteSpace: "pre-wrap",
         }}>
-          {popup.content}
+          {effectiveContent}
         </p>
       )}
     </>
@@ -250,7 +260,7 @@ export default function PopupBanner({
         display: "block", padding: "12px 18px", fontSize: "0.85rem", fontWeight: 700,
         color: "#fff", background: "var(--primary)", borderRadius: 999, whiteSpace: "nowrap",
       }}>
-        {popup.content}
+        {effectiveContent}
       </span>
     );
 
@@ -270,7 +280,7 @@ export default function PopupBanner({
             <EffectOverlay effect={effect} />
           </>
         )}
-        {popup.image_url && popup.content && hovering && (
+        {popup.image_url && effectiveContent && hovering && (
           <div style={{
             position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
             marginBottom: 8, padding: "8px 12px", maxWidth: 220,
@@ -279,7 +289,7 @@ export default function PopupBanner({
             whiteSpace: "pre-wrap", textAlign: "center",
             pointerEvents: "none", zIndex: 901,
           }}>
-            {popup.content}
+            {effectiveContent}
           </div>
         )}
         {huntCode ? (
