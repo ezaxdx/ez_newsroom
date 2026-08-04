@@ -15,7 +15,7 @@ type Popup = {
   image_url: string | null;
   link_url: string | null;
   content: string | null;
-  content_overrides: { date: string; text: string }[] | null;
+  content_overrides: { from: string; to: string; text: string }[] | null;
   is_active: boolean;
   display_type: string;
   position: string;
@@ -36,7 +36,7 @@ type FormState = {
   image_url: string;
   link_url: string;
   content: string;
-  content_overrides: { date: string; text: string }[];
+  content_overrides: { from: string; to: string; text: string }[];
   is_active: boolean;
   display_type: string;
   position: string;
@@ -247,7 +247,11 @@ export default function PopupManager() {
       image_url: p.image_url ?? "",
       link_url: p.link_url ?? "",
       content: p.content ?? "",
-      content_overrides: p.content_overrides ?? [],
+      // 이전 스키마({date, text})로 저장된 값이 남아있어도 깨지지 않게 from/to로 변환
+      content_overrides: (p.content_overrides ?? []).map((o) => {
+        const legacy = o as unknown as { date?: string; from?: string; to?: string; text: string };
+        return { from: legacy.from ?? legacy.date ?? "", to: legacy.to ?? legacy.date ?? "", text: legacy.text };
+      }),
       is_active: p.is_active,
       display_type: p.display_type ?? "modal",
       position: p.position ?? "bottom-right",
@@ -683,21 +687,30 @@ export default function PopupManager() {
 
             <div style={{ marginBottom: 10 }}>
               <label style={labelStyle}>
-                날짜별 문구 오버라이드 <span style={{ fontWeight: 400 }}>(선택 · 특정 날짜만 위 내용 대신 다른 문구를 보여줌)</span>
+                날짜별 문구 오버라이드 <span style={{ fontWeight: 400 }}>(선택 · 특정 날짜/기간만 위 내용 대신 다른 문구를 보여줌)</span>
               </label>
               <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--on-surface-variant)" }}>
-                예: 게시기간이 8/4~8/6이고 실제 참여는 4일·6일만 가능하면, 8/5에만 &quot;6일부터 다시 참여 가능합니다&quot;처럼 다르게 띄울 수 있음
+                하루만 다르게 하려면 시작·종료를 같은 날로, 여러 날 이어지면 기간으로 지정하세요.
+                예: 게시기간이 8/4~8/6이고 실제 참여는 4일·6일만 가능하면, 8/5(하루)에만 &quot;6일부터 다시 참여 가능합니다&quot;처럼 다르게 띄울 수 있음
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
                 {form.content_overrides.map((o, i) => (
                   <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input type="date" value={o.date}
+                    <input type="date" value={o.from} title="시작일"
                       onChange={(e) => setForm((f) => ({
                         ...f,
-                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, date: e.target.value } : row),
+                        // 종료일이 비어있으면 시작일과 같이 채워서 "하루만" 지정이 한 번에 끝나게
+                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, from: e.target.value, to: row.to || e.target.value } : row),
                       }))}
                       style={{ ...inputStyle, width: "auto", height: 30 }} />
-                    <input type="text" value={o.text} placeholder="이 날짜에 보여줄 문구"
+                    <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
+                    <input type="date" value={o.to} title="종료일(하루만이면 시작일과 동일)"
+                      onChange={(e) => setForm((f) => ({
+                        ...f,
+                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, to: e.target.value } : row),
+                      }))}
+                      style={{ ...inputStyle, width: "auto", height: 30 }} />
+                    <input type="text" value={o.text} placeholder="이 기간에 보여줄 문구"
                       onChange={(e) => setForm((f) => ({
                         ...f,
                         content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, text: e.target.value } : row),
@@ -712,11 +725,11 @@ export default function PopupManager() {
                 ))}
               </div>
               <button
-                onClick={() => setForm((f) => ({ ...f, content_overrides: [...f.content_overrides, { date: "", text: "" }] }))}
+                onClick={() => setForm((f) => ({ ...f, content_overrides: [...f.content_overrides, { from: "", to: "", text: "" }] }))}
                 style={{ padding: "5px 10px", borderRadius: 6, border: "1px dashed var(--surface-container-highest)",
                   background: "var(--surface-container-lowest)", color: "var(--on-surface-variant)", fontSize: 12, cursor: "pointer" }}
               >
-                + 날짜별 문구 추가
+                + 날짜/기간 문구 추가
               </button>
             </div>
 

@@ -17,13 +17,13 @@ export type PopupData = {
   pos_x?: number | null;     // position="custom"일 때만 사용 — 관리자가 미리보기를 클릭해 찍은 위치(%)
   pos_y?: number | null;
   effect?: string | null;   // 이미지 위 장식 효과: none|sparkle|hearts|bounce|shake (없으면 none)
-  content_overrides?: { date: string; text: string }[] | null; // 특정 날짜(KST)에만 content 대신 보여줄 문구
+  content_overrides?: { from: string; to: string; text: string }[] | null; // 특정 날짜 구간(KST)에만 content 대신 보여줄 문구 (하루짜리는 from===to)
 };
 
-// 오늘(KST) 날짜에 맞는 문구 오버라이드가 있으면 그걸, 없으면 기본 content를 사용
+// 오늘(KST)이 속한 문구 오버라이드 구간이 있으면 그걸, 없으면 기본 content를 사용
 function resolveEffectiveContent(popup: PopupData): string | null {
   const todayKstStr = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const override = popup.content_overrides?.find((o) => o.date === todayKstStr);
+  const override = popup.content_overrides?.find((o) => o.from <= todayKstStr && todayKstStr <= o.to);
   return override?.text ?? popup.content;
 }
 

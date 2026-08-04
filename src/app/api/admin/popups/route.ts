@@ -9,14 +9,23 @@ function normalizeEffect(effect: unknown): string {
   return typeof effect === "string" && VALID_EFFECTS.has(effect) ? effect : "none";
 }
 
-// 특정 날짜(KST, YYYY-MM-DD)에만 기본 "내용"을 대신 보여줄 문구 목록 — 예: 이벤트 중 공백일에 안내 문구
-type ContentOverride = { date: string; text: string };
+// 특정 날짜 구간(KST, YYYY-MM-DD ~ YYYY-MM-DD)에만 기본 "내용"을 대신 보여줄 문구 목록 — 하루짜리는 from===to.
+// 예: 이벤트 중 공백일 하루 안내, 또는 여러 날 이어지는 기간에 동일 안내
+type ContentOverride = { from: string; to: string; text: string };
 function normalizeContentOverrides(input: unknown): ContentOverride[] {
   if (!Array.isArray(input)) return [];
+  const isDate = (s: string) => /^\d{4}-\d{2}-\d{2}$/.test(s);
   return input
-    .filter((o): o is { date?: unknown; text?: unknown } => !!o && typeof o === "object")
-    .map((o) => ({ date: String(o.date ?? "").slice(0, 10), text: String(o.text ?? "").trim() }))
-    .filter((o) => /^\d{4}-\d{2}-\d{2}$/.test(o.date) && o.text.length > 0);
+    .filter((o): o is Record<string, unknown> => !!o && typeof o === "object")
+    .map((o) => {
+      // 이전 스키마({date, text}) 호환 — date를 from/to 둘 다로 사용
+      const legacyDate = String(o.date ?? "").slice(0, 10);
+      const from = String(o.from ?? legacyDate ?? "").slice(0, 10);
+      const to = String(o.to ?? legacyDate ?? "").slice(0, 10);
+      return { from, to, text: String(o.text ?? "").trim() };
+    })
+    .filter((o) => isDate(o.from) && isDate(o.to) && o.text.length > 0)
+    .map((o) => (o.to < o.from ? { ...o, from: o.to, to: o.from } : o)); // 뒤바뀌어 들어와도 자동 정렬
 }
 
 const VALID_PAGES = new Set(["home", "category", "events", "archive"]);
