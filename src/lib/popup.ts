@@ -30,14 +30,14 @@ export async function fetchActivePopups(): Promise<PopupData[]> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return [];
   try {
     const supabase = createAdminClient();
-    // KST 기준 오늘 날짜 — 서버가 UTC면 자정 전후로 하루 어긋날 수 있음
-    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // start_date/end_date는 timestamptz — 지금 이 순간이 게시 기간 안에 있는지 시각까지 비교
+    const now = new Date().toISOString();
     const { data } = await supabase
       .from("newsroom_popups")
       .select(POPUP_SELECT)
       .eq("is_active", true)
-      .lte("start_date", today)
-      .gte("end_date", today)
+      .lte("start_date", now)
+      .gte("end_date", now)
       .order("created_at", { ascending: false });
 
     const rows: PopupData[] = data ?? [];
@@ -54,7 +54,7 @@ export async function fetchEventSettings(): Promise<EventSettings | null> {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
   try {
     const supabase = createAdminClient();
-    const today = new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const now = new Date().toISOString();
     const [{ data: settings }, { count }] = await Promise.all([
       supabase
         .from("newsroom_event_settings")
@@ -66,8 +66,8 @@ export async function fetchEventSettings(): Promise<EventSettings | null> {
         .select("id", { count: "exact", head: true })
         .eq("is_active", true)
         .not("hunt_code", "is", null)
-        .lte("start_date", today)
-        .gte("end_date", today),
+        .lte("start_date", now)
+        .gte("end_date", now),
     ]);
     if (!settings) return null;
     return { ...settings, total: count ?? 0 };

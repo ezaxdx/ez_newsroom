@@ -71,7 +71,25 @@ const PRESET_PCT: Record<string, { x: number; y: number }> = {
 };
 
 const todayKST = () => new Date(Date.now() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
-const fmtDate = (s: string) => s.replaceAll("-", ".");
+// 게시기간(start_date/end_date)은 timestamptz — 목록 표시는 KST 날짜+시간으로
+function fmtDateTime(iso: string): string {
+  if (!iso) return "";
+  const kst = new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString();
+  return `${kst.slice(0, 10).replaceAll("-", ".")} ${kst.slice(11, 16)}`;
+}
+// timestamptz(UTC ISO) → <input type="datetime-local"> 값(KST 벽시계 기준 "YYYY-MM-DDTHH:mm")
+function toDatetimeLocalKST(iso: string): string {
+  if (!iso) return "";
+  return new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 16);
+}
+// datetime-local 값("YYYY-MM-DDTHH:mm", KST 벽시계 기준) → timestamptz로 저장할 ISO(+09:00 오프셋 명시)
+function fromDatetimeLocalKST(local: string): string {
+  return local ? `${local}:00+09:00` : local;
+}
+// timestamptz → 날짜 필터 비교용 KST 날짜만(YYYY-MM-DD)
+function kstDateOnly(iso: string): string {
+  return new Date(new Date(iso).getTime() + 9 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
 // 오늘로부터 정확히 한 달 뒤(YYYY-MM-DD, KST) — 날짜 필터 기본 종료일
 function oneMonthFromTodayKST() {
   const d = new Date(Date.now() + 9 * 60 * 60 * 1000);
@@ -198,16 +216,16 @@ export default function PopupManager() {
 
   useEffect(() => { fetchPopups(); }, [fetchPopups]);
 
-  // 게시기간 안 + 사용중 = 지금 사이트에 실제로 떠 있는 팝업
+  // 게시기간 안 + 사용중 = 지금 사이트에 실제로 떠 있는 팝업 (시각까지 비교)
   function isLive(p: Popup) {
-    const today = todayKST();
-    return p.is_active && p.start_date <= today && p.end_date >= today;
+    const now = Date.now();
+    return p.is_active && new Date(p.start_date).getTime() <= now && new Date(p.end_date).getTime() >= now;
   }
 
-  // 게시기간이 필터 범위와 겹치는 팝업만 — 기간이 하루라도 걸치면 포함
+  // 게시기간이 필터 범위와 겹치는 팝업만 — 기간이 하루라도 걸치면 포함 (필터는 날짜 단위)
   const filteredPopups = popups.filter((p) => {
-    if (filterFrom && p.end_date < filterFrom) return false;
-    if (filterTo && p.start_date > filterTo) return false;
+    if (filterFrom && kstDateOnly(p.end_date) < filterFrom) return false;
+    if (filterTo && kstDateOnly(p.start_date) > filterTo) return false;
     return true;
   });
 
@@ -222,8 +240,8 @@ export default function PopupManager() {
     setEditingId(p.id);
     setForm({
       title: p.title,
-      start_date: p.start_date,
-      end_date: p.end_date,
+      start_date: toDatetimeLocalKST(p.start_date),
+      end_date: toDatetimeLocalKST(p.end_date),
       image_url: p.image_url ?? "",
       link_url: p.link_url ?? "",
       content: p.content ?? "",
@@ -281,10 +299,15 @@ export default function PopupManager() {
     setSaving(true);
     setError(null);
     try {
+      const payload = {
+        ...form,
+        start_date: fromDatetimeLocalKST(form.start_date),
+        end_date: fromDatetimeLocalKST(form.end_date),
+      };
       const res = await fetch("/api/admin/popups", {
         method: editingId ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(editingId ? { id: editingId, ...form } : form),
+        body: JSON.stringify(editingId ? { id: editingId, ...payload } : payload),
       });
       const json = await res.json();
       if (!res.ok) { setError(json.error ?? "저장 실패"); return; }
@@ -462,7 +485,7 @@ export default function PopupManager() {
                       </span>
                     </td>
                     <td style={{ padding: "9px 12px", color: "var(--on-surface-variant)" }}>
-                      {fmtDate(p.start_date)} ~ {fmtDate(p.end_date)}
+                      {fmtDateTime(p.start_date)} ~ {fmtDateTime(p.end_date)}
                     </td>
                     <td style={{ padding: "9px 12px", textAlign: "center", color: "var(--on-surface-variant)", fontSize: "0.72rem" }}>
                       {new Date(p.created_at).toLocaleDateString("ko-KR")}
@@ -623,13 +646,13 @@ export default function PopupManager() {
 
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>시작일 *</label>
-                <input type="date" value={form.start_date}
+                <label style={labelStyle}>시작 일시 *</label>
+                <input type="datetime-local" value={form.start_date}
                   onChange={(e) => setForm((f) => ({ ...f, start_date: e.target.value }))} style={inputStyle} />
               </div>
               <div style={{ flex: 1 }}>
-                <label style={labelStyle}>종료일 *</label>
-                <input type="date" value={form.end_date}
+                <label style={labelStyle}>종료 일시 *</label>
+                <input type="datetime-local" value={form.end_date}
                   onChange={(e) => setForm((f) => ({ ...f, end_date: e.target.value }))} style={inputStyle} />
               </div>
             </div>

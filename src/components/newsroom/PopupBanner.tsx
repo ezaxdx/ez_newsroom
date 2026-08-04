@@ -186,13 +186,31 @@ export default function PopupBanner({
   const media = (
     <>
       {popup.image_url && (
-        // 외부 스토리지 URL이라 next/image 최적화 대상이 아님
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={popup.image_url}
-          alt={popup.title}
-          style={{ display: "block", width: "100%", height: "auto" }}
-        />
+        <div
+          onMouseEnter={() => setHovering(true)}
+          onMouseLeave={() => setHovering(false)}
+          style={{ position: "relative" }}
+        >
+          {/* 외부 스토리지 URL이라 next/image 최적화 대상이 아님 */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={popup.image_url}
+            alt={popup.title}
+            style={{ display: "block", width: "100%", height: "auto" }}
+          />
+          {popup.content && hovering && (
+            <div style={{
+              position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
+              marginBottom: 8, padding: "8px 12px", maxWidth: "90%",
+              background: "rgba(0,0,0,0.85)", color: "#fff",
+              fontSize: "0.78rem", lineHeight: 1.5, borderRadius: 8,
+              whiteSpace: "pre-wrap", textAlign: "center",
+              pointerEvents: "none", zIndex: 901,
+            }}>
+              {popup.content}
+            </div>
+          )}
+        </div>
       )}
       {popup.content && (
         <p style={{
@@ -279,6 +297,22 @@ export default function PopupBanner({
             {inner}
           </a>
         ) : inner}
+        {/* 고정형은 원래 상시노출(닫기 없음)이지만, 방해될 때 지금 화면에서만 잠깐 치울 수 있게 —
+            새로고침·재방문하면 다시 노출됨(오늘 하루 보지 않기처럼 영구 저장하지 않음) */}
+        <button
+          onClick={() => setOpen(false)}
+          title="닫기"
+          style={{
+            position: "absolute", top: -8, right: -8, width: 20, height: 20,
+            borderRadius: "50%", border: "1px solid var(--surface-container-highest)",
+            background: "#fff", color: "var(--on-surface-variant)",
+            fontSize: 12, lineHeight: 1, cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 1px 4px rgba(0,0,0,0.25)", zIndex: 903, padding: 0,
+          }}
+        >
+          ×
+        </button>
       </div>
     );
   }

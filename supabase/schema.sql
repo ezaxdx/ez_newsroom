@@ -241,8 +241,8 @@ create table if not exists public.newsletter_subscribers (
 create table if not exists public.newsroom_popups (
   id          uuid primary key default gen_random_uuid(),
   title       text not null,          -- 관리용 식별명 (사용자에게 노출 안 됨)
-  start_date  date not null,
-  end_date    date not null,
+  start_date  timestamptz not null,   -- 게시 시작 일시(시각까지 지정 가능)
+  end_date    timestamptz not null,   -- 게시 종료 일시(시각까지 지정 가능)
   image_url   text,
   link_url    text,                   -- 클릭 시 이동할 주소 (구글폼 등). 없으면 클릭 불가
   content     text,                   -- 이미지 없이 텍스트만 띄우고 싶을 때
@@ -268,6 +268,19 @@ alter table public.newsroom_popups add column if not exists size_px integer;
 alter table public.newsroom_popups add column if not exists pos_x numeric;
 alter table public.newsroom_popups add column if not exists pos_y numeric;
 alter table public.newsroom_popups add column if not exists effect text default 'none' not null;
+
+-- start_date/end_date를 date → timestamptz로 전환(팝업 게시기간에 시각까지 지정 가능하게).
+-- 이미 date로 만들어진 기존 테이블에서만 실행되고, 이미 timestamptz면 조용히 스킵됨.
+-- 기존 값은 KST 자정(시작)/23:59:59(종료)로 캐스팅해 예전 "하루 종일" 동작을 그대로 보존.
+do $$
+begin
+  if (select data_type from information_schema.columns
+      where table_schema = 'public' and table_name = 'newsroom_popups' and column_name = 'start_date') = 'date' then
+    alter table public.newsroom_popups
+      alter column start_date type timestamptz using (start_date::text || ' 00:00:00+09')::timestamptz,
+      alter column end_date   type timestamptz using (end_date::text   || ' 23:59:59+09')::timestamptz;
+  end if;
+end $$;
 
 -- ── newsroom_event_settings ───────────────────────────────────────────
 -- 숨은 그림(고양이) 찾기 이벤트 전역 설정. 단일 행으로만 사용
