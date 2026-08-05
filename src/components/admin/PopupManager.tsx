@@ -686,41 +686,52 @@ export default function PopupManager() {
             </div>
 
             <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>
-                날짜별 문구 오버라이드 <span style={{ fontWeight: 400 }}>(선택 · 특정 날짜/기간만 위 내용 대신 다른 문구를 보여줌)</span>
+              <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 5 }}>
+                날짜별 문구 오버라이드 <span style={{ fontWeight: 400 }}>(선택)</span>
+                <SectionInfoModal title="날짜별 문구 오버라이드 안내">
+                  <p style={{ margin: 0, fontWeight: 400, fontSize: 13, color: "#555", lineHeight: 1.65 }}>
+                    하루만 다르게 하려면 시작·종료를 같은 날로, 여러 날 이어지면 기간으로 지정하세요.
+                    <br /><br />
+                    예: 게시기간이 8/4~8/6이고 실제 참여는 4일·6일만 가능하면, 8/5(하루)에만 &quot;6일부터 다시 참여 가능합니다&quot;처럼 다르게 띄울 수 있음
+                  </p>
+                </SectionInfoModal>
               </label>
               <p style={{ margin: "0 0 8px", fontSize: 11, color: "var(--on-surface-variant)" }}>
-                하루만 다르게 하려면 시작·종료를 같은 날로, 여러 날 이어지면 기간으로 지정하세요.
-                예: 게시기간이 8/4~8/6이고 실제 참여는 4일·6일만 가능하면, 8/5(하루)에만 &quot;6일부터 다시 참여 가능합니다&quot;처럼 다르게 띄울 수 있음
+                특정 날짜·기간만 위 내용 대신 다른 문구를 보여주고 싶을 때 사용합니다
               </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 8 }}>
                 {form.content_overrides.map((o, i) => (
-                  <div key={i} style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                    <input type="date" value={o.from} title="시작일"
-                      onChange={(e) => setForm((f) => ({
-                        ...f,
-                        // 종료일이 비어있으면 시작일과 같이 채워서 "하루만" 지정이 한 번에 끝나게
-                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, from: e.target.value, to: row.to || e.target.value } : row),
-                      }))}
-                      style={{ ...inputStyle, width: "auto", height: 30 }} />
-                    <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
-                    <input type="date" value={o.to} title="종료일(하루만이면 시작일과 동일)"
-                      onChange={(e) => setForm((f) => ({
-                        ...f,
-                        content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, to: e.target.value } : row),
-                      }))}
-                      style={{ ...inputStyle, width: "auto", height: 30 }} />
+                  <div key={i} style={{
+                    display: "flex", flexDirection: "column", gap: 6,
+                    padding: 8, borderRadius: 6, border: "1px solid var(--surface-container-highest)",
+                  }}>
+                    <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                      <input type="date" value={o.from} title="시작일"
+                        onChange={(e) => setForm((f) => ({
+                          ...f,
+                          // 종료일이 비어있으면 시작일과 같이 채워서 "하루만" 지정이 한 번에 끝나게
+                          content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, from: e.target.value, to: row.to || e.target.value } : row),
+                        }))}
+                        style={{ ...inputStyle, width: "auto", height: 30, flex: 1 }} />
+                      <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
+                      <input type="date" value={o.to} title="종료일(하루만이면 시작일과 동일)"
+                        onChange={(e) => setForm((f) => ({
+                          ...f,
+                          content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, to: e.target.value } : row),
+                        }))}
+                        style={{ ...inputStyle, width: "auto", height: 30, flex: 1 }} />
+                      <button
+                        onClick={() => setForm((f) => ({ ...f, content_overrides: f.content_overrides.filter((_, j) => j !== i) }))}
+                        title="삭제"
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--on-surface-variant)", padding: "0 4px" }}
+                      >×</button>
+                    </div>
                     <input type="text" value={o.text} placeholder="이 기간에 보여줄 문구"
                       onChange={(e) => setForm((f) => ({
                         ...f,
                         content_overrides: f.content_overrides.map((row, j) => j === i ? { ...row, text: e.target.value } : row),
                       }))}
-                      style={{ ...inputStyle, flex: 1, height: 30 }} />
-                    <button
-                      onClick={() => setForm((f) => ({ ...f, content_overrides: f.content_overrides.filter((_, j) => j !== i) }))}
-                      title="삭제"
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--on-surface-variant)", padding: "0 4px" }}
-                    >×</button>
+                      style={{ ...inputStyle, height: 30 }} />
                   </div>
                 ))}
               </div>
