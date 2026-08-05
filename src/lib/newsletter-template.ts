@@ -322,22 +322,22 @@ export function generateNewsletterHTML(data: NewsletterData): string {
                       <tr>
                         <td style="background:#FFFFFF;border-radius:10px;padding:24px 28px;">
                           ${editorialFlapSrc ? `
-                          <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                          <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                           <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
                           ` : `
                           <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-                          <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                          <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                           `}
                         </td>
                       </tr>
                     </table>
                     ` : `
                     ${editorialFlapSrc ? `
-                    <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                    <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                     <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
                     ` : `
                     <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-                    <div style="margin:0;font-size:15px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                    <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                     `}
                     `}
                   </td>

@@ -1216,7 +1216,7 @@ export default function NewsletterPage() {
                 >
                   <option value="" disabled>글씨 크기</option>
                   <option value="12">작게 (12px)</option>
-                  <option value="15">기본 (15px)</option>
+                  <option value="14">기본 (14px)</option>
                   <option value="18">크게 (18px)</option>
                   <option value="22">아주 크게 (22px)</option>
                 </select>
