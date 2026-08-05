@@ -8,6 +8,8 @@ import SectionInfoModal from "@/components/admin/SectionInfoModal";
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
 
+const EDITORIAL_HIGHLIGHT_DEFAULT = "#fff59d"; // 형광펜 기본색 (연노랑)
+
 type Subscriber = {
   id: string;
   email: string;
@@ -1188,6 +1190,24 @@ export default function NewsletterPage() {
                   onClick={() => applyEditorialInlineStyle({ fontWeight: "700" })}
                   style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, fontWeight: 700, cursor: "pointer", color: "var(--on-surface)" }}
                 >B 굵게</button>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyEditorialInlineStyle({ fontStyle: "italic" })}
+                  style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, fontStyle: "italic", cursor: "pointer", color: "var(--on-surface)" }}
+                >I 기울임</button>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => applyEditorialInlineStyle({ backgroundColor: EDITORIAL_HIGHLIGHT_DEFAULT })}
+                  style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: EDITORIAL_HIGHLIGHT_DEFAULT, fontSize: 11, cursor: "pointer", color: "#3a3a3a" }}
+                >형광펜</button>
+                <input
+                  type="color"
+                  defaultValue={EDITORIAL_HIGHLIGHT_DEFAULT}
+                  onMouseDown={captureEditorialSelection}
+                  onChange={(e) => applyEditorialInlineStyle({ backgroundColor: e.target.value })}
+                  title="하이라이트 색상 직접 선택"
+                  style={{ width: 28, height: 26, padding: 0, borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "none", cursor: "pointer" }}
+                />
                 <select
                   defaultValue=""
                   onMouseDown={captureEditorialSelection}
