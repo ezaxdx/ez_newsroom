@@ -127,7 +127,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       // 아카이브 방문 = 카테고리 아카이브 페이지(/category/X)를 연 것 (view + category)
       // ※ 과거 category_view(홈 피드 노출) 이벤트는 사실상 홈 방문 수와 동일해 신호가 없어 집계에서 제외
       applyDate(db.from("user_logs").select("category").eq("event_type", "view").not("category", "is", null).limit(5000), from, to),
-      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent, category").eq("event_type", "view").limit(5000), from, to),
+      applyDate(db.from("user_logs").select("utm_source, utm_campaign, referrer, user_agent, category, via_deeplink").eq("event_type", "view").limit(5000), from, to),
       applyDate(db.from("user_logs").select("search_query").eq("event_type", "search").not("search_query", "is", null).limit(2000), from, to),
       applyDate(db.from("user_logs").select("event_id").eq("event_type", "event_click").not("event_id", "is", null).limit(5000), from, to),
       applyDate(db.from("user_logs").select("newsletter_vol, utm_source").eq("event_type", "newsletter_archive_view").limit(5000), from, to),
@@ -145,10 +145,15 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     const dlView    = viewDeeplink    ?? 0;
     const dlDetail  = detailDeeplink  ?? 0;
     const dlOutbound = outboundDeeplink ?? 0;
-    const orgView    = Math.max(0, viewCount   - dlView);
     const orgDetail  = Math.max(0, detailCount - dlDetail);
     const orgOutbound = Math.max(0, outboundCount - dlOutbound);
     const pct = (n: number, base: number) => base ? +((n / base) * 100).toFixed(1) : 0;
+
+    // category 없는 view = 메인(홈) 페이지 첫 진입. category 있는 view = 아카이브·행사 캘린더 등 다른 탭 이동.
+    // "메인 접속"은 오직 메인페이지 최초 진입만 집계(탐색형이므로 딥링크 진입도 제외) — 다른 탭 이동은 여기 포함하지 않음.
+    const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
+    const orgView = entryLogs.filter((l: { via_deeplink: boolean | null }) => !l.via_deeplink).length;
+
     const exploreFunnel = [
       { label: "메인 접속", count: orgView,     pct: 100 },
       { label: "기사 클릭", count: orgDetail,   pct: pct(orgDetail, orgView) },
@@ -161,12 +166,8 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     ];
 
     // ── 유입 경로 (홈 첫 진입만 — "어떻게 사이트에 들어왔나") ──
-    // category 없는 view = 홈 첫 진입(유입). category 있는 view = 아카이브 카테고리 이동(사이트 내 이동).
     // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
     const siteHost = getSiteHost();
-    const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
-    // "총 접속 수"는 홈 첫 진입 기준 — 아카이브 방문은 아카이브 카테고리별 기사 반응에서 별도로 집계되므로 여기선 제외
-    const homeViewCount = entryLogs.length;
     const refMap: Record<string, number> = {};
     let previewCount = 0;
     for (const log of entryLogs) {
@@ -292,7 +293,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .slice(0, 10);
 
     return {
-      totals: { view: homeViewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
+      totals: { view: viewCount, detail_view: detailCount, outbound_click: outboundCount, event_click: eventClickTotal },
       exploreFunnel,
       deeplinkFunnel,
       referrers,
@@ -428,9 +429,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="총 접속 수" value={totals.view} info={
           <>
-            <p className="m-0 mb-2">뉴스룸 홈 화면에 &ldquo;최초 진입&rdquo;한 횟수만 집계합니다. 카테고리 아카이브 페이지로 이동한 것은 포함하지 않습니다(아카이브 방문은 인게이지먼트 퍼널의 &ldquo;메인 접속&rdquo;과 카테고리별 성과 표에 별도로 잡힙니다).</p>
+            <p className="m-0 mb-2">뉴스룸에서 발생한 모든 페이지뷰(view)의 합계입니다 — 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입, 뉴스레터 딥링크 진입을 모두 포함합니다.</p>
             <p className="m-0" style={{ opacity: 0.75 }}>
-              같은 사람이 여러 번 들어오면 그만큼 여러 번 집계됩니다(순 방문자 수가 아닌 방문 건수). 관리자 프리뷰 배포 테스트 접속도 포함된 수치입니다.
+              같은 사람이 여러 페이지를 넘나들면 그만큼 여러 번 집계됩니다(순 방문자 수가 아닌 방문 건수). 관리자 프리뷰 배포 테스트 접속도 포함된 수치입니다.
             </p>
           </>
         } />
