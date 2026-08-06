@@ -150,10 +150,27 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
     const pct = (n: number, base: number) => base ? +((n / base) * 100).toFixed(1) : 0;
 
     // category 없는 view = 메인(홈) 페이지 첫 진입. category 있는 view = 아카이브·행사 캘린더 등 다른 탭 이동.
-    // "메인 접속"은 오직 메인페이지 최초 진입만 집계(탐색형이므로 딥링크 진입도 제외) — 다른 탭 이동은 여기 포함하지 않음.
     const entryLogs = (sourceLogs ?? []).filter((l: { category: string | null }) => !l.category);
-    const orgView = entryLogs.filter((l: { via_deeplink: boolean | null }) => !l.via_deeplink).length;
 
+    // ── 유입 경로 (홈 첫 진입만 — "어떻게 사이트에 들어왔나") ──
+    // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
+    // "메인 접속"(탐색형 퍼널)도 같은 entryLogs를 기준으로 계산 — 관리자 프리뷰 테스트 접속은 여기서도 동일하게 제외하고,
+    // 딥링크(뉴스레터 등 자동 오픈) 진입만 별도 제외해 "직접 메인페이지에 들어와 둘러본" 진짜 탐색형만 집계한다.
+    const siteHost = getSiteHost();
+    const refMap: Record<string, number> = {};
+    let previewCount = 0;
+    let orgView = 0;
+    for (const log of entryLogs) {
+      const label = detectSource(log.utm_source, log.referrer, siteHost, log.user_agent);
+      if (label === PREVIEW_SENTINEL) { previewCount++; continue; } // 관리자 프리뷰 테스트 — 순위표·퍼널 모두 제외
+      refMap[label] = (refMap[label] ?? 0) + 1;
+      if (!log.via_deeplink) orgView++;
+    }
+    const referrers = Object.entries(refMap)
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count);
+
+    // "메인 접속"은 오직 메인페이지 최초 진입만 집계(탐색형이므로 딥링크 진입도 제외) — 다른 탭 이동은 여기 포함하지 않음.
     const exploreFunnel = [
       { label: "메인 접속", count: orgView,     pct: 100 },
       { label: "기사 클릭", count: orgDetail,   pct: pct(orgDetail, orgView) },
@@ -164,20 +181,6 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       { label: "기사 열람",   count: dlDetail,   pct: pct(dlDetail, dlView) },
       { label: "원문 클릭",   count: dlOutbound, pct: pct(dlOutbound, dlView) },
     ];
-
-    // ── 유입 경로 (홈 첫 진입만 — "어떻게 사이트에 들어왔나") ──
-    // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
-    const siteHost = getSiteHost();
-    const refMap: Record<string, number> = {};
-    let previewCount = 0;
-    for (const log of entryLogs) {
-      const label = detectSource(log.utm_source, log.referrer, siteHost, log.user_agent);
-      if (label === PREVIEW_SENTINEL) { previewCount++; continue; } // 관리자 프리뷰 테스트 — 순위표에서 제외
-      refMap[label] = (refMap[label] ?? 0) + 1;
-    }
-    const referrers = Object.entries(refMap)
-      .map(([source, count]) => ({ source, count }))
-      .sort((a, b) => b.count - a.count);
 
     // ── UTM 캠페인 (홈 첫 진입 중 utm_source가 있는 것만) ──
     const campMap: Record<string, number> = {};
