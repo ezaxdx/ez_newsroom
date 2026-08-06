@@ -420,39 +420,34 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">애널리틱스 <HelpTriggerConnected /></h2>
+          <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">
+            애널리틱스 <HelpTriggerConnected />
+            <SectionInfoModal title="📖 지표 용어 정리 — 왜 “접속/진입”이 여러 번 나오나요">
+              <p className="m-0 mb-3">숫자가 큰 것부터 작은 것 순서로 — 아래로 갈수록 위 항목의 부분집합입니다.</p>
+              <ul className="m-0 pl-5" style={{ listStyle: "disc" }}>
+                <li className="mb-2.5"><b>전체 페이지뷰</b> — 뉴스룸의 모든 페이지뷰 합계. 홈 진입 + 카테고리 아카이브 이동 + 행사 캘린더 진입 + 뉴스레터 딥링크 진입을 전부 포함하는 가장 큰 숫자.</li>
+                <li className="mb-2.5">
+                  <b>EZ 뉴스룸 접속 경로 (총합)</b> — 전체 페이지뷰 중 <b>메인 진입 + 딥링크 진입</b>만 유입경로별로 나눈 것(카테고리 아카이브·행사 캘린더 이동은 여기서 빠짐).
+                  <ul className="m-0 mt-1.5 pl-5" style={{ listStyle: "circle" }}>
+                    <li><b>직접 접속</b> — 이 목록의 항목 중 하나. 리퍼러·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크 등)만 골라낸 값 — 목록 전체 합계와는 다름.</li>
+                  </ul>
+                </li>
+                <li className="mb-2.5"><b>메인 진입</b> — 인게이지먼트 퍼널 · 탐색형 1단계. 딥링크가 아닌, 메인(홈)페이지에 직접 들어온 것만.</li>
+                <li className="mb-2.5"><b>딥링크 진입</b> — 인게이지먼트 퍼널 · 딥링크 1단계. 뉴스레터 등 링크 클릭으로 도착 즉시 모달이 자동으로 열린 진입.</li>
+                <li><b>아카이브 방문</b> — 카테고리 탭(MICE·TOURISM·AI·EZPMP)을 눌러 아카이브 페이지로 이동한 횟수. 전체 페이지뷰에는 포함되지만 위 &ldquo;메인 진입&rdquo;·&ldquo;접속 경로&rdquo;에는 포함되지 않음.</li>
+              </ul>
+              <p className="m-0 mt-3" style={{ opacity: 0.75 }}>
+                &ldquo;기사 클릭&rdquo;·&ldquo;원문 클릭&rdquo;도 두 곳에 나오는데 <b>숫자 자체가 다릅니다</b> — 위 KPI 카드는 <b>탐색형 + 딥링크를 합친 전체 수치</b>이고, 인게이지먼트 퍼널의 &ldquo;탐색형&rdquo; 쪽은 딥링크를 뺀 수치라 항상 KPI 카드보다 작습니다.
+                (예: KPI 기사 클릭 = 탐색형 기사 클릭 + 딥링크 퍼널의 기사 열람). 전환율(%) 역시 KPI는 전체 페이지뷰 기준, 퍼널은 메인 진입/딥링크 진입 기준이라 서로 다릅니다.
+              </p>
+            </SectionInfoModal>
+          </h2>
           <p className="text-sm m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>
             사용자 여정 · 유입 경로 · 카테고리 성과
           </p>
         </div>
         <DateRangePicker />
       </div>
-
-      {/* ── 지표 용어 정리 — "접속/진입" 계열 용어가 여러 섹션에 흩어져 있어 한눈에 비교할 수 있게 정리 ── */}
-      <details className="rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-        <summary className="cursor-pointer px-5 py-3 text-sm font-semibold" style={{ color: "var(--on-surface)" }}>
-          📖 지표 용어 정리 — &ldquo;접속/진입&rdquo;이 여러 번 나오는 이유
-        </summary>
-        <div className="px-5 pb-5" style={{ fontSize: 13, lineHeight: 1.7, color: "var(--on-surface-variant)" }}>
-          <p className="m-0 mb-3">숫자가 큰 것부터 작은 것 순서로 — 아래로 갈수록 위 항목의 부분집합입니다.</p>
-          <ul className="m-0 pl-5" style={{ listStyle: "disc" }}>
-            <li className="mb-2"><b style={{ color: "var(--on-surface)" }}>전체 페이지뷰</b> — 뉴스룸의 모든 페이지뷰 합계. 홈 진입 + 카테고리 아카이브 이동 + 행사 캘린더 진입 + 뉴스레터 딥링크 진입을 전부 포함하는 가장 큰 숫자.</li>
-            <li className="mb-2">
-              <b style={{ color: "var(--on-surface)" }}>EZ 뉴스룸 접속 경로 (총합)</b> — 전체 페이지뷰 중 <b>메인 진입 + 딥링크 진입</b>만 유입경로별로 나눈 것(카테고리 아카이브·행사 캘린더 이동은 여기서 빠짐).
-              <ul className="m-0 mt-1 pl-5" style={{ listStyle: "circle" }}>
-                <li><b style={{ color: "var(--on-surface)" }}>직접 접속</b> — 이 목록의 항목 중 하나. 리퍼러·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크 등)만 골라낸 값 — 목록 전체 합계와는 다름.</li>
-              </ul>
-            </li>
-            <li className="mb-2"><b style={{ color: "var(--on-surface)" }}>메인 진입</b> — 인게이지먼트 퍼널 · 탐색형 1단계. 딥링크가 아닌, 메인(홈)페이지에 직접 들어온 것만.</li>
-            <li className="mb-2"><b style={{ color: "var(--on-surface)" }}>딥링크 진입</b> — 인게이지먼트 퍼널 · 딥링크 1단계. 뉴스레터 등 링크 클릭으로 도착 즉시 모달이 자동으로 열린 진입.</li>
-            <li><b style={{ color: "var(--on-surface)" }}>아카이브 방문</b> — 카테고리 탭(MICE·TOURISM·AI·EZPMP)을 눌러 아카이브 페이지로 이동한 횟수. 전체 페이지뷰에는 포함되지만 위 &ldquo;메인 진입&rdquo;·&ldquo;접속 경로&rdquo;에는 포함되지 않음.</li>
-          </ul>
-          <p className="m-0 mt-3" style={{ opacity: 0.8 }}>
-            ※ &ldquo;기사 클릭&rdquo;·&ldquo;원문 클릭&rdquo;도 두 곳에 나오는데 <b>숫자 자체가 다릅니다</b> — 위 KPI 카드는 <b>탐색형 + 딥링크를 합친 전체 수치</b>이고, 인게이지먼트 퍼널의 &ldquo;탐색형&rdquo; 쪽은 딥링크를 뺀 수치라 항상 KPI 카드보다 작습니다.
-            (예: KPI 기사 클릭 = 탐색형 기사 클릭 + 딥링크 퍼널의 기사 열람). 전환율(%) 역시 KPI는 전체 페이지뷰 기준, 퍼널은 메인 진입/딥링크 진입 기준이라 서로 다릅니다.
-          </p>
-        </div>
-      </details>
 
       {/* ── KPI 카드 ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
@@ -468,7 +463,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </>
         } />
         <StatCard label="기사 클릭" value={totals.detail_view} sub={`전환율 ${detailRate}%`} />
-        <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
+        <StatCard label="원문 클릭" value={totals.outbound_click} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
         <StatCard label="평균 체류시간(2026-07-21부터 수집)" value={`${avgReadSec}초`} sub="홈 화면 전체 체류" />
         <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="전체 페이지뷰 → 원문 클릭" />
