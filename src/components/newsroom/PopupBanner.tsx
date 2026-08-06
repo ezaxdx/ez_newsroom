@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 
 export type PopupData = {
   id: string;
@@ -28,6 +28,26 @@ function resolveEffectiveContent(popup: PopupData): string | null {
 }
 
 const DEFAULT_SIZE = { floating: 150, modal: 420 } as const;
+
+// 말풍선 툴팁이 화면(뷰포트) 밖으로 나가지 않도록 — 중앙 정렬 기준에서 벗어난 만큼만 보정
+function useEdgeClampedCenter(active: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shift, setShift] = useState(0);
+
+  useEffect(() => {
+    if (!active) { setShift(0); return; }
+    const el = ref.current;
+    if (!el) return;
+    const margin = 10;
+    const r = el.getBoundingClientRect();
+    let s = 0;
+    if (r.right > window.innerWidth - margin) s -= r.right - (window.innerWidth - margin);
+    if (r.left + s < margin) s += margin - (r.left + s);
+    setShift(s);
+  }, [active]);
+
+  return { ref, style: { left: "50%", transform: `translateX(calc(-50% + ${shift}px))` } as React.CSSProperties };
+}
 
 // 이미지 위 장식 효과 — 관리자가 팝업 등록 시 고를 수 있음
 export const EFFECT_LABELS: Record<string, string> = {
@@ -108,6 +128,7 @@ export default function PopupBanner({
   // 랜덤 위치는 접속할 때마다 새로 뽑음 (고양이 찾기 같은 이벤트용).
   // 서버에서 정하면 캐시·hydration 문제가 생기므로 클라이언트에서만 계산
   const [randomPos, setRandomPos] = useState<{ top: string; left: string } | null>(null);
+  const tooltipClamp = useEdgeClampedCenter(hovering);
 
   useEffect(() => {
     if (popup.position === "random") {
@@ -209,12 +230,12 @@ export default function PopupBanner({
             style={{ display: "block", width: "100%", height: "auto" }}
           />
           {effectiveContent && hovering && (
-            <div style={{
-              position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
-              marginBottom: 8, padding: "8px 12px", maxWidth: "90%",
+            <div ref={tooltipClamp.ref} style={{
+              position: "absolute", bottom: "100%", ...tooltipClamp.style,
+              marginBottom: 8, padding: "10px 14px", width: "max-content", maxWidth: "min(280px, 90vw)",
               background: "rgba(0,0,0,0.85)", color: "#fff",
-              fontSize: "0.78rem", lineHeight: 1.5, borderRadius: 8,
-              whiteSpace: "pre-wrap", textAlign: "center",
+              fontSize: "clamp(0.8rem, 3.2vw, 0.92rem)", fontWeight: 500, lineHeight: 1.55, borderRadius: 10,
+              whiteSpace: "pre-wrap", textAlign: "center", wordBreak: "keep-all",
               pointerEvents: "none", zIndex: 901,
             }}>
               {effectiveContent}
@@ -282,12 +303,12 @@ export default function PopupBanner({
           </>
         )}
         {popup.image_url && effectiveContent && hovering && (
-          <div style={{
-            position: "absolute", bottom: "100%", left: "50%", transform: "translateX(-50%)",
-            marginBottom: 8, padding: "8px 12px", maxWidth: 220,
+          <div ref={tooltipClamp.ref} style={{
+            position: "absolute", bottom: "100%", ...tooltipClamp.style,
+            marginBottom: 8, padding: "10px 14px", width: "max-content", maxWidth: "min(260px, 78vw)",
             background: "rgba(0,0,0,0.85)", color: "#fff",
-            fontSize: "0.78rem", lineHeight: 1.5, borderRadius: 8,
-            whiteSpace: "pre-wrap", textAlign: "center",
+            fontSize: "clamp(0.8rem, 3.2vw, 0.92rem)", fontWeight: 500, lineHeight: 1.55, borderRadius: 10,
+            whiteSpace: "pre-wrap", textAlign: "center", wordBreak: "keep-all",
             pointerEvents: "none", zIndex: 901,
           }}>
             {effectiveContent}
