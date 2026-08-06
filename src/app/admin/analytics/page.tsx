@@ -50,7 +50,7 @@ const REFERRER_HOST_LABEL: { match: string; label: string }[] = [
 const BOT_UA_PATTERN = /bot|crawler|spider|headlesschrome|vercel-screenshot|google-app-companion/i;
 
 // 관리자·개발자가 테스트하는 Vercel 프리뷰/브랜치 배포 도메인 — 실사용자 유입이 아니므로
-// 유입경로 순위표에서 제외하고 별도로만 집계 (봇과 달리 총 접속 수 성격의 트래픽 자체가 아님)
+// 유입경로 순위표에서 제외하고 별도로만 집계 (봇과 달리 전체 페이지뷰 성격의 트래픽 자체가 아님)
 const PREVIEW_SENTINEL = "__PREVIEW__";
 function isPreviewHost(host: string, siteHost: string): boolean {
   return host !== siteHost && host.endsWith(".vercel.app");

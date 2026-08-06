@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/client";
 
 // category_view: 홈 피드에 해당 카테고리 콘텐츠가 노출된 페이지 로드 1회당 카테고리 수만큼 기록.
-// "view"(총 접속 수 KPI 집계 대상)와 분리해 총 접속 수 지표가 부풀려지지 않게 함.
+// "view"(전체 페이지뷰 KPI 집계 대상)와 분리해 전체 페이지뷰 지표가 부풀려지지 않게 함.
 // session_time: 뉴스룸 홈에 진입한 순간부터 이탈할 때까지의 전체 체류시간 (read_time은 인사이트 모달 열람 시간만 측정 — 둘은 별개 지표)
 export type EventType = "view" | "detail_view" | "outbound_click" | "event_click" | "read_time" | "search" | "category_view" | "session_time" | "newsletter_archive_view";
 
