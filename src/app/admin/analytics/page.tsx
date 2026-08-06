@@ -7,7 +7,7 @@ import DateRangePicker from "./DateRangePicker";
 const EMPTY = {
   totals: { view: 0, detail_view: 0, outbound_click: 0, event_click: 0 },
   exploreFunnel: [
-    { label: "메인 접속",  count: 0, pct: 100 },
+    { label: "메인 진입",  count: 0, pct: 100 },
     { label: "기사 클릭",  count: 0, pct: 0 },
     { label: "원문 클릭",  count: 0, pct: 0 },
   ],
@@ -154,7 +154,7 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
 
     // ── 유입 경로 (홈 첫 진입만 — "어떻게 사이트에 들어왔나") ──
     // 사이트 내 이동은 유입이 아니라 "사용자 여정"이라 유입경로 집계에서 제외(카테고리별 성과·퍼널에 이미 잡힘).
-    // "메인 접속"(탐색형 퍼널)도 같은 entryLogs를 기준으로 계산 — 관리자 프리뷰 테스트 접속은 여기서도 동일하게 제외하고,
+    // "메인 진입"(탐색형 퍼널)도 같은 entryLogs를 기준으로 계산 — 관리자 프리뷰 테스트 접속은 여기서도 동일하게 제외하고,
     // 딥링크(뉴스레터 등 자동 오픈) 진입만 별도 제외해 "직접 메인페이지에 들어와 둘러본" 진짜 탐색형만 집계한다.
     const siteHost = getSiteHost();
     const refMap: Record<string, number> = {};
@@ -170,9 +170,9 @@ async function fetchAnalytics(from: string | null = null, to: string | null = nu
       .map(([source, count]) => ({ source, count }))
       .sort((a, b) => b.count - a.count);
 
-    // "메인 접속"은 오직 메인페이지 최초 진입만 집계(탐색형이므로 딥링크 진입도 제외) — 다른 탭 이동은 여기 포함하지 않음.
+    // "메인 진입"은 오직 메인페이지 최초 진입만 집계(탐색형이므로 딥링크 진입도 제외) — 다른 탭 이동은 여기 포함하지 않음.
     const exploreFunnel = [
-      { label: "메인 접속", count: orgView,     pct: 100 },
+      { label: "메인 진입", count: orgView,     pct: 100 },
       { label: "기사 클릭", count: orgDetail,   pct: pct(orgDetail, orgView) },
       { label: "원문 클릭", count: orgOutbound, pct: pct(orgOutbound, orgView) },
     ];
@@ -428,13 +428,42 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <DateRangePicker />
       </div>
 
+      {/* ── 지표 용어 정리 — "접속/진입" 계열 용어가 여러 섹션에 흩어져 있어 한눈에 비교할 수 있게 정리 ── */}
+      <details className="rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
+        <summary className="cursor-pointer px-5 py-3 text-sm font-semibold" style={{ color: "var(--on-surface)" }}>
+          📖 지표 용어 정리 — &ldquo;접속/진입&rdquo;이 여러 번 나오는 이유
+        </summary>
+        <div className="px-5 pb-5" style={{ fontSize: 13, lineHeight: 1.7, color: "var(--on-surface-variant)" }}>
+          <p className="m-0 mb-3">숫자가 큰 것부터 작은 것 순서로 — 아래로 갈수록 위 항목의 부분집합입니다.</p>
+          <ul className="m-0 pl-5" style={{ listStyle: "disc" }}>
+            <li className="mb-2"><b style={{ color: "var(--on-surface)" }}>전체 페이지뷰</b> — 뉴스룸의 모든 페이지뷰 합계. 홈 진입 + 카테고리 아카이브 이동 + 행사 캘린더 진입 + 뉴스레터 딥링크 진입을 전부 포함하는 가장 큰 숫자.</li>
+            <li className="mb-2">
+              <b style={{ color: "var(--on-surface)" }}>EZ 뉴스룸 접속 경로 (총합)</b> — 전체 페이지뷰 중 <b>메인 진입 + 딥링크 진입</b>만 유입경로별로 나눈 것(카테고리 아카이브·행사 캘린더 이동은 여기서 빠짐).
+              <ul className="m-0 mt-1 pl-5" style={{ listStyle: "circle" }}>
+                <li><b style={{ color: "var(--on-surface)" }}>직접 접속</b> — 이 목록의 항목 중 하나. 리퍼러·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크 등)만 골라낸 값 — 목록 전체 합계와는 다름.</li>
+              </ul>
+            </li>
+            <li className="mb-2"><b style={{ color: "var(--on-surface)" }}>메인 진입</b> — 인게이지먼트 퍼널 · 탐색형 1단계. 딥링크가 아닌, 메인(홈)페이지에 직접 들어온 것만.</li>
+            <li className="mb-2"><b style={{ color: "var(--on-surface)" }}>딥링크 진입</b> — 인게이지먼트 퍼널 · 딥링크 1단계. 뉴스레터 등 링크 클릭으로 도착 즉시 모달이 자동으로 열린 진입.</li>
+            <li><b style={{ color: "var(--on-surface)" }}>아카이브 방문</b> — 카테고리 탭(MICE·TOURISM·AI·EZPMP)을 눌러 아카이브 페이지로 이동한 횟수. 전체 페이지뷰에는 포함되지만 위 &ldquo;메인 진입&rdquo;·&ldquo;접속 경로&rdquo;에는 포함되지 않음.</li>
+          </ul>
+          <p className="m-0 mt-3" style={{ opacity: 0.8 }}>
+            ※ &ldquo;기사 클릭&rdquo;·&ldquo;원문 클릭&rdquo;도 두 곳에 나오는데 <b>숫자 자체가 다릅니다</b> — 위 KPI 카드는 <b>탐색형 + 딥링크를 합친 전체 수치</b>이고, 인게이지먼트 퍼널의 &ldquo;탐색형&rdquo; 쪽은 딥링크를 뺀 수치라 항상 KPI 카드보다 작습니다.
+            (예: KPI 기사 클릭 = 탐색형 기사 클릭 + 딥링크 퍼널의 기사 열람). 전환율(%) 역시 KPI는 전체 페이지뷰 기준, 퍼널은 메인 진입/딥링크 진입 기준이라 서로 다릅니다.
+          </p>
+        </div>
+      </details>
+
       {/* ── KPI 카드 ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-        <StatCard label="총 접속 수" value={totals.view} info={
+        <StatCard label="전체 페이지뷰" value={totals.view} info={
           <>
             <p className="m-0 mb-2">뉴스룸에서 발생한 모든 페이지뷰(view)의 합계입니다 — 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입, 뉴스레터 딥링크 진입을 모두 포함합니다.</p>
-            <p className="m-0" style={{ opacity: 0.75 }}>
+            <p className="m-0 mb-2" style={{ opacity: 0.75 }}>
               같은 사람이 여러 페이지를 넘나들면 그만큼 여러 번 집계됩니다(순 방문자 수가 아닌 방문 건수). 관리자 프리뷰 배포 테스트 접속도 포함된 수치입니다.
+            </p>
+            <p className="m-0" style={{ opacity: 0.75 }}>
+              아래 &ldquo;메인 진입&rdquo;(인게이지먼트 퍼널)과는 다른 지표입니다 — 메인 진입은 딥링크를 제외한 메인페이지 진입만 세므로, 이 페이지뷰 총합보다 항상 작거나 같습니다.
             </p>
           </>
         } />
@@ -442,15 +471,25 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <StatCard label="원문 클릭" value={totals.outbound_click} sub={`전환율 ${outboundRate}%`} />
         <StatCard label="행사 클릭" value={totals.event_click} sub="EZPMP 픽 캘린더" />
         <StatCard label="평균 체류시간(2026-07-21부터 수집)" value={`${avgReadSec}초`} sub="홈 화면 전체 체류" />
-        <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="접속 → 원문 클릭" />
+        <StatCard label="전체 전환율" value={`${outboundRate}%`} sub="전체 페이지뷰 → 원문 클릭" />
       </div>
 
       {/* ── 유입 경로 + UTM 캠페인 ── */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
         {/* 유입 경로 */}
         <section className="p-6 rounded-lg" style={{ background: "var(--surface-container-lowest)" }}>
-          <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase mb-1 m-0"
-            style={{ color: "var(--on-surface-variant)" }}>EZ 뉴스룸 접속 경로</p>
+          <div className="flex items-center gap-1.5 mb-1">
+            <p className="text-[0.72rem] font-semibold tracking-[0.05em] uppercase m-0"
+              style={{ color: "var(--on-surface-variant)" }}>EZ 뉴스룸 접속 경로</p>
+            <SectionInfoModal title="접속 경로 총합, 왜 메인 진입과 다른가요?">
+              <p className="m-0 mb-2">
+                이 목록의 합계 = <b>메인 진입(탐색형)</b> + <b>딥링크 진입</b>(인게이지먼트 퍼널 참고). 딥링크(뉴스레터 클릭 등 자동 오픈)로 들어온 방문까지 여기서는 &ldquo;뉴스레터 클릭 유입&rdquo; 등으로 같이 집계되기 때문에, 딥링크를 제외한 &ldquo;메인 진입&rdquo; 숫자보다 이 목록의 합계가 더 큽니다.
+              </p>
+              <p className="m-0" style={{ opacity: 0.75 }}>
+                &ldquo;직접 접속&rdquo;은 이 목록의 여러 항목 중 하나일 뿐입니다 — 리퍼러(어디서 왔는지)·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크, 즐겨찾기 앱 링크 등)만 골라낸 값이라, 검색·SNS·다른 사이트 링크로 들어온 방문은 여기 포함되지 않고 각자 다른 항목으로 잡힙니다.
+              </p>
+            </SectionInfoModal>
+          </div>
           {referrers.length === 0 && (
             <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
               유입 데이터가 없습니다.
@@ -469,7 +508,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                     )}
                     {r.source === "직접 접속" && (
                       <span className="text-xs ml-1.5" style={{ color: "var(--on-surface-variant)", opacity: 0.6 }}>
-                        * 뉴스룸 URL을 통해 들어온 모든 경로
+                        * 리퍼러·UTM 정보 없는 진입(주소창 직접 입력·북마크 등)
                       </span>
                     )}
                   </span>
@@ -749,13 +788,14 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         </p>
 
         <Section title="1. KPI 카드">
-          <Def term="총 접속 수">
-            메인 페이지(뉴스룸 홈) 방문 횟수입니다. 새로고침·재방문 포함, 아카이브 카테고리 페이지 방문은
-            별도 집계(4. 아카이브 카테고리별 기사 반응)이므로 제외됩니다.
+          <Def term="전체 페이지뷰">
+            뉴스룸에서 발생한 모든 페이지뷰의 합계입니다 — 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입,
+            뉴스레터 딥링크 진입을 모두 포함합니다(새로고침·재방문 포함). 아래 &quot;3. 인게이지먼트 퍼널&quot;의
+            &quot;메인 진입&quot;과는 다른 지표입니다 — 메인 진입은 딥링크를 제외한 메인페이지 진입만 세므로 항상 이 값보다 작거나 같습니다.
           </Def>
-          <Def term="기사 클릭">기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수입니다.</Def>
-          <Def term="원문 클릭">모달 내 &quot;VIEW ORIGINAL SOURCE&quot; 클릭 횟수입니다.</Def>
-          <Def term="전체 전환율">메인 접속 대비 원문 클릭 비율입니다(접속 → 원문 클릭).</Def>
+          <Def term="기사 클릭">기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수입니다. 전환율 = 기사 클릭 ÷ 전체 페이지뷰.</Def>
+          <Def term="원문 클릭">모달 내 &quot;VIEW ORIGINAL SOURCE&quot; 클릭 횟수입니다. 전환율 = 원문 클릭 ÷ 전체 페이지뷰.</Def>
+          <Def term="전체 전환율">전체 페이지뷰 대비 원문 클릭 비율입니다(전체 페이지뷰 → 원문 클릭).</Def>
         </Section>
 
         <Section title="2. 트래픽 소스">
@@ -769,7 +809,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
           </Def>
           <Def term="봇/크롤러(자동수집)">
             실제 사람이 아니라 시스템이 자동으로 페이지를 렌더링한 접속입니다. 사람 트래픽과 구분해 표시하지만
-            총 접속 수 집계에서 제외되진 않습니다.
+            전체 페이지뷰 집계에서 제외되진 않습니다.
           </Def>
           <Indent>
             카카오톡·슬랙·카카오뷰 등에 링크를 공유하면 메신저 서버가 미리보기용으로 한 번 접속(링크 미리보기 봇) ·
