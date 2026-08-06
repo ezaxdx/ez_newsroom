@@ -422,22 +422,22 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
         <div>
           <h2 className="text-xl font-bold tracking-tight m-0 flex items-center gap-2">
             애널리틱스 <HelpTriggerConnected />
-            <SectionInfoModal title="📖 지표 용어 정리 — 왜 “접속/진입”이 여러 번 나오나요">
-              <p className="m-0 mb-3">숫자가 큰 것부터 작은 것 순서로 — 아래로 갈수록 위 항목의 부분집합입니다.</p>
+            <SectionInfoModal title="📖 지표 용어 정리 · 왜 “접속/진입”이 여러 번 나오나요">
+              <p className="m-0 mb-3">숫자가 큰 것부터 작은 것 순서로 나열했습니다. 아래로 갈수록 위 항목의 부분집합입니다.</p>
               <ul className="m-0 pl-5" style={{ listStyle: "disc" }}>
-                <li className="mb-2.5"><b>전체 페이지뷰</b> — 뉴스룸의 모든 페이지뷰 합계. 홈 진입 + 카테고리 아카이브 이동 + 행사 캘린더 진입 + 뉴스레터 딥링크 진입을 전부 포함하는 가장 큰 숫자.</li>
+                <li className="mb-2.5"><b>전체 페이지뷰</b>: 뉴스룸의 모든 페이지뷰 합계. 홈 진입 + 카테고리 아카이브 이동 + 행사 캘린더 진입 + 뉴스레터 딥링크 진입을 전부 포함하는 가장 큰 숫자.</li>
                 <li className="mb-2.5">
-                  <b>EZ 뉴스룸 접속 경로 (총합)</b> — 전체 페이지뷰 중 <b>메인 진입 + 딥링크 진입</b>만 유입경로별로 나눈 것(카테고리 아카이브·행사 캘린더 이동은 여기서 빠짐).
+                  <b>EZ 뉴스룸 접속 경로 (총합)</b>: 전체 페이지뷰 중 <b>메인 진입 + 딥링크 진입</b>만 유입경로별로 나눈 것(카테고리 아카이브·행사 캘린더 이동은 여기서 빠짐).
                   <ul className="m-0 mt-1.5 pl-5" style={{ listStyle: "circle" }}>
-                    <li><b>직접 접속</b> — 이 목록의 항목 중 하나. 리퍼러·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크 등)만 골라낸 값 — 목록 전체 합계와는 다름.</li>
+                    <li><b>직접 접속</b>: 이 목록의 항목 중 하나. 리퍼러·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크 등)만 골라낸 값입니다. 목록 전체 합계와는 다릅니다.</li>
                   </ul>
                 </li>
-                <li className="mb-2.5"><b>메인 진입</b> — 인게이지먼트 퍼널 · 탐색형 1단계. 딥링크가 아닌, 메인(홈)페이지에 직접 들어온 것만.</li>
-                <li className="mb-2.5"><b>딥링크 진입</b> — 인게이지먼트 퍼널 · 딥링크 1단계. 뉴스레터 등 링크 클릭으로 도착 즉시 모달이 자동으로 열린 진입.</li>
-                <li><b>아카이브 방문</b> — 카테고리 탭(MICE·TOURISM·AI·EZPMP)을 눌러 아카이브 페이지로 이동한 횟수. 전체 페이지뷰에는 포함되지만 위 &ldquo;메인 진입&rdquo;·&ldquo;접속 경로&rdquo;에는 포함되지 않음.</li>
+                <li className="mb-2.5"><b>메인 진입</b>: 인게이지먼트 퍼널 · 탐색형 1단계. 딥링크가 아닌, 메인(홈)페이지에 직접 들어온 것만.</li>
+                <li className="mb-2.5"><b>딥링크 진입</b>: 인게이지먼트 퍼널 · 딥링크 1단계. 뉴스레터 등 링크 클릭으로 도착 즉시 모달이 자동으로 열린 진입.</li>
+                <li><b>아카이브 방문</b>: 카테고리 탭(MICE·TOURISM·AI·EZPMP)을 눌러 아카이브 페이지로 이동한 횟수. 전체 페이지뷰에는 포함되지만 위 &ldquo;메인 진입&rdquo;·&ldquo;접속 경로&rdquo;에는 포함되지 않음.</li>
               </ul>
               <p className="m-0 mt-3" style={{ opacity: 0.75 }}>
-                &ldquo;기사 클릭&rdquo;·&ldquo;원문 클릭&rdquo;도 두 곳에 나오는데 <b>숫자 자체가 다릅니다</b> — 위 KPI 카드는 <b>탐색형 + 딥링크를 합친 전체 수치</b>이고, 인게이지먼트 퍼널의 &ldquo;탐색형&rdquo; 쪽은 딥링크를 뺀 수치라 항상 KPI 카드보다 작습니다.
+                &ldquo;기사 클릭&rdquo;·&ldquo;원문 클릭&rdquo;도 두 곳에 나오는데 <b>숫자 자체가 다릅니다.</b> 위 KPI 카드는 <b>탐색형 + 딥링크를 합친 전체 수치</b>이고, 인게이지먼트 퍼널의 &ldquo;탐색형&rdquo; 쪽은 딥링크를 뺀 수치라 항상 KPI 카드보다 작습니다.
                 (예: KPI 기사 클릭 = 탐색형 기사 클릭 + 딥링크 퍼널의 기사 열람). 전환율(%) 역시 KPI는 전체 페이지뷰 기준, 퍼널은 메인 진입/딥링크 진입 기준이라 서로 다릅니다.
               </p>
             </SectionInfoModal>
@@ -453,12 +453,12 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="전체 페이지뷰" value={totals.view} info={
           <>
-            <p className="m-0 mb-2">뉴스룸에서 발생한 모든 페이지뷰(view)의 합계입니다 — 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입, 뉴스레터 딥링크 진입을 모두 포함합니다.</p>
+            <p className="m-0 mb-2">뉴스룸에서 발생한 모든 페이지뷰(view)의 합계입니다. 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입, 뉴스레터 딥링크 진입을 모두 포함합니다.</p>
             <p className="m-0 mb-2" style={{ opacity: 0.75 }}>
               같은 사람이 여러 페이지를 넘나들면 그만큼 여러 번 집계됩니다(순 방문자 수가 아닌 방문 건수). 관리자 프리뷰 배포 테스트 접속도 포함된 수치입니다.
             </p>
             <p className="m-0" style={{ opacity: 0.75 }}>
-              아래 &ldquo;메인 진입&rdquo;(인게이지먼트 퍼널)과는 다른 지표입니다 — 메인 진입은 딥링크를 제외한 메인페이지 진입만 세므로, 이 페이지뷰 총합보다 항상 작거나 같습니다.
+              아래 &ldquo;메인 진입&rdquo;(인게이지먼트 퍼널)과는 다른 지표입니다. 메인 진입은 딥링크를 제외한 메인페이지 진입만 세므로, 이 페이지뷰 총합보다 항상 작거나 같습니다.
             </p>
           </>
         } />
@@ -481,7 +481,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
                 이 목록의 합계 = <b>메인 진입(탐색형)</b> + <b>딥링크 진입</b>(인게이지먼트 퍼널 참고). 딥링크(뉴스레터 클릭 등 자동 오픈)로 들어온 방문까지 여기서는 &ldquo;뉴스레터 클릭 유입&rdquo; 등으로 같이 집계되기 때문에, 딥링크를 제외한 &ldquo;메인 진입&rdquo; 숫자보다 이 목록의 합계가 더 큽니다.
               </p>
               <p className="m-0" style={{ opacity: 0.75 }}>
-                &ldquo;직접 접속&rdquo;은 이 목록의 여러 항목 중 하나일 뿐입니다 — 리퍼러(어디서 왔는지)·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크, 즐겨찾기 앱 링크 등)만 골라낸 값이라, 검색·SNS·다른 사이트 링크로 들어온 방문은 여기 포함되지 않고 각자 다른 항목으로 잡힙니다.
+                &ldquo;직접 접속&rdquo;은 이 목록의 여러 항목 중 하나일 뿐입니다. 리퍼러(어디서 왔는지)·UTM 정보가 전혀 없는 진입(주소창 직접 입력, 북마크, 즐겨찾기 앱 링크 등)만 골라낸 값이라, 검색·SNS·다른 사이트 링크로 들어온 방문은 여기 포함되지 않고 각자 다른 항목으로 잡힙니다.
               </p>
             </SectionInfoModal>
           </div>
@@ -784,9 +784,9 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <Section title="1. KPI 카드">
           <Def term="전체 페이지뷰">
-            뉴스룸에서 발생한 모든 페이지뷰의 합계입니다 — 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입,
+            뉴스룸에서 발생한 모든 페이지뷰의 합계입니다. 홈 화면 진입, 카테고리 아카이브 이동, 행사 캘린더 진입,
             뉴스레터 딥링크 진입을 모두 포함합니다(새로고침·재방문 포함). 아래 &quot;3. 인게이지먼트 퍼널&quot;의
-            &quot;메인 진입&quot;과는 다른 지표입니다 — 메인 진입은 딥링크를 제외한 메인페이지 진입만 세므로 항상 이 값보다 작거나 같습니다.
+            &quot;메인 진입&quot;과는 다른 지표입니다. 메인 진입은 딥링크를 제외한 메인페이지 진입만 세므로 항상 이 값보다 작거나 같습니다.
           </Def>
           <Def term="기사 클릭">기사 카드를 눌러 요약·인사이트 모달을 열람한 횟수입니다. 전환율 = 기사 클릭 ÷ 전체 페이지뷰.</Def>
           <Def term="원문 클릭">모달 내 &quot;VIEW ORIGINAL SOURCE&quot; 클릭 횟수입니다. 전환율 = 원문 클릭 ÷ 전체 페이지뷰.</Def>
@@ -795,7 +795,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
 
         <Section title="2. 트래픽 소스">
           <Item text="UTM 파라미터가 있으면 우선 사용합니다(카카오톡, 뉴스레터, SNS 등)." />
-          <Item text="UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별합니다 — 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힘." />
+          <Item text="UTM이 없으면 브라우저가 보내는 referrer(어디서 왔는지) 도메인으로 자동 판별합니다. 사내 AIGate처럼 링크에 UTM을 못 붙이는 경로도 잡힙니다." />
           <Indent>링크 예시: ?utm_source=kakao&amp;utm_campaign=weekly</Indent>
           <Def term="&quot;OO 클릭 유입&quot;의 의미">
             각 라벨은 그 방문이 해당 링크를 직접 클릭해 들어왔다는 뜻(last-touch)입니다. 같은 사람이 나중에
@@ -831,7 +831,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             목록에서 개별 호 카드를 클릭해 그 호의 실제 발송본(HTML)을 열람한 횟수입니다. 어떤 지난호가 인기 있는지
             확인할 수 있습니다.
           </Def>
-          <Item text="2026-07-30부터 수집 시작 — 그 이전 시점 데이터는 없습니다." />
+          <Item text="2026-07-30부터 수집을 시작했습니다. 그 이전 시점 데이터는 없습니다." />
         </Section>
 
         <Section title="6. 인기 검색어">
@@ -847,7 +847,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
             홈 화면에 진입한 순간부터 이탈(탭 닫기·다른 사이트 이동·다른 페이지 이동)할 때까지의 전체 체류 시간(초)입니다.
             탭이 백그라운드에 있는 동안은 카운트에서 제외됩니다. 2026-07-21부터 수집.
           </Def>
-          <Item text="카테고리별 성과 표의 '평균 체류(초)'는 이것과 다릅니다 — 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계(2026-05-28부터 수집)." />
+          <Item text="카테고리별 성과 표의 '평균 체류(초)'는 이것과 다릅니다. 해당 카테고리 기사의 인사이트 모달을 열어본 평균 시간만 별도로 집계합니다(2026-05-28부터 수집)." />
           <div style={{ marginTop: 6 }}>
             <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>어떻게 측정하나</p>
             <Indent>
