@@ -428,7 +428,7 @@ export default async function AnalyticsPage({ searchParams }: { searchParams: Pr
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
         <StatCard label="총 접속 수" value={totals.view} info={
           <>
-            <p className="m-0 mb-2">뉴스룸 홈 화면 진입 + 카테고리 아카이브 페이지 방문을 합친 수치입니다.</p>
+            <p className="m-0 mb-2">뉴스룸 홈 화면에 &ldquo;최초 진입&rdquo;한 횟수만 집계합니다. 카테고리 아카이브 페이지로 이동한 것은 포함하지 않습니다(아카이브 방문은 인게이지먼트 퍼널의 &ldquo;메인 접속&rdquo;과 카테고리별 성과 표에 별도로 잡힙니다).</p>
             <p className="m-0" style={{ opacity: 0.75 }}>
               같은 사람이 여러 번 들어오면 그만큼 여러 번 집계됩니다(순 방문자 수가 아닌 방문 건수). 관리자 프리뷰 배포 테스트 접속도 포함된 수치입니다.
             </p>
