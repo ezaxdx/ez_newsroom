@@ -149,6 +149,8 @@ export default function PopupManager() {
   // 게시기간 날짜 필터 — 기본값: 오늘 ~ 한 달 뒤
   const [filterFrom, setFilterFrom] = useState(todayKST());
   const [filterTo, setFilterTo] = useState(oneMonthFromTodayKST());
+  // 예정·진행중 탭(날짜 필터 사용) vs 지난 팝업 탭(게시기간이 이미 끝난 것만, 최근 종료순)
+  const [viewMode, setViewMode] = useState<"upcoming" | "past">("upcoming");
   // 미리보기 화면에서 팝업을 직접 드래그로 옮기거나 모서리로 크기 조절할 때의 드래그 상태
   const [dragState, setDragState] = useState<{
     mode: "move" | "resize";
@@ -224,12 +226,19 @@ export default function PopupManager() {
     return p.is_active && new Date(p.start_date).getTime() <= now && new Date(p.end_date).getTime() >= now;
   }
 
-  // 게시기간이 필터 범위와 겹치는 팝업만 — 기간이 하루라도 걸치면 포함 (필터는 날짜 단위)
-  const filteredPopups = popups.filter((p) => {
+  // 지난 팝업 탭: 게시기간이 이미 끝난 것만, 최근에 끝난 순
+  const pastPopups = popups
+    .filter((p) => kstDateOnly(p.end_date) < todayKST())
+    .sort((a, b) => (a.end_date < b.end_date ? 1 : -1));
+
+  // 예정·진행중 탭: 게시기간이 필터 범위와 겹치는 팝업만 — 기간이 하루라도 걸치면 포함 (필터는 날짜 단위)
+  const upcomingPopups = popups.filter((p) => {
     if (filterFrom && kstDateOnly(p.end_date) < filterFrom) return false;
     if (filterTo && kstDateOnly(p.start_date) > filterTo) return false;
     return true;
   });
+
+  const filteredPopups = viewMode === "past" ? pastPopups : upcomingPopups;
 
   function openNew() {
     setEditingId(null);
@@ -421,18 +430,41 @@ export default function PopupManager() {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>게시기간 필터</span>
-        <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
-          style={{ ...inputStyle, width: "auto", height: 30 }} />
-        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
-        <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
-          style={{ ...inputStyle, width: "auto", height: 30 }} />
-        <button
-          onClick={() => { setFilterFrom(todayKST()); setFilterTo(oneMonthFromTodayKST()); }}
-          style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary)", textDecoration: "underline" }}
-        >
-          기본값(오늘~한 달)
-        </button>
+        <div style={{ display: "flex", gap: 2, padding: 2, borderRadius: 7, background: "var(--surface-container-low)" }}>
+          {([
+            { key: "upcoming" as const, label: "예정·진행중" },
+            { key: "past" as const, label: "지난 팝업" },
+          ]).map(({ key, label }) => (
+            <button key={key} onClick={() => setViewMode(key)}
+              style={{
+                padding: "5px 12px", borderRadius: 5, border: "none", cursor: "pointer",
+                fontSize: 12, fontWeight: 700,
+                background: viewMode === key ? "var(--surface-container-lowest)" : "transparent",
+                color: viewMode === key ? "var(--on-surface)" : "var(--on-surface-variant)",
+                boxShadow: viewMode === key ? "0 1px 3px rgba(0,0,0,0.12)" : "none",
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+        {viewMode === "upcoming" ? (
+          <>
+            <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>게시기간 필터</span>
+            <input type="date" value={filterFrom} onChange={(e) => setFilterFrom(e.target.value)}
+              style={{ ...inputStyle, width: "auto", height: 30 }} />
+            <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>~</span>
+            <input type="date" value={filterTo} onChange={(e) => setFilterTo(e.target.value)}
+              style={{ ...inputStyle, width: "auto", height: 30 }} />
+            <button
+              onClick={() => { setFilterFrom(todayKST()); setFilterTo(oneMonthFromTodayKST()); }}
+              style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--primary)", textDecoration: "underline" }}
+            >
+              기본값(오늘~한 달)
+            </button>
+          </>
+        ) : (
+          <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>게시기간이 이미 끝난 팝업을 최근 종료순으로 보여줍니다</span>
+        )}
         <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{filteredPopups.length}건</span>
       </div>
 
@@ -442,7 +474,7 @@ export default function PopupManager() {
         </div>
       ) : filteredPopups.length === 0 ? (
         <p className="text-sm text-center py-6 m-0" style={{ color: "var(--on-surface-variant)" }}>
-          {popups.length === 0 ? "등록된 팝업이 없습니다." : "이 기간에 게시되는 팝업이 없습니다."}
+          {popups.length === 0 ? "등록된 팝업이 없습니다." : viewMode === "past" ? "지난 팝업이 없습니다." : "이 기간에 게시되는 팝업이 없습니다."}
         </p>
       ) : (
         <div style={{ borderRadius: 8, border: "1px solid var(--surface-container-high)", overflowX: "auto" }}>
