@@ -473,17 +473,16 @@ export default function NewsletterPage() {
     return sel;
   }
 
-  // 선택한 글자만 span으로 감싸 인라인 스타일(글씨크기·글씨체·굵기) 적용
+  // 선택한 구간을 span으로 감싸 인라인 스타일(글씨크기·글씨체·굵기·하이라이트) 적용.
+  // extractContents로 기존 내용(과 그 안의 다른 서식 span들)을 그대로 떼어내 새 span 안에 넣으므로,
+  // 굵게 → 기울임처럼 서로 다른 서식을 순서대로 적용해도 앞서 적용한 서식이 사라지지 않고 겹쳐 쌓인다.
   function applyEditorialInlineStyle(style: Partial<CSSStyleDeclaration>) {
     const sel = restoreEditorialSelection();
     if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
     const range = sel.getRangeAt(0);
-    const text = range.toString();
-    if (!text) return;
     const span = document.createElement("span");
     Object.assign(span.style, style);
-    span.textContent = text;
-    range.deleteContents();
+    span.appendChild(range.extractContents());
     range.insertNode(span);
     sel.removeAllRanges();
     const after = document.createRange();
@@ -491,6 +490,66 @@ export default function NewsletterPage() {
     after.collapse(true);
     sel.addRange(after);
     handleEditorialInput();
+  }
+
+  // 선택 구간 안에 이미 하이라이트(배경색)가 있는지 — 시작 지점 기준으로 상위 요소를 훑어 판단
+  function isEditorialHighlighted(sel: Selection): boolean {
+    const root = editorialRef.current;
+    let node: Node | null = sel.getRangeAt(0).startContainer;
+    while (node && node !== root) {
+      if (node instanceof HTMLElement && node.style.backgroundColor && node.style.backgroundColor !== "transparent") {
+        return true;
+      }
+      node = node.parentNode;
+    }
+    return false;
+  }
+
+  // 선택 구간 안의 모든 요소에서 배경색만 지움(서식 자체는 유지) — 형광펜 두 번째 클릭 시 사용
+  function removeEditorialHighlight(sel: Selection) {
+    const range = sel.getRangeAt(0);
+    const span = document.createElement("span");
+    const fragment = range.extractContents();
+    const clearBg = (node: Node) => {
+      if (node instanceof HTMLElement) node.style.backgroundColor = "";
+      node.childNodes.forEach(clearBg);
+    };
+    clearBg(fragment);
+    span.appendChild(fragment);
+    range.insertNode(span);
+
+    // 선택 범위가 어떤 서식 span의 내용 전체와 정확히 겹치면, extractContents는 그 span의 텍스트만
+    // 뽑아가고 이제 자식이 우리가 넣은 새 span뿐인 빈 조상 span은 배경색을 그대로 지닌 채 남는다
+    // (브라우저가 insertNode 과정에서 빈 텍스트 노드를 형제로 남겨둘 수 있어 childNodes.length만으론 판단 못 함).
+    // 다른 내용(형제 텍스트 등)이 남아있는 조상은 절대 건드리지 않고, 온전히 비어버린 조상만 위로 올라가며 지운다.
+    const hasOnlyEmptySiblings = (el: HTMLElement, keep: Node) =>
+      Array.from(el.childNodes).every((n) => n === keep || (n.nodeType === Node.TEXT_NODE && n.textContent === ""));
+    const root = editorialRef.current;
+    let prev: Node = span;
+    let ancestor: Node | null = span.parentNode;
+    while (ancestor && ancestor !== root && ancestor instanceof HTMLElement && hasOnlyEmptySiblings(ancestor, prev)) {
+      ancestor.style.backgroundColor = "";
+      prev = ancestor;
+      ancestor = ancestor.parentNode;
+    }
+
+    sel.removeAllRanges();
+    const after = document.createRange();
+    after.setStartAfter(span);
+    after.collapse(true);
+    sel.addRange(after);
+    handleEditorialInput();
+  }
+
+  // 형광펜 버튼: 이미 하이라이트된 선택이면 지우고, 아니면 칠한다 (한 번 누르면 칠하고 두 번 누르면 지워짐)
+  function toggleEditorialHighlight() {
+    const sel = restoreEditorialSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return;
+    if (isEditorialHighlighted(sel)) {
+      removeEditorialHighlight(sel);
+    } else {
+      applyEditorialInlineStyle({ backgroundColor: EDITORIAL_HIGHLIGHT_DEFAULT });
+    }
   }
 
   // 정렬은 글자가 아니라 커서가 있는 줄(블록) 전체에 적용
@@ -1197,7 +1256,8 @@ export default function NewsletterPage() {
                 >I 기울임</button>
                 <button
                   onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => applyEditorialInlineStyle({ backgroundColor: EDITORIAL_HIGHLIGHT_DEFAULT })}
+                  onClick={toggleEditorialHighlight}
+                  title="한 번 누르면 칠하고, 이미 칠한 곳을 선택해 다시 누르면 지워집니다"
                   style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: EDITORIAL_HIGHLIGHT_DEFAULT, fontSize: 11, cursor: "pointer", color: "#3a3a3a" }}
                 >형광펜</button>
                 <input
