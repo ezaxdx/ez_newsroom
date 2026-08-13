@@ -286,27 +286,17 @@ export function generateNewsletterHTML(data: NewsletterData): string {
   <table width="600" cellpadding="0" cellspacing="0" border="0"
          style="max-width:600px;width:100%;background:${C.white};">
 
-    <!-- ── Vol./Date 표시줄 (이미지 위에 겹치지 않고 그 위에 별도 줄로) ── -->
-    <!-- 예전엔 position:absolute로 헤더 이미지 위에 겹쳐 띄웠는데, Gmail이 보안상 이메일 HTML에서
-         position 속성 자체를 제거해버려서 겹침 기준점을 잃고 화면 맨 위로 텍스트가 튀는 문제가 있었음.
-         position도, (다우오피스가 못 읽는) background-size도 전혀 안 쓰는 방식으로 교체 — 일반 텍스트 줄이라
-         어떤 렌더러에서도 항상 같은 자리에 나온다. -->
-    <tr>
-      <td style="padding:16px 0 8px;text-align:center;background:${C.white};">
-        <p style="margin:0;font-size:14px;font-weight:600;color:${C.dark};font-family:${FONT_NOTO};">
-          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
-        </p>
-      </td>
-    </tr>
-
-    <!-- ── HEADER 이미지 ── -->
-    <!-- background-image + background-size는 다우오피스 채팅 미리보기 등 일부 단순 HTML 뷰어가 지원하지 않아
-         원본 픽셀 크기 그대로 렌더링되며 화면 밖으로 잘리는 문제가 있었음 — 실제 <img width="100%">로 교체.
-         width="100%"는 거의 모든 렌더러(단순 웹뷰 포함)가 지키는 가장 안전한 방식. -->
+    <!-- ── HEADER (이미지 + Vol./Date 오버레이) ── -->
+    <!-- background-image+background-size(다우오피스 미지원), position:absolute(Gmail이 이메일에서 제거)
+         둘 다 실패해서, 이미지 뒤에 이어 붙인 텍스트를 음수 margin-top으로 끌어올려 겹치는 옛날 방식으로 교체.
+         margin은 Gmail도 지우지 않고, 웬만한 단순 렌더러도 다 지원하는 가장 기본적인 박스 모델 속성이라 안전함. -->
     <tr>
       <td style="padding:0;line-height:0;font-size:0;" height="440" align="center" valign="top">
         <img src="${headerImageSrc}" width="100%" height="440" alt=""
              style="display:block;width:100%;height:440px;">
+        <p style="margin:-405px 0 0;font-size:16px;font-weight:500;color:${C.dark};text-align:center;line-height:normal;font-family:${FONT_NOTO};">
+          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
+        </p>
       </td>
     </tr>
 
