@@ -126,18 +126,20 @@ function newsDeepLink(id: string, site_url: string): string {
   return `${site_url}/?news=${id}`;
 }
 
+// 카드 썸네일 폭 255px는 데스크톱·이메일 클라이언트 기준 기본값 — 실제로는 부모 td(50%)를 100% 채워
+// max-width:255px로 그 이상 커지지만 않게 캡을 씌우므로, 좁은 화면에서는 부모와 함께 비례로 줄어든다
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 function newsCard(item: NewsCard, vol: number, site_url: string, is_email = false): string {
   const proxied = proxyImg(item.image_url, site_url, is_email);
   // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
   const img = proxied
-    ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
-         <tr><td width="255" height="129" style="width:255px;height:129px;overflow:hidden;line-height:0;font-size:0;">
-           <img src="${proxied}" alt="" width="255" height="129"
-                style="display:block;width:255px;height:129px;border:0;">
+    ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+         <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
+           <img src="${proxied}" alt="" width="100%" height="129"
+                style="display:block;width:100%;height:129px;border:0;">
          </td></tr>
        </table>`
-    : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
+    : `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
            <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
                 style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
@@ -145,9 +147,9 @@ function newsCard(item: NewsCard, vol: number, site_url: string, is_email = fals
        </table>`;
   const summary = item.summary;
   return `
-<td width="255" valign="top">
+<td width="50%" valign="top" style="width:50%;max-width:255px;">
   <a href="${withUTM(newsDeepLink(item.id, site_url), vol)}" style="text-decoration:none;color:inherit;display:block;">
-    <table cellpadding="0" cellspacing="0" width="255">
+    <table cellpadding="0" cellspacing="0" width="100%">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
       <tr><td style="padding:3px 4px 0;">
         <p style="margin:0 0 6px;font-size:16px;font-weight:700;color:#000000;line-height:1.3;text-align:center;font-family:${FONT_NOTO};">${item.title}</p>
@@ -163,13 +165,13 @@ function pickCard(ev: EventCard, vol: number, site_url: string, is_email = false
   const proxied = proxyImg(ev.image_url ?? null, site_url, is_email);
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
-    ? `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
-         <tr><td width="255" height="129" style="width:255px;height:129px;overflow:hidden;line-height:0;font-size:0;">
-           <img src="${proxied}" width="255" height="129" alt=""
-                style="display:block;width:255px;height:129px;border:0;">
+    ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+         <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
+           <img src="${proxied}" width="100%" height="129" alt=""
+                style="display:block;width:100%;height:129px;border:0;">
          </td></tr>
        </table>`
-    : `<table cellpadding="0" cellspacing="0" width="255" style="width:255px;">
+    : `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
            <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
                 style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
@@ -187,9 +189,9 @@ function pickCard(ev: EventCard, vol: number, site_url: string, is_email = false
     ? (ev.description.length > 40 ? ev.description.slice(0, 40) + "…" : ev.description)
     : null;
   return `
-<td width="255" valign="top">
+<td width="50%" valign="top" style="width:50%;max-width:255px;">
   <a href="${link}" style="text-decoration:none;color:inherit;display:block;">
-    <table cellpadding="0" cellspacing="0" width="255">
+    <table cellpadding="0" cellspacing="0" width="100%">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
       <tr><td style="padding:8px 4px 0;">
         <p style="margin:0 0 6px;font-size:16px;font-weight:500;color:#000000;line-height:1.3;text-align:center;font-family:${FONT_NOTO};">${ev.name}</p>
@@ -207,12 +209,14 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
     ? withUTM(ev.website, vol)
     : `https://search.naver.com/search.naver?query=${encodeURIComponent(ev.name)}`;
   const border = isLast ? "" : `border-bottom:1px solid #E8E0D0;`;
+  // 날짜 사이 공백을 일반 스페이스로 둬서(&nbsp; 아님) 좁은 화면에선 "~"에서 줄바꿈될 수 있게 함
+  // — 고정 폭 열이 줄바꿈 없는 긴 문자열 때문에 화면 밖으로 밀려나지 않도록
   const dateRange = ev.end_date && ev.end_date !== ev.start_date
-    ? `${ev.start_date}&nbsp;~&nbsp;${ev.end_date}`
+    ? `${ev.start_date} ~ ${ev.end_date}`
     : ev.start_date;
   return `
 <tr>
-  <td style="padding:9px 0;${border}width:160px;font-size:12px;font-weight:700;color:${C.green};white-space:nowrap;vertical-align:middle;font-family:${FONT_NOTO};">${dateRange}</td>
+  <td style="padding:9px 0;${border}width:33%;max-width:160px;font-size:12px;font-weight:700;color:${C.green};vertical-align:middle;font-family:${FONT_NOTO};">${dateRange}</td>
   <td style="padding:9px 8px;${border}font-size:13px;font-weight:500;color:${C.dark};vertical-align:middle;font-family:${FONT_NOTO};">
     <a href="${link}" style="color:${C.dark};text-decoration:underline;font-family:${FONT_NOTO};">${ev.name}</a>
   </td>
@@ -222,12 +226,12 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
 // ── 뉴스 카테고리 블록 ────────────────────────────────────
 function newsSection(label: string, items: NewsCard[], vol: number, site_url: string, is_email = false): string {
   if (items.length === 0) return "";
-  const cards = items.slice(0, 2).map(n => newsCard(n, vol, site_url, is_email)).join(`<td width="22"></td>`);
+  const cards = items.slice(0, 2).map(n => newsCard(n, vol, site_url, is_email)).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
   return `
 <tr>
   <td style="background:${C.white};padding:0 32px 24px;">
     <p style="margin:0 0 14px;font-size:16px;font-weight:500;color:#000000;font-family:${FONT_NOTO};">- ${label}</p>
-    <table cellpadding="0" cellspacing="0" width="100%">
+    <table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed;">
       <tr>${cards}</tr>
     </table>
   </td>
@@ -256,8 +260,8 @@ export function generateNewsletterHTML(data: NewsletterData): string {
 
   // Pick 4개 → 2행
   const picks = featured_events.slice(0, 4);
-  const pickRow1 = picks.slice(0, 2).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="22"></td>`);
-  const pickRow2 = picks.slice(2, 4).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="22"></td>`);
+  const pickRow1 = picks.slice(0, 2).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const pickRow2 = picks.slice(2, 4).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
 
   // 행사 리스트
   const listRows = upcoming_events.map((ev, i) =>
@@ -283,14 +287,16 @@ export function generateNewsletterHTML(data: NewsletterData): string {
   <table width="600" cellpadding="0" cellspacing="0" border="0"
          style="max-width:600px;width:100%;background:${C.white};">
 
-    <!-- ── HEADER (배경 이미지 + Vol./Date 오버레이) ── -->
-    <!-- background="" : 이메일 클라이언트 대응 / CSS background-image: 브라우저 미리보기 대응 -->
+    <!-- ── HEADER (이미지 + Vol./Date 오버레이) ── -->
+    <!-- background-image + background-size는 다우오피스 채팅 미리보기 등 일부 단순 HTML 뷰어가 지원하지 않아
+         원본 픽셀 크기 그대로 렌더링되며 화면 밖으로 잘리는 문제가 있었음 — 실제 <img width="100%">로 교체.
+         width="100%"는 거의 모든 렌더러(단순 웹뷰 포함)가 지키는 가장 안전한 방식. 텍스트는 그 위에 절대 위치로 겹침. -->
     <tr>
-      <td background="${headerImageSrc}"
-          bgcolor="${C.bg}"
-          style="background-color:${C.bg};background-image:url('${headerImageSrc}');background-size:100% 100%;background-repeat:no-repeat;"
+      <td style="position:relative;padding:0;line-height:0;font-size:0;background-color:${C.bg};"
           height="440" align="center" valign="top">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0">
+        <img src="${headerImageSrc}" width="100%" height="440" alt=""
+             style="display:block;width:100%;height:440px;">
+        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="position:absolute;top:0;left:0;">
           <tr>
             <td style="padding:35px 0 0;text-align:center;">
               <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
@@ -312,7 +318,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
                 ${editorialFlapSrc ? `
                 <tr>
                   <td style="padding:0;line-height:0;font-size:0;">
-                    <img src="${editorialFlapSrc}" width="560" alt="" style="display:block;width:100%;max-width:560px;height:auto;margin-bottom:${editorial_box_color ? "-12px" : "0"};border-radius:${editorial_box_color ? "0" : "15px 15px 0 0"};">
+                    <img src="${editorialFlapSrc}" width="100%" alt="" style="display:block;width:100%;max-width:560px;height:auto;margin-bottom:${editorial_box_color ? "-12px" : "0"};border-radius:${editorial_box_color ? "0" : "15px 15px 0 0"};">
                   </td>
                 </tr>` : ""}
                 <tr>
@@ -364,7 +370,7 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <!-- ── PICK 행사 4개 (2×2) ── -->
     <tr>
       <td style="background:${C.white};padding:0 32px 24px;">
-        <table cellpadding="0" cellspacing="0" width="100%">
+        <table cellpadding="0" cellspacing="0" width="100%" style="table-layout:fixed;">
           ${pickRow1 ? `<tr>${pickRow1}</tr>` : ""}
           ${pickRow2 ? `
             <tr><td colspan="3" height="20" style="font-size:0;line-height:0;">&nbsp;</td></tr>
@@ -392,8 +398,8 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     <tr>
       <td style="background:${C.white};padding:0 32px 24px;text-align:center;">
         ${footer_banner?.link_url
-          ? `<a href="${withUTM(footer_banner.link_url, vol)}" style="display:block;text-decoration:none;"><img src="${footerBannerSrc}" alt="" style="display:block;width:100%;max-width:536px;height:auto;margin:0 auto;border-radius:8px;"></a>`
-          : `<img src="${footerBannerSrc}" alt="" style="display:block;width:100%;max-width:536px;height:auto;margin:0 auto;border-radius:8px;">`}
+          ? `<a href="${withUTM(footer_banner.link_url, vol)}" style="display:block;text-decoration:none;"><img src="${footerBannerSrc}" width="100%" alt="" style="display:block;width:100%;max-width:536px;height:auto;margin:0 auto;border-radius:8px;"></a>`
+          : `<img src="${footerBannerSrc}" width="100%" alt="" style="display:block;width:100%;max-width:536px;height:auto;margin:0 auto;border-radius:8px;">`}
       </td>
     </tr>` : ""}
 
