@@ -286,17 +286,24 @@ export function generateNewsletterHTML(data: NewsletterData): string {
   <table width="600" cellpadding="0" cellspacing="0" border="0"
          style="max-width:600px;width:100%;background:${C.white};">
 
-    <!-- ── HEADER (이미지 + Vol./Date 오버레이) ── -->
-    <!-- background-image+background-size(다우오피스 미지원), position:absolute(Gmail이 이메일에서 제거)
-         둘 다 실패해서, 이미지 뒤에 이어 붙인 텍스트를 음수 margin-top으로 끌어올려 겹치는 옛날 방식으로 교체.
-         margin은 Gmail도 지우지 않고, 웬만한 단순 렌더러도 다 지원하는 가장 기본적인 박스 모델 속성이라 안전함. -->
+    <!-- ── Vol./Date 표시줄 (이미지 위에 겹치지 않고 그 위에 별도 줄로) ── -->
+    <!-- background-image+background-size(다우오피스 미지원), position:absolute(Gmail이 이메일에서 제거),
+         음수 margin-top(Gmail이 이것도 제거 — 실제 발송 메일에서 확인됨)까지 다 실패해서,
+         이미지 위에 겹치는 걸 포기하고 그 위에 별도의 평범한 텍스트 줄로 뺌.
+         겹침 트릭이 전혀 없는 순수 문서 흐름이라 어떤 클라이언트에서도 항상 같은 자리에 나온다. -->
+    <tr>
+      <td style="padding:16px 0 8px;text-align:center;background:${C.white};">
+        <p style="margin:0;font-size:14px;font-weight:600;color:${C.dark};font-family:${FONT_NOTO};">
+          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
+        </p>
+      </td>
+    </tr>
+
+    <!-- ── HEADER 이미지 ── -->
     <tr>
       <td style="padding:0;line-height:0;font-size:0;" height="440" align="center" valign="top">
         <img src="${headerImageSrc}" width="100%" height="440" alt=""
              style="display:block;width:100%;height:440px;">
-        <p style="margin:-405px 0 0;font-size:16px;font-weight:500;color:${C.dark};text-align:center;line-height:normal;font-family:${FONT_NOTO};">
-          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
-        </p>
       </td>
     </tr>
 
