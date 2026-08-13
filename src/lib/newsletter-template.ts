@@ -45,7 +45,6 @@ const C = {
   bg:      "#F5F0E8",
   green:   "#54713B",
   dark:    "#423C25",
-  darkAlt: "#413C26",
   beige:   "#F5EDE3",
   muted:   "#7A6E5F",
   gray:    "#D9D9D9",
@@ -77,8 +76,8 @@ function sectionDivider(title: string): string {
         <td style="vertical-align:middle;padding:0;">
           <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
         </td>
-        <td style="text-align:center;white-space:nowrap;padding:0 20px;width:1%;">
-          <span style="font-size:36px;font-weight:700;color:${C.dark};font-family:${FONT_NOTO};letter-spacing:0.02em;">${title}</span>
+        <td style="text-align:center;padding:0 12px;width:1%;">
+          <span style="font-size:36px;font-weight:700;color:${C.dark};font-family:${FONT_NOTO};letter-spacing:0.02em;word-break:keep-all;">${title}</span>
         </td>
         <td style="vertical-align:middle;padding:0;">
           <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
@@ -287,24 +286,27 @@ export function generateNewsletterHTML(data: NewsletterData): string {
   <table width="600" cellpadding="0" cellspacing="0" border="0"
          style="max-width:600px;width:100%;background:${C.white};">
 
-    <!-- ── HEADER (이미지 + Vol./Date 오버레이) ── -->
+    <!-- ── Vol./Date 표시줄 (이미지 위에 겹치지 않고 그 위에 별도 줄로) ── -->
+    <!-- 예전엔 position:absolute로 헤더 이미지 위에 겹쳐 띄웠는데, Gmail이 보안상 이메일 HTML에서
+         position 속성 자체를 제거해버려서 겹침 기준점을 잃고 화면 맨 위로 텍스트가 튀는 문제가 있었음.
+         position도, (다우오피스가 못 읽는) background-size도 전혀 안 쓰는 방식으로 교체 — 일반 텍스트 줄이라
+         어떤 렌더러에서도 항상 같은 자리에 나온다. -->
+    <tr>
+      <td style="padding:16px 0 8px;text-align:center;background:${C.white};">
+        <p style="margin:0;font-size:14px;font-weight:600;color:${C.dark};font-family:${FONT_NOTO};">
+          Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
+        </p>
+      </td>
+    </tr>
+
+    <!-- ── HEADER 이미지 ── -->
     <!-- background-image + background-size는 다우오피스 채팅 미리보기 등 일부 단순 HTML 뷰어가 지원하지 않아
          원본 픽셀 크기 그대로 렌더링되며 화면 밖으로 잘리는 문제가 있었음 — 실제 <img width="100%">로 교체.
-         width="100%"는 거의 모든 렌더러(단순 웹뷰 포함)가 지키는 가장 안전한 방식. 텍스트는 그 위에 절대 위치로 겹침. -->
+         width="100%"는 거의 모든 렌더러(단순 웹뷰 포함)가 지키는 가장 안전한 방식. -->
     <tr>
-      <td style="position:relative;padding:0;line-height:0;font-size:0;background-color:${C.bg};"
-          height="440" align="center" valign="top">
+      <td style="padding:0;line-height:0;font-size:0;" height="440" align="center" valign="top">
         <img src="${headerImageSrc}" width="100%" height="440" alt=""
              style="display:block;width:100%;height:440px;">
-        <table width="100%" cellpadding="0" cellspacing="0" border="0" style="position:absolute;top:0;left:0;">
-          <tr>
-            <td style="padding:35px 0 0;text-align:center;">
-              <p style="margin:0;font-size:16px;font-weight:500;color:${C.darkAlt};font-family:${FONT_NOTO};">
-                Vol.${String(vol).padStart(2,"0")} &nbsp;·&nbsp; ${send_date}
-              </p>
-            </td>
-          </tr>
-        </table>
       </td>
     </tr>
 
