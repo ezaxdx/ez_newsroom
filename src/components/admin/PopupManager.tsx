@@ -669,19 +669,17 @@ export default function PopupManager() {
               </label>
             </div>
 
-            {form.display_type === "floating" && (
-              <div style={{ marginBottom: 10 }}>
-                <label style={labelStyle}>이미지 효과</label>
-                <select value={form.effect}
-                  onChange={(e) => setForm((f) => ({ ...f, effect: e.target.value }))}
-                  style={{ ...inputStyle, cursor: "pointer" }}
-                >
-                  {Object.entries(EFFECT_LABELS).map(([key, label]) => (
-                    <option key={key} value={key}>{label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+            <div style={{ marginBottom: 10 }}>
+              <label style={labelStyle}>이미지 효과</label>
+              <select value={form.effect}
+                onChange={(e) => setForm((f) => ({ ...f, effect: e.target.value }))}
+                style={{ ...inputStyle, cursor: "pointer" }}
+              >
+                {Object.entries(EFFECT_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
 
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <div style={{ flex: 1 }}>
@@ -812,7 +810,7 @@ export default function PopupManager() {
         const isFloatingPreview = form.display_type === "floating";
         const place = resolvePreviewPlace(form.position, form.pos_x, form.pos_y, 20, 110);
         const previewUrl = PREVIEW_PAGE_URL[form.pages[0]] ?? "/";
-        const previewEffect = isFloatingPreview ? (form.effect || "none") : "none";
+        const previewEffect = form.effect || "none";
         const previewEffectAnimation =
           previewEffect === "bounce" ? "popup-fx-bounce 1.2s ease-in-out infinite"
           : previewEffect === "shake" ? "popup-fx-shake 1.6s ease-in-out infinite"
@@ -904,6 +902,12 @@ export default function PopupManager() {
                     boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
                     cursor: dragState?.mode === "move" ? "grabbing" : "grab",
                   }}>
+                  {previewEffect !== "none" && (
+                    <>
+                      <style>{EFFECT_KEYFRAMES}</style>
+                      <EffectOverlay effect={previewEffect} />
+                    </>
+                  )}
                   {media}
                   <div style={{
                     display: "flex", alignItems: "center", justifyContent: "space-between",

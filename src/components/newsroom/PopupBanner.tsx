@@ -214,6 +214,14 @@ export default function PopupBanner({
     setOpen(false);
   }
 
+  // 이미지 위 장식 효과 — 고정형·팝업형 공통. bounce/shake는 배치용 transform과 겹치면 안 되므로
+  // 이미지를 감싸는 안쪽 래퍼에만 건다(고정형은 위치 이동, 팝업형은 딱히 이동이 없어 영향 없음)
+  const effect = popup.effect || "none";
+  const effectAnimation =
+    effect === "bounce" ? "popup-fx-bounce 1.2s ease-in-out infinite"
+    : effect === "shake" ? "popup-fx-shake 1.6s ease-in-out infinite"
+    : undefined;
+
   const media = (
     <>
       {popup.image_url && (
@@ -222,12 +230,18 @@ export default function PopupBanner({
           onMouseLeave={() => setHovering(false)}
           style={{ position: "relative" }}
         >
+          {effect !== "none" && (
+            <>
+              <style>{EFFECT_KEYFRAMES}</style>
+              <EffectOverlay effect={effect} />
+            </>
+          )}
           {/* 외부 스토리지 URL이라 next/image 최적화 대상이 아님 */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={popup.image_url}
             alt={popup.title}
-            style={{ display: "block", width: "100%", height: "auto" }}
+            style={{ display: "block", width: "100%", height: "auto", animation: effectAnimation }}
           />
           {effectiveContent && hovering && (
             <div ref={tooltipClamp.ref} style={{
@@ -263,12 +277,6 @@ export default function PopupBanner({
     // 랜덤 위치가 아직 안 정해졌으면(첫 렌더) 그리지 않음 — 왼쪽 위에 잠깐 튀는 것 방지
     if (popup.position === "random" && !randomPos) return null;
     const place = resolvePlace(20, 110);
-    const effect = popup.effect || "none";
-    // bounce/shake는 배치용 transform(translate 등)과 겹치면 안 되므로, 이미지를 감싸는 안쪽 래퍼에만 건다
-    const effectAnimation =
-      effect === "bounce" ? "popup-fx-bounce 1.2s ease-in-out infinite"
-      : effect === "shake" ? "popup-fx-shake 1.6s ease-in-out infinite"
-      : undefined;
     const inner = popup.image_url ? (
       // eslint-disable-next-line @next/next/no-img-element
       <img
