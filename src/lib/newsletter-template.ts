@@ -76,8 +76,8 @@ function sectionDivider(title: string): string {
         <td style="vertical-align:middle;padding:0;">
           <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
         </td>
-        <td style="text-align:center;padding:0 12px;width:1%;">
-          <span style="font-size:36px;font-weight:700;color:${C.dark};font-family:${FONT_NOTO};letter-spacing:0.02em;word-break:keep-all;">${title}</span>
+        <td style="text-align:center;white-space:nowrap;padding:0 12px;width:1%;">
+          <span style="font-size:26px;font-weight:700;color:${C.dark};font-family:${FONT_NOTO};letter-spacing:0.02em;">${title}</span>
         </td>
         <td style="vertical-align:middle;padding:0;">
           <span style="display:block;border-top:1px solid ${C.border};font-size:0;line-height:0;overflow:hidden;">&nbsp;</span>
