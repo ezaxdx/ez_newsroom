@@ -42,8 +42,14 @@ export async function fetchActivePopups(): Promise<PopupData[]> {
 
     const rows: PopupData[] = data ?? [];
     const hunts = rows.filter((p) => p.hunt_code);
-    // 일반 팝업이 여러 개면 화면이 겹치므로 가장 최근 것 하나만 노출
-    const normal = rows.filter((p) => !p.hunt_code).slice(0, 1);
+    // 같은 표시 방식(고정/팝업)끼리는 화면이 겹치므로 각각 가장 최근 것 하나만 노출.
+    // 고정(구석 배너)과 팝업(화면 중앙)은 서로 다른 영역이라 겹치지 않으므로 동시에 띄운다.
+    const normalByType = new Map<string, PopupData>();
+    for (const p of rows) {
+      if (p.hunt_code) continue;
+      if (!normalByType.has(p.display_type)) normalByType.set(p.display_type, p);
+    }
+    const normal = Array.from(normalByType.values());
     return [...hunts, ...normal];
   } catch {
     return [];

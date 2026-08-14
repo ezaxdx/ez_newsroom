@@ -232,11 +232,15 @@ export default function PopupManager() {
     .sort((a, b) => (a.end_date < b.end_date ? 1 : -1));
 
   // 예정·진행중 탭: 게시기간이 필터 범위와 겹치는 팝업만 — 기간이 하루라도 걸치면 포함 (필터는 날짜 단위)
-  const upcomingPopups = popups.filter((p) => {
-    if (filterFrom && kstDateOnly(p.end_date) < filterFrom) return false;
-    if (filterTo && kstDateOnly(p.start_date) > filterTo) return false;
-    return true;
-  });
+  // 등록 순서대로 위에서 아래로 쌓이도록 오래된 것부터(=NO 1) 표시 — popups 자체는 최신순(created_at desc)이라 뒤집음
+  const upcomingPopups = popups
+    .filter((p) => {
+      if (filterFrom && kstDateOnly(p.end_date) < filterFrom) return false;
+      if (filterTo && kstDateOnly(p.start_date) > filterTo) return false;
+      return true;
+    })
+    .slice()
+    .reverse();
 
   const filteredPopups = viewMode === "past" ? pastPopups : upcomingPopups;
 
@@ -499,7 +503,7 @@ export default function PopupManager() {
                     background: live ? "color-mix(in srgb, var(--primary) 5%, transparent)" : undefined,
                   }}>
                     <td style={{ padding: "9px 12px", textAlign: "center", color: "var(--on-surface-variant)", fontSize: "0.72rem" }}>
-                      {filteredPopups.length - idx}
+                      {idx + 1}
                     </td>
                     <td style={{ padding: "9px 12px" }}>
                       {p.hunt_code && (
