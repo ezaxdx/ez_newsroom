@@ -76,6 +76,23 @@ create trigger trg_news_published_at_history
   for each row
   execute function public.log_news_published_at_change();
 
+-- created_at 진짜 고정 — default now()는 INSERT 시에만 적용되고 UPDATE는 막지 못하므로,
+-- 어떤 UPDATE가 와도 created_at은 항상 기존 값으로 강제 유지하는 트리거를 추가
+-- (2026-08-20 published_at 일괄 초기화 사고 재발 시 created_at까지 같이 덮어써지는 걸 방지)
+create or replace function public.protect_news_created_at()
+returns trigger as $$
+begin
+  new.created_at := old.created_at;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_protect_news_created_at on public.news;
+create trigger trg_protect_news_created_at
+  before update on public.news
+  for each row
+  execute function public.protect_news_created_at();
+
 -- ── rss_sources ───────────────────────────────────────────────────────
 create table if not exists public.rss_sources (
   id               uuid primary key default gen_random_uuid(),
