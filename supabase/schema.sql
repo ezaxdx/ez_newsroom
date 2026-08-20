@@ -24,7 +24,10 @@ create table if not exists public.news (
   faithfulness_issues jsonb,                             -- 재검증에서 발견된 문제점 목록 (할루시네이션·과장 등)
   audited_at      timestamptz,                           -- 콘텐츠 품질 재검증 실행 시각 (null이면 미감사)
   audit_dismissed_at timestamptz,                        -- 관리자가 "확인했으나 수정 안 함"으로 완료처리한 시각 — 감사 목록에서 제외
-  published_at    timestamptz default now()
+  published_at    timestamptz default now(),
+  created_at      timestamptz default now()               -- 행이 실제로 처음 생성된 시각. published_at은 재발행 등으로 나중에
+                                                            -- 바뀔 수 있지만 이 값은 절대 갱신하지 않음(2026-08-20 published_at
+                                                            -- 일괄 초기화 사고 이후 복구용 기준값으로 추가)
 );
 
 alter table public.news
@@ -35,13 +38,43 @@ alter table public.news
   add column if not exists faithfulness_score integer,
   add column if not exists faithfulness_issues jsonb,
   add column if not exists audited_at      timestamptz,
-  add column if not exists audit_dismissed_at timestamptz;
+  add column if not exists audit_dismissed_at timestamptz,
+  add column if not exists created_at      timestamptz default now();
 
 -- original_url unique 제약 (news_original_url_unique) — 재발행 시 duplicate key 처리 기준
 do $$ begin
   alter table public.news add constraint news_original_url_unique unique (original_url);
 exception when duplicate_object then null;
 end $$;
+
+-- ── news_published_at_history ────────────────────────────────────────
+-- published_at이 바뀔 때마다(재발행 등 포함) 이전 값을 자동 기록 — 대량 오변경 사고 발생 시 복구용
+-- (2026-08-20 published_at 678건 일괄 초기화 사고를 계기로 도입)
+create table if not exists public.news_published_at_history (
+  id         bigint generated always as identity primary key,
+  news_id    uuid not null references public.news(id) on delete cascade,
+  old_value  timestamptz,
+  new_value  timestamptz,
+  changed_at timestamptz default now()
+);
+alter table public.news_published_at_history enable row level security;
+
+create or replace function public.log_news_published_at_change()
+returns trigger as $$
+begin
+  if old.published_at is distinct from new.published_at then
+    insert into public.news_published_at_history (news_id, old_value, new_value)
+    values (old.id, old.published_at, new.published_at);
+  end if;
+  return new;
+end;
+$$ language plpgsql;
+
+drop trigger if exists trg_news_published_at_history on public.news;
+create trigger trg_news_published_at_history
+  before update on public.news
+  for each row
+  execute function public.log_news_published_at_change();
 
 -- ── rss_sources ───────────────────────────────────────────────────────
 create table if not exists public.rss_sources (
