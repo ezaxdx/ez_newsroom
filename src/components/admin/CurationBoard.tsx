@@ -129,15 +129,21 @@ export default function CurationBoard({
     const to = dragOverIdx.current;
     if (from === null || to === null || from === to) return;
 
-    const liveIds = liveSortedByCat.map((i) => i.id);
-    const reordered = [...liveIds];
+    // from/to는 "화면에 보이는 목록(filtered)" 기준 인덱스 — 카테고리 필터가 걸려 있으면
+    // 전체 라이브 목록과 인덱스가 어긋나므로 반드시 filtered를 대상으로 계산해야 함
+    const visible = filtered;
+    if (from >= visible.length || to >= visible.length) return;
+
+    const reordered = visible.map((i) => i.id);
     const [moved] = reordered.splice(from, 1);
     reordered.splice(to, 0, moved);
 
     setItems((prev) => {
-      // 라이브 기사끼리만 순서 재부여 — 아카이브/대기열 기사의 display_order는 절대 건드리지 않음
-      const idxMap = new Map(reordered.map((id, i) => [id, i + 1]));
-      return prev.map((item) => idxMap.has(item.id) ? { ...item, display_order: idxMap.get(item.id)! } : item);
+      // 화면에 보이는 기사들이 원래 쓰던 display_order 자리(slot)만 서로 맞바꿈 —
+      // 필터로 가려진 기사·아카이브·대기열의 display_order는 절대 건드리지 않음
+      const slots = visible.map((i) => i.display_order);
+      const orderMap = new Map(reordered.map((id, i) => [id, slots[i]]));
+      return prev.map((item) => orderMap.has(item.id) ? { ...item, display_order: orderMap.get(item.id)! } : item);
     });
     dragIdx.current = null;
     dragOverIdx.current = null;
@@ -168,16 +174,19 @@ export default function CurationBoard({
 
   const moveItem = (id: string, dir: -1 | 1) => {
     setItems((prev) => {
-      // 라이브 탭 전용 버튼 — 라이브 기사끼리만 순서를 바꾸고, 나머지 기사의 display_order는 건드리지 않음
-      const liveIds = liveSortedByCat.map((i) => i.id);
-      const idx = liveIds.indexOf(id);
+      // 화면에 보이는 목록 기준으로만 이동 — 필터가 걸린 상태에서 화면에 없는 기사와
+      // 순서가 바뀌어 엉뚱한 기사의 display_order가 저장되는 것을 방지
+      const visible = filtered;
+      const idx = visible.findIndex((i) => i.id === id);
       if (idx < 0) return prev;
       const next = idx + dir;
-      if (next < 0 || next >= liveIds.length) return prev;
-      const swapped = [...liveIds];
+      if (next < 0 || next >= visible.length) return prev;
+
+      const swapped = visible.map((i) => i.id);
       [swapped[idx], swapped[next]] = [swapped[next], swapped[idx]];
-      const idxMap = new Map(swapped.map((sid, i) => [sid, i + 1]));
-      return prev.map((item) => idxMap.has(item.id) ? { ...item, display_order: idxMap.get(item.id)! } : item);
+      const slots = visible.map((i) => i.display_order);
+      const orderMap = new Map(swapped.map((sid, i) => [sid, slots[i]]));
+      return prev.map((item) => orderMap.has(item.id) ? { ...item, display_order: orderMap.get(item.id)! } : item);
     });
   };
 
