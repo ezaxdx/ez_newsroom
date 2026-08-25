@@ -1048,16 +1048,31 @@ Deno.serve(async (req) => {
   }
 
   // 오래된 대기열(30일 이상 미발행) 자동 정리 — 검토 없이 무기한 누적되는 것 방지.
-  // published_at은 미발행 기사의 경우 원문 발행일(pubDate)이라 삽입 시점과 정확히 일치하진
-  // 않지만, RSS 특성상 수집 직후 값이라 충분히 근사치로 사용 가능.
+  // 기준은 반드시 created_at(행이 실제로 생성된 시각, 절대 안 바뀜)을 써야 함 — published_at은
+  // 한때 발행됐다가 나중에 발행취소된 오래된 기사도 값을 그대로 갖고 있어서, published_at
+  // 기준으로 하면 "발행취소" 한 번으로 몇 달 전 기사가 다음 실행 때 바로 영구 삭제되어 버림
+  // (2026-08-25 사고 점검 중 발견 — DELETE는 이력이 안 남아 published_at 사고보다 위험함).
+  // 상한(MAX)도 둬서 조건이 잘못 걸려도 한 번에 대량 삭제되지 않게 하고, 삭제 전 목록을 로그로 남김.
   const cleanupCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { count: cleanedUp, error: cleanupError } = await supabase
+  const CLEANUP_MAX = 200;
+  const { data: cleanupTargets, error: cleanupSelectError } = await supabase
     .from("news")
-    .delete({ count: "exact" })
+    .select("id, title, created_at")
     .eq("is_published", false)
-    .lt("published_at", cleanupCutoff);
-  if (cleanupError) console.error("[대기열 정리 실패]", cleanupError.message);
-  else if (cleanedUp) console.log(`[대기열 정리] 30일 경과 미발행 기사 ${cleanedUp}건 삭제`);
+    .lt("created_at", cleanupCutoff)
+    .limit(CLEANUP_MAX);
+  if (cleanupSelectError) {
+    console.error("[대기열 정리 조회 실패]", cleanupSelectError.message);
+  } else if (cleanupTargets && cleanupTargets.length > 0) {
+    console.log(`[대기열 정리] 삭제 대상 ${cleanupTargets.length}건:`,
+      cleanupTargets.map((t) => `${t.id}(${t.created_at}) ${t.title}`).join(" | "));
+    const { error: cleanupError } = await supabase
+      .from("news")
+      .delete()
+      .in("id", cleanupTargets.map((t) => t.id));
+    if (cleanupError) console.error("[대기열 정리 삭제 실패]", cleanupError.message);
+    else console.log(`[대기열 정리] ${cleanupTargets.length}건 삭제 완료`);
+  }
 
   const durationMs = Date.now() - runStart;
   const fetched = sourceStats.reduce((s, r) => s + r.fetched, 0);
