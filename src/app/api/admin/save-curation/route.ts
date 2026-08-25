@@ -43,7 +43,9 @@ export async function POST(req: NextRequest) {
 
   // 한 건씩 순차 대기(await in for-loop)하면 항목 수만큼 왕복이 쌓여 느려짐 — 병렬로 전송
   await Promise.all(items.map((item) => {
-    const justPublished = item.is_published && !wasPublished.get(item.id);
+    // undefined(조회 실패/누락)를 "새로 발행됨"으로 오인하면 published_at이 잘못 리셋될 수 있어
+    // 명시적으로 false(발행 안 된 상태)로 확인된 경우에만 "새로 발행"으로 간주
+    const justPublished = item.is_published && wasPublished.get(item.id) === false;
     return supabase
       .from("news")
       .update({

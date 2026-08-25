@@ -135,12 +135,9 @@ export default function CurationBoard({
     reordered.splice(to, 0, moved);
 
     setItems((prev) => {
-      const otherIds = prev.filter((i) => !isLive(i, lastRunMs)).map((i) => i.id);
-      const allOrdered = [...reordered, ...otherIds];
-      const idxMap = new Map(allOrdered.map((id, i) => [id, i + 1]));
-      return prev
-        .map((item) => ({ ...item, display_order: idxMap.get(item.id) ?? item.display_order }))
-        .sort((a, b) => a.display_order - b.display_order);
+      // 라이브 기사끼리만 순서 재부여 — 아카이브/대기열 기사의 display_order는 절대 건드리지 않음
+      const idxMap = new Map(reordered.map((id, i) => [id, i + 1]));
+      return prev.map((item) => idxMap.has(item.id) ? { ...item, display_order: idxMap.get(item.id)! } : item);
     });
     dragIdx.current = null;
     dragOverIdx.current = null;
@@ -171,13 +168,16 @@ export default function CurationBoard({
 
   const moveItem = (id: string, dir: -1 | 1) => {
     setItems((prev) => {
-      const idx = prev.findIndex((i) => i.id === id);
+      // 라이브 탭 전용 버튼 — 라이브 기사끼리만 순서를 바꾸고, 나머지 기사의 display_order는 건드리지 않음
+      const liveIds = liveSortedByCat.map((i) => i.id);
+      const idx = liveIds.indexOf(id);
       if (idx < 0) return prev;
       const next = idx + dir;
-      if (next < 0 || next >= prev.length) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[next]] = [arr[next], arr[idx]];
-      return arr.map((item, i) => ({ ...item, display_order: i + 1 }));
+      if (next < 0 || next >= liveIds.length) return prev;
+      const swapped = [...liveIds];
+      [swapped[idx], swapped[next]] = [swapped[next], swapped[idx]];
+      const idxMap = new Map(swapped.map((sid, i) => [sid, i + 1]));
+      return prev.map((item) => idxMap.has(item.id) ? { ...item, display_order: idxMap.get(item.id)! } : item);
     });
   };
 
