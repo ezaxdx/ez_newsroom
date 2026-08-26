@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { verifyCronAuth } from "@/lib/verify-cron";
 
 export const maxDuration = 10;
 
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const unauth = verifyCronAuth(req);
+  if (unauth) return unauth;
 
   const supabase = createAdminClient();
   const { data } = await supabase

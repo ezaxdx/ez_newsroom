@@ -4,15 +4,13 @@ import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-te
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { fetchEventImage } from "@/lib/fetch-event-image";
+import { verifyCronAuth } from "@/lib/verify-cron";
 
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  // Vercel cron 인증
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const unauth = verifyCronAuth(req);
+  if (unauth) return unauth;
 
   const supabase = createAdminClient();
 

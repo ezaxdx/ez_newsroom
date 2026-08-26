@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { verifyCronAuth } from "@/lib/verify-cron";
 
 export const maxDuration = 10;
 
@@ -8,10 +9,8 @@ export const maxDuration = 10;
  * 이 라우트는 트리거만 하고 즉시 리턴
  */
 export async function GET(req: Request) {
-  const authHeader = req.headers.get("authorization");
-  if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return new Response("Unauthorized", { status: 401 });
-  }
+  const unauth = verifyCronAuth(req);
+  if (unauth) return unauth;
 
   const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/scrape-events`;
   const cronSecret = process.env.CRON_SECRET ?? "";
