@@ -1,17 +1,33 @@
 import { NextRequest, NextResponse } from "next/server";
 import { google } from "googleapis";
+import { cookies } from "next/headers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { encryptToken } from "@/lib/token-crypto";
+import { requireAdmin } from "@/lib/admin-auth";
 
 export async function GET(req: NextRequest) {
+  // 관리자 세션이 있는 브라우저에서 온 요청만 허용 — 외부인이 자기 구글 계정 인가코드로
+  // 이 콜백을 직접 호출해 gmail_tokens를 덮어쓰는 것을 막음
+  const unauth = await requireAdmin();
+  if (unauth) return NextResponse.redirect(new URL("/admin/login?from=/admin/gmail", req.url));
+
   const code = req.nextUrl.searchParams.get("code");
   const error = req.nextUrl.searchParams.get("error");
+  const state = req.nextUrl.searchParams.get("state");
 
   if (error) {
     return NextResponse.redirect(new URL("/admin/gmail?error=access_denied", req.url));
   }
   if (!code) {
     return NextResponse.redirect(new URL("/admin/gmail?error=no_code", req.url));
+  }
+
+  // state 대조 — /api/gmail/auth에서 우리가 직접 시작한 인가 흐름인지 확인 (CSRF 방지)
+  const cookieStore = await cookies();
+  const expectedState = cookieStore.get("gmail_oauth_state")?.value;
+  cookieStore.delete("gmail_oauth_state");
+  if (!expectedState || state !== expectedState) {
+    return NextResponse.redirect(new URL("/admin/gmail?error=invalid_state", req.url));
   }
 
   const clientId = process.env.GMAIL_CLIENT_ID!;
