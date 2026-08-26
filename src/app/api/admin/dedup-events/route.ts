@@ -165,6 +165,9 @@ export async function GET() {
   }
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const IDS_DELETE_MAX = 50; // 정상 사용(개별 중복 삭제)은 한 번에 1건 — 한도를 넘으면 오작동으로 간주
+
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
@@ -172,6 +175,15 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}));
 
   if (Array.isArray(body.ids)) {
+    if (body.ids.length === 0) {
+      return NextResponse.json({ error: "ids가 비어 있습니다." }, { status: 400 });
+    }
+    if (body.ids.length > IDS_DELETE_MAX) {
+      return NextResponse.json({ error: `한 번에 최대 ${IDS_DELETE_MAX}건까지만 삭제할 수 있습니다.` }, { status: 400 });
+    }
+    if (!body.ids.every((id: unknown) => typeof id === "string" && UUID_RE.test(id))) {
+      return NextResponse.json({ error: "id 형식이 올바르지 않습니다." }, { status: 400 });
+    }
     const supabase = createAdminClient();
     const { error } = await supabase
       .from("convention_events")
@@ -181,7 +193,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, deleted: body.ids.length });
   }
 
-  const dryRun = body.dry_run === true;
+  // 본문이 없거나 dry_run이 명시적으로 false가 아니면 안전하게 조회만 함(실삭제 없음)
+  const dryRun = body.dry_run !== false;
   try {
     const result = await runDedup(dryRun);
     return NextResponse.json({ ok: true, ...result });
