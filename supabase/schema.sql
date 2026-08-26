@@ -444,10 +444,6 @@ create policy "public read published news"
   on public.news for select
   using (is_published = true);
 
-create policy "public read curation_settings"
-  on public.curation_settings for select
-  using (true);
-
 create policy "public read convention_events"
   on public.convention_events for select
   using (is_published = true);
