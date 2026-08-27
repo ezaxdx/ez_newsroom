@@ -139,10 +139,11 @@ export default function CurationBoard({
     reordered.splice(to, 0, moved);
 
     setItems((prev) => {
-      // 화면에 보이는 기사들이 원래 쓰던 display_order 자리(slot)만 서로 맞바꿈 —
-      // 필터로 가려진 기사·아카이브·대기열의 display_order는 절대 건드리지 않음
-      const slots = visible.map((i) => i.display_order);
-      const orderMap = new Map(reordered.map((id, i) => [id, slots[i]]));
+      // 화면에 보이는 기사들에게만 새 순번을 매김(0,1,2...) — 필터로 가려진 기사·아카이브·
+      // 대기열의 display_order는 절대 건드리지 않음. 원래 값을 그대로 주고받으면 같은 값을
+      // 가진 기사끼리는(큐레이션이 같은 점수로 매긴 경우 흔함) 맞바꿔도 순서가 안 바뀌므로,
+      // 매번 새 값을 매겨 확실히 갈라놓음
+      const orderMap = new Map(reordered.map((id, i) => [id, i]));
       return prev.map((item) => orderMap.has(item.id) ? { ...item, display_order: orderMap.get(item.id)! } : item);
     });
     dragIdx.current = null;
@@ -184,8 +185,9 @@ export default function CurationBoard({
 
       const swapped = visible.map((i) => i.id);
       [swapped[idx], swapped[next]] = [swapped[next], swapped[idx]];
-      const slots = visible.map((i) => i.display_order);
-      const orderMap = new Map(swapped.map((sid, i) => [sid, slots[i]]));
+      // 화면에 보이는 기사들에게만 새 순번(0,1,2...)을 매김 — 원래 값을 그대로 주고받으면
+      // 같은 값을 가진 기사끼리는(흔함) 맞바꿔도 순서가 안 바뀌므로 매번 새로 매겨 확실히 갈라놓음
+      const orderMap = new Map(swapped.map((sid, i) => [sid, i]));
       return prev.map((item) => orderMap.has(item.id) ? { ...item, display_order: orderMap.get(item.id)! } : item);
     });
   };
