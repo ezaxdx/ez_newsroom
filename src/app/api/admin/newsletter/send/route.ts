@@ -197,22 +197,26 @@ export async function POST(req: NextRequest) {
     return { id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url };
   }
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
-    // TOP: 라이브(최근 큐레이션 실행 이후) 범위 안에서 display_order가 가장 낮은 1건.
-    // 라이브 범위로 안 묶으면 예전에 아카이브된 기사가 display_order 값이 우연히 낮다는
-    // 이유만으로 계속 뽑혀서 "최신 기사를 못 가져온다"는 증상으로 이어짐(홈 히어로와 동일 버그)
-    const { data: topRaw } = await supabase.from("news")
+    // 라이브(최근 큐레이션 실행 이후) 범위 안에서 display_order(품질점수 기반 순위)가
+    // 가장 좋은 2건. 같은 배치 안 기사들은 발행 시각이 몇 분 차이 날 뿐 편집상 의미가
+    // 없어서(전부 그날 새벽 큐레이션이 한 번에 저장한 것) "최신순"이 아니라 반드시
+    // display_order로 골라야 실제 품질 순위 2건이 나옴. 라이브 범위로 안 묶으면
+    // 예전에 아카이브된 기사가 display_order 값이 우연히 낮다는 이유만으로 계속 뽑힘
+    const { data: liveRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
-      .order("display_order", { ascending: true }).limit(1);
-    const top = (topRaw ?? []) as RawNews[];
-    const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
-    // 보충: 최근 2주 내에서 실제 발행일(published_at) 기준 최신순으로 1건 더
-    const { data: latestRaw } = await supabase.from("news")
+      .order("display_order", { ascending: true }).limit(2);
+    const live = (liveRaw ?? []) as RawNews[];
+    if (live.length >= 2) return live.map(toNewsCard);
+
+    // 라이브 기사가 1건 이하면 최근 2주 내에서 실제 발행일 최신순으로 보충
+    const excludeId = live[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    const { data: fallbackRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", twoWeeksAgo)
       .or(orFilter).neq("id", excludeId)
-      .order("published_at", { ascending: false }).limit(1);
-    return [...top, ...(latestRaw ?? []) as RawNews[]].map(toNewsCard);
+      .order("published_at", { ascending: false }).limit(2 - live.length);
+    return [...live, ...(fallbackRaw ?? []) as RawNews[]].map(toNewsCard);
   }
 
   const [miceNews, tourismNews, aiNews, ezpmpNews] = await Promise.all([

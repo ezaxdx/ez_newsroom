@@ -70,20 +70,25 @@ export async function GET(req: NextRequest) {
     ? calcLastScheduledRun(curationSchedule.days, curationSchedule.hour ?? 9).toISOString()
     : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-  // TOPNEWS 1건 + 최근 발행순 1건 수집
+  // 라이브 범위 안에서 display_order(품질점수 기반 순위) 상위 2건. 같은 배치 안
+  // 기사들은 발행 시각이 몇 분 차이 날 뿐 편집상 의미가 없어서 "최신순"이 아니라
+  // display_order로 골라야 실제 품질 순위 2건이 나옴(send/route.ts와 동일 원칙)
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
-    const { data: topRaw } = await supabase.from("news")
+    const { data: liveRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
-      .order("display_order", { ascending: true }).limit(1);
-    const top = (topRaw ?? []) as RawNews[];
-    const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
-    const { data: latestRaw } = await supabase.from("news")
+      .order("display_order", { ascending: true }).limit(2);
+    const live = (liveRaw ?? []) as RawNews[];
+    if (live.length >= 2) return live.map(toCard);
+
+    // 라이브 기사가 1건 이하면 최근 2주 내에서 실제 발행일 최신순으로 보충
+    const excludeId = live[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    const { data: fallbackRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", twoWeeksAgo)
       .or(orFilter).neq("id", excludeId)
-      .order("published_at", { ascending: false }).limit(1);
-    return [...top, ...(latestRaw ?? []) as RawNews[]].map(toCard);
+      .order("published_at", { ascending: false }).limit(2 - live.length);
+    return [...live, ...(fallbackRaw ?? []) as RawNews[]].map(toCard);
   }
 
   const miceNews    = await fetchCategoryNews("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%");
