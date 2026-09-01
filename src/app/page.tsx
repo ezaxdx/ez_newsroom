@@ -55,11 +55,13 @@ async function fetchSiteSettings(): Promise<SiteSettings> {
 }
 
 // 히어로용: 카테고리별 최신 1건 + 부족하면 최신 기사로 보충해서 항상 4건
-async function fetchHeroNews(categories: string[]): Promise<NewsItem[]> {
+async function fetchHeroNews(categories: string[], lastRunISO: string): Promise<NewsItem[]> {
   try {
     const supabase = createAdminClient();
 
     // 카테고리별 display_order 가장 낮은 1건 (큐레이션보드 탑뉴스 기준과 동일)
+    // 반드시 라이브(최근 실행 이후 발행) 범위로 한정 — 아니면 예전에 아카이브된 기사가
+    // 우연히 낮은 display_order를 갖고 있을 때 그게 계속 히어로를 차지해버림
     const perCat = await Promise.all(
       categories.map(async (cat) => {
         const { data } = await supabase
@@ -67,6 +69,7 @@ async function fetchHeroNews(categories: string[]): Promise<NewsItem[]> {
           .select("*")
           .eq("is_published", true)
           .eq("category", cat)
+          .gte("published_at", lastRunISO)
           .order("display_order", { ascending: true })
           .limit(1);
         return (data?.[0] ?? null) as NewsItem | null;
@@ -189,7 +192,7 @@ export default async function NewsroomPage({ searchParams }: Props) {
 
   const heroCategories = [...navCategories, "BLOG"];
   const [heroNews, feedAllNews, events, deepLinkItem, popups, eventSettings] = await Promise.all([
-    fetchHeroNews(heroCategories),   // 히어로: 카테고리별 최신 1건 (시간 무관)
+    fetchHeroNews(heroCategories, lastRunISO),   // 히어로: 카테고리별 라이브 중 display_order 최상위 1건
     fetchNews(lastRunISO),           // 피드: 최근 큐레이션 이후
     fetchUpcomingEvents(),
     fetchDeepLinkNews(deepLinkNewsId),
