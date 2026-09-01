@@ -5,6 +5,7 @@ import { NewsCard, EventCard } from "@/lib/newsletter-template";
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { fetchEventImage } from "@/lib/fetch-event-image";
 import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
+import { calcLastScheduledRun } from "@/lib/schedule";
 
 export const dynamic = "force-dynamic";
 
@@ -29,18 +30,28 @@ export async function GET() {
   type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
   const toCard = (n: RawNews): NewsCard => ({ id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
 
+  // send/route.ts와 동일하게 라이브 범위(최근 큐레이션 실행 이후) 계산 — 안 그러면
+  // 아카이브된 옛 기사가 display_order 낮은 값을 우연히 갖고 있을 때 계속 TOP으로 뽑혀서
+  // "최신 기사를 못 가져온다"는 증상이 발생함 (이 엔드포인트는 실제 발송과 결과가 같아야 함)
+  const { data: curationSettings } = await supabase
+    .from("curation_settings").select("auto_schedule").limit(1).single();
+  const curationSchedule = curationSettings?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
+  const lastRunISO = curationSchedule.enabled && curationSchedule.days?.length > 0
+    ? calcLastScheduledRun(curationSchedule.days, curationSchedule.hour ?? 9).toISOString()
+    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
     const { data: topRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true).or(orFilter)
+      .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
       .order("display_order", { ascending: true }).limit(1);
     const top = (topRaw ?? []) as RawNews[];
     const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
     const { data: latestRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true)
+      .eq("is_published", true).gte("published_at", twoWeeksAgo)
       .or(orFilter).neq("id", excludeId)
-      .order("display_order", { ascending: true }).limit(1);
+      .order("published_at", { ascending: false }).limit(1);
     return [...top, ...(latestRaw ?? []) as RawNews[]].map(toCard);
   }
 

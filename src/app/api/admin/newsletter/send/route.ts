@@ -5,6 +5,7 @@ import { generateNewsletterHTML, NewsCard, EventCard } from "@/lib/newsletter-te
 import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
+import { calcLastScheduledRun } from "@/lib/schedule";
 
 export const maxDuration = 60;
 
@@ -153,8 +154,12 @@ export async function POST(req: NextRequest) {
 
   // 하단 상시 배너 — 발송마다 고르는 게 아니라 curation_settings에 저장된 값을 그대로 항상 반영
   const { data: bannerSettings } = await supabase
-    .from("curation_settings").select("newsletter_footer_banner").limit(1).single();
+    .from("curation_settings").select("newsletter_footer_banner, auto_schedule").limit(1).single();
   const footer_banner = bannerSettings?.newsletter_footer_banner ?? null;
+  const schedule = bannerSettings?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
+  const lastRunISO = schedule.enabled && schedule.days?.length > 0
+    ? calcLastScheduledRun(schedule.days, schedule.hour ?? 9).toISOString()
+    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const today = new Date();
   const todayStr = today.toISOString().split("T")[0];
@@ -192,17 +197,21 @@ export async function POST(req: NextRequest) {
     return { id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url };
   }
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
+    // TOP: 라이브(최근 큐레이션 실행 이후) 범위 안에서 display_order가 가장 낮은 1건.
+    // 라이브 범위로 안 묶으면 예전에 아카이브된 기사가 display_order 값이 우연히 낮다는
+    // 이유만으로 계속 뽑혀서 "최신 기사를 못 가져온다"는 증상으로 이어짐(홈 히어로와 동일 버그)
     const { data: topRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true).or(orFilter)
+      .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
       .order("display_order", { ascending: true }).limit(1);
     const top = (topRaw ?? []) as RawNews[];
     const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    // 보충: 최근 2주 내에서 실제 발행일(published_at) 기준 최신순으로 1건 더
     const { data: latestRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true)
+      .eq("is_published", true).gte("published_at", twoWeeksAgo)
       .or(orFilter).neq("id", excludeId)
-      .order("display_order", { ascending: true }).limit(1);
+      .order("published_at", { ascending: false }).limit(1);
     return [...top, ...(latestRaw ?? []) as RawNews[]].map(toNewsCard);
   }
 

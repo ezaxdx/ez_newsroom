@@ -5,6 +5,7 @@ import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/li
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { fetchEventImage } from "@/lib/fetch-event-image";
 import { verifyCronAuth } from "@/lib/verify-cron";
+import { calcLastScheduledRun } from "@/lib/schedule";
 
 export const maxDuration = 60;
 
@@ -60,11 +61,20 @@ export async function GET(req: NextRequest) {
   const toCard = (n: RawNews): NewsCard =>
     ({ id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
 
+  // 큐레이션 라이브 범위(최근 실행 이후) — 없으면 아카이브된 옛 기사가 display_order
+  // 낮은 값으로 계속 TOP으로 뽑히는 문제가 있어 홈 히어로와 동일하게 범위를 씌움
+  const { data: curationSettings } = await supabase
+    .from("curation_settings").select("auto_schedule").limit(1).single();
+  const curationSchedule = curationSettings?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
+  const lastRunISO = curationSchedule.enabled && curationSchedule.days?.length > 0
+    ? calcLastScheduledRun(curationSchedule.days, curationSchedule.hour ?? 9).toISOString()
+    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
   // TOPNEWS 1건 + 최근 발행순 1건 수집
   async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
     const { data: topRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true).or(orFilter)
+      .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
       .order("display_order", { ascending: true }).limit(1);
     const top = (topRaw ?? []) as RawNews[];
     const excludeId = top[0]?.id ?? "00000000-0000-0000-0000-000000000000";
