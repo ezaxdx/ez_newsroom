@@ -205,7 +205,10 @@ ${articleText}`;
       implications: parsed.implications ?? "",
       quality_score: typeof parsed.quality_score === "number" ? parsed.quality_score : null,
       quality_criteria: parsed.quality_criteria ?? null,
-      level: parsed.level ?? level ?? "Intermediate",
+      // level은 관리자가 직접 고른 작성 지침이므로 그대로 반환 — AI가 프롬프트에서
+      // 자체 판단해 채운 parsed.level로 덮어쓰면 안 됨(거의 항상 "Intermediate"로
+      // 나와서 어떤 레벨을 골라도 생성 후 중간으로 돌아가 버리는 원인이었음)
+      level: level ?? "Intermediate",
       image_url,
       original_url: url,
       category: category.toUpperCase(),
