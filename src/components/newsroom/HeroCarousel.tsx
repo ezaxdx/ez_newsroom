@@ -16,13 +16,17 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
   const items = slides.slice(0, 4);
   if (!items.length) return null;
 
-  // 1개일 때: 1열, 2~3개: 2열 1행, 4개: 2×2
-  const cols = items.length === 1 ? 1 : 2;
-  const rows = items.length <= 2 ? 1 : 2;
+  // 1개일 때: 1열, 2~3개: 2열 1행(3개는 3열 1행), 4개: 2×2
+  const cols = items.length === 1 ? 1 : items.length === 3 ? 3 : 2;
+  const rows = items.length <= 3 ? 1 : 2;
 
   return (
     <div
-      className={cols === 1 ? "grid grid-cols-1" : "grid grid-cols-1 md:grid-cols-2"}
+      className={
+        cols === 1 ? "grid grid-cols-1"
+        : cols === 3 ? "grid grid-cols-1 md:grid-cols-3"
+        : "grid grid-cols-1 md:grid-cols-2"
+      }
       style={{
         gridTemplateRows: `repeat(${rows}, 1fr)`,
         minHeight: rows === 1 ? 480 : 520,
