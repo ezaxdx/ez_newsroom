@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import type React from "react";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Eye, EyeOff, ArrowUp, ArrowDown, Trash2,
-  ExternalLink, Sparkles, Loader2, RefreshCw, TrendingUp,
+  ExternalLink, Sparkles, Loader2, RefreshCw, TrendingUp, Pencil, X,
 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import { calcLastScheduledRun } from "@/lib/schedule";
@@ -196,6 +197,34 @@ export default function CurationBoard({
     if (!confirm("이 기사를 삭제할까요?")) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeletedIds((prev) => [...prev, id]);
+  };
+
+  // ── 기사 내용 직접 편집 (제목/요약/시사점/이미지) ──
+  const [editingItem, setEditingItem] = useState<NewsItem | null>(null);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState("");
+
+  const saveEdit = async (fields: { title: string; summary_short: string; implications: string; image_url: string }) => {
+    if (!editingItem) return;
+    setEditSaving(true);
+    setEditError("");
+    try {
+      const res = await fetch("/api/admin/news/edit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: editingItem.id, ...fields }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "저장 실패");
+      setItems((prev) => prev.map((it) => it.id === editingItem.id
+        ? { ...it, title: fields.title, summary_short: fields.summary_short, implications: fields.implications, image_url: fields.image_url || null }
+        : it));
+      setEditingItem(null);
+    } catch (e) {
+      setEditError(e instanceof Error ? e.message : "저장 실패");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   // ── 대기열 일괄 처리 ──
@@ -543,6 +572,7 @@ export default function CurationBoard({
                         onMove={moveItem}
                         onRemove={remove}
                         onRepublish={republish}
+                        onEdit={setEditingItem}
                         LEVEL_STYLE={LEVEL_STYLE}
                       />
                     </div>
@@ -565,6 +595,7 @@ export default function CurationBoard({
                   onMove={moveItem}
                   onRemove={remove}
                   onRepublish={republish}
+                  onEdit={setEditingItem}
                   LEVEL_STYLE={LEVEL_STYLE}
                   selected={tab === "staging" ? selectedIds.has(item.id) : undefined}
                   onToggleSelect={tab === "staging" ? toggleSelect : undefined}
@@ -605,6 +636,7 @@ export default function CurationBoard({
                     onMove={moveItem}
                     onRemove={remove}
                     onRepublish={republish}
+                    onEdit={setEditingItem}
                     LEVEL_STYLE={LEVEL_STYLE}
                   />
                 ))}
@@ -613,6 +645,118 @@ export default function CurationBoard({
           ))}
         </div>
       )}
+
+      {editingItem && (
+        <EditArticleModal
+          item={editingItem}
+          saving={editSaving}
+          error={editError}
+          onCancel={() => { setEditingItem(null); setEditError(""); }}
+          onSave={saveEdit}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── 기사 편집 모달 ── */
+function EditArticleModal({
+  item, saving, error, onCancel, onSave,
+}: {
+  item: NewsItem;
+  saving: boolean;
+  error: string;
+  onCancel: () => void;
+  onSave: (fields: { title: string; summary_short: string; implications: string; image_url: string }) => void;
+}) {
+  const [title, setTitle] = useState(item.title);
+  const [summary, setSummary] = useState(item.summary_short);
+  const [implications, setImplications] = useState(item.implications ?? "");
+  const [imageUrl, setImageUrl] = useState(item.image_url ?? "");
+
+  const inputStyle: React.CSSProperties = {
+    background: "var(--surface-container-lowest)",
+    border: "1px solid var(--surface-container-high)",
+    borderRadius: 6,
+    color: "var(--on-surface)",
+    padding: "8px 10px",
+    fontSize: "0.85rem",
+    width: "100%",
+    outline: "none",
+    boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    fontSize: "0.7rem",
+    fontWeight: 600,
+    letterSpacing: "0.03em",
+    textTransform: "uppercase",
+    color: "var(--on-surface-variant)",
+  };
+
+  return (
+    <div
+      onClick={onCancel}
+      style={{
+        position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)",
+        display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: 16,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="flex flex-col gap-3"
+        style={{
+          background: "var(--surface-container-lowest)", borderRadius: 12, padding: 20,
+          width: "100%", maxWidth: 560, maxHeight: "85vh", overflowY: "auto",
+        }}
+      >
+        <div className="flex items-center justify-between">
+          <p className="font-semibold text-sm m-0">기사 편집</p>
+          <button onClick={onCancel} style={{ background: "transparent", border: "none", cursor: "pointer", padding: 4 }}>
+            <X size={16} style={{ color: "var(--on-surface-variant)" }} />
+          </button>
+        </div>
+
+        <label className="flex flex-col gap-1">
+          <span style={labelStyle}>제목</span>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} style={inputStyle} />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span style={labelStyle}>요약</span>
+          <textarea rows={3} value={summary} onChange={(e) => setSummary(e.target.value)} style={{ ...inputStyle, resize: "vertical" }} />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span style={labelStyle}>시사점 (Implications)</span>
+          <textarea rows={3} value={implications} onChange={(e) => setImplications(e.target.value)} style={{ ...inputStyle, resize: "vertical" }} />
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span style={labelStyle}>이미지 URL</span>
+          <input value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} placeholder="https://..." style={inputStyle} />
+          {imageUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={imageUrl} alt="" style={{ marginTop: 6, width: "100%", maxHeight: 160, objectFit: "cover", borderRadius: 6 }} />
+          )}
+        </label>
+
+        {error && <p className="m-0 text-xs" style={{ color: "#dc2626" }}>{error}</p>}
+
+        <div className="flex items-center justify-end gap-2 mt-1">
+          <button onClick={onCancel} disabled={saving}
+            className="h-9 px-4 rounded-md text-sm font-semibold"
+            style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: saving ? "not-allowed" : "pointer" }}>
+            취소
+          </button>
+          <button
+            onClick={() => onSave({ title, summary_short: summary, implications, image_url: imageUrl })}
+            disabled={saving || !title.trim() || !summary.trim()}
+            className="h-9 px-4 rounded-md text-sm font-semibold"
+            style={{ background: "var(--primary)", color: "var(--on-primary)", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
+            {saving ? "저장 중..." : "저장"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -621,7 +765,7 @@ export default function CurationBoard({
 function ArticleCard({
   item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
-  onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish,
+  onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish, onEdit,
   LEVEL_STYLE, selected, onToggleSelect,
 }: {
   item: NewsItem;
@@ -637,6 +781,7 @@ function ArticleCard({
   onMove: (id: string, dir: -1 | 1) => void;
   onRemove: (id: string) => void;
   onRepublish: (id: string) => void;
+  onEdit: (item: NewsItem) => void;
   LEVEL_STYLE: Record<string, { bg: string; color: string }>;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -810,6 +955,12 @@ function ArticleCard({
               : <EyeOff size={14} style={{ color: "var(--on-surface-variant)" }} />}
           </button>
         )}
+
+        <button title="편집 (제목·요약·시사점·이미지)" onClick={() => onEdit(item)}
+          className="p-1.5 rounded hover:bg-[--surface-container-high] transition-colors"
+          style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+          <Pencil size={14} style={{ color: "var(--on-surface-variant)" }} />
+        </button>
 
         <button title="삭제" onClick={() => onRemove(item.id)}
           className="p-1.5 rounded hover:bg-red-50 transition-colors"
