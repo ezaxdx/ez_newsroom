@@ -16,17 +16,14 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
   const items = slides.slice(0, 4);
   if (!items.length) return null;
 
-  // 1개일 때: 1열, 2~3개: 2열 1행(3개는 3열 1행), 4개: 2×2
-  const cols = items.length === 1 ? 1 : items.length === 3 ? 3 : 2;
-  const rows = items.length <= 3 ? 1 : 2;
+  // 1개일 때: 1열, 2개: 2열 1행, 3개: 2열 2행(위 2·아래 1, 아래는 전체 폭), 4개: 2×2
+  const cols = items.length === 1 ? 1 : 2;
+  const rows = items.length <= 2 ? 1 : 2;
+  const totalRows = Math.ceil(items.length / cols);
 
   return (
     <div
-      className={
-        cols === 1 ? "grid grid-cols-1"
-        : cols === 3 ? "grid grid-cols-1 md:grid-cols-3"
-        : "grid grid-cols-1 md:grid-cols-2"
-      }
+      className={cols === 1 ? "grid grid-cols-1" : "grid grid-cols-1 md:grid-cols-2"}
       style={{
         gridTemplateRows: `repeat(${rows}, 1fr)`,
         minHeight: rows === 1 ? 480 : 520,
@@ -34,10 +31,12 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
     >
       {items.map((slide, i) => {
         const { item } = slide;
-        const isLeftCol  = i % cols === 0;
-        const isTopRow   = i < cols;
+        const rowIndex   = Math.floor(i / cols);
         const isLastCol  = i % cols === cols - 1;
-        const isLastRow  = i >= items.length - cols;
+        const isLastRow  = rowIndex === totalRows - 1;
+        // 3개일 때 마지막(3번째) 카드는 아래 한 줄 전체 폭을 차지 — 4개일 때와 비슷한
+        // 크기감을 유지하면서 오른쪽 칸이 비지 않게 함
+        const spansFullRow = items.length === 3 && i === 2;
 
         return (
           <article
@@ -47,7 +46,8 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
               position: "relative",
               overflow: "hidden",
               cursor: "pointer",
-              borderRight:  !isLastCol  ? "1px solid var(--surface-container-high)" : "none",
+              gridColumn: spansFullRow ? "1 / -1" : undefined,
+              borderRight:  !isLastCol && !spansFullRow ? "1px solid var(--surface-container-high)" : "none",
               borderBottom: !isLastRow  ? "1px solid var(--surface-container-high)" : "none",
               minHeight: rows === 1 ? 480 : 240,
             }}
