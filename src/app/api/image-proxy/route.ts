@@ -1,9 +1,28 @@
 import { NextRequest, NextResponse } from "next/server";
+import { readFile } from "fs/promises";
+import path from "path";
 
 /**
  * 외부 이미지 프록시
  * 이메일 HTML에서 외부 이미지를 자체 도메인을 통해 로드 (Gmail CORS 우회)
+ *
+ * 원본 이미지를 못 가져오면(핫링크 차단, 삭제됨, 접근 불가 등) 뉴스룸(ArticleImg)과
+ * 동일하게 EZPMP 로고로 대체함 — 이메일 클라이언트는 onError 같은 JS 폴백을
+ * 못 쓰므로 프록시 단에서 처리해야 함. 여기서 실패를 흡수하지 않으면 이 프록시를
+ * 거치는 뉴스레터 이미지가 그대로 깨진 이미지 아이콘으로 보임
  */
+async function fallbackLogoResponse(): Promise<NextResponse> {
+  const buffer = await readFile(path.join(process.cwd(), "public", "ez-fallback.png"));
+  return new NextResponse(buffer, {
+    status: 200,
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, max-age=86400",
+      "Access-Control-Allow-Origin": "*",
+    },
+  });
+}
+
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
   if (!url) {
@@ -15,11 +34,11 @@ export async function GET(req: NextRequest) {
   try {
     parsed = new URL(url);
   } catch {
-    return new NextResponse("유효하지 않은 URL입니다.", { status: 400 });
+    return fallbackLogoResponse();
   }
 
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return new NextResponse("허용되지 않는 URL 스킴입니다.", { status: 400 });
+    return fallbackLogoResponse();
   }
 
   try {
@@ -40,14 +59,12 @@ export async function GET(req: NextRequest) {
     });
 
     if (!response.ok) {
-      return new NextResponse(`이미지 가져오기 실패: ${response.status}`, {
-        status: response.status,
-      });
+      return fallbackLogoResponse();
     }
 
     const contentType = response.headers.get("content-type") ?? "image/jpeg";
     if (!contentType.startsWith("image/")) {
-      return new NextResponse("이미지 파일이 아닙니다.", { status: 400 });
+      return fallbackLogoResponse();
     }
 
     const buffer = await response.arrayBuffer();
@@ -62,6 +79,6 @@ export async function GET(req: NextRequest) {
     });
   } catch (err) {
     console.error("[image-proxy] fetch error:", err);
-    return new NextResponse("이미지를 불러올 수 없습니다.", { status: 502 });
+    return fallbackLogoResponse();
   }
 }
