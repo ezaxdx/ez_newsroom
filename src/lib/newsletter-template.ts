@@ -89,12 +89,26 @@ function sectionDivider(title: string): string {
 }
 
 // ── 외부 이미지 → 프록시 URL 변환 ────────────────────────
-// is_email=true 이면 원본 URL 그대로 (Gmail이 자체 프록시 처리)
-// is_email=false(미리보기)면 /api/image-proxy 경유 (일부 서버가 직접 접근 차단)
-function proxyImg(image_url: string | null, site_url: string, _is_email = false): string | null {
+// 원본이 실제로 접근 가능한지 생성 시점에 먼저 확인함 — image-proxy가 실패 시
+// EZPMP 로고로 대체해주긴 하지만, 그 대체 이미지를 "실제 사진" 자리(255x129,
+// 꽉 채워 늘리는 스타일)에 그대로 넣으면 로고가 옆으로 늘어나 크게 보임.
+// 여기서 미리 걸러서 실패하면 null을 반환해 "이미지 없음"(작게 중앙 배치) 스타일로
+// 렌더링되게 함 — image-proxy의 대체 로직은 그래도 만약을 위한 마지막 안전망으로 유지
+async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {
   if (!image_url) return null;
-  // 미리보기/발송 모두 프록시 사용 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
   if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
+  try {
+    const res = await fetch(image_url, {
+      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return null;
+    const contentType = res.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return null;
+  } catch {
+    return null;
+  }
+  // 미리보기/발송 모두 프록시 경유 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
 
@@ -128,8 +142,8 @@ function newsDeepLink(id: string, site_url: string): string {
 // 카드 썸네일 폭 255px는 데스크톱·이메일 클라이언트 기준 기본값 — 실제로는 부모 td(50%)를 100% 채워
 // max-width:255px로 그 이상 커지지만 않게 캡을 씌우므로, 좁은 화면에서는 부모와 함께 비례로 줄어든다
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
-function newsCard(item: NewsCard, vol: number, site_url: string, is_email = false): string {
-  const proxied = proxyImg(item.image_url, site_url, is_email);
+async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<string> {
+  const proxied = await resolveNewsImage(item.image_url, site_url);
   // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
   const img = proxied
     ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
@@ -160,8 +174,8 @@ function newsCard(item: NewsCard, vol: number, site_url: string, is_email = fals
 }
 
 // ── Pick 행사 카드 ────────────────────────────────────────
-function pickCard(ev: EventCard, vol: number, site_url: string, is_email = false): string {
-  const proxied = proxyImg(ev.image_url ?? null, site_url, is_email);
+async function pickCard(ev: EventCard, vol: number, site_url: string): Promise<string> {
+  const proxied = await resolveNewsImage(ev.image_url ?? null, site_url);
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
     ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
@@ -223,9 +237,10 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
 }
 
 // ── 뉴스 카테고리 블록 ────────────────────────────────────
-function newsSection(label: string, items: NewsCard[], vol: number, site_url: string, is_email = false): string {
+async function newsSection(label: string, items: NewsCard[], vol: number, site_url: string): Promise<string> {
   if (items.length === 0) return "";
-  const cards = items.slice(0, 2).map(n => newsCard(n, vol, site_url, is_email)).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const cards = (await Promise.all(items.slice(0, 2).map(n => newsCard(n, vol, site_url))))
+    .join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
   return `
 <tr>
   <td style="background:${C.white};padding:0 32px 24px;">
@@ -238,10 +253,10 @@ function newsSection(label: string, items: NewsCard[], vol: number, site_url: st
 }
 
 // ── 메인 HTML ──────────────────────────────────────────────
-export function generateNewsletterHTML(data: NewsletterData): string {
+export async function generateNewsletterHTML(data: NewsletterData): Promise<string> {
   const { vol_number: vol, send_date, editorial_text,
           mice_news, tourism_news, ai_news, ezpmp_news,
-          featured_events, upcoming_events, site_url, is_email = false, header_image_url, editorial_flap_url, editorial_box_color, footer_banner } = data;
+          featured_events, upcoming_events, site_url, header_image_url, editorial_flap_url, editorial_box_color, footer_banner } = data;
 
   const headerImageSrc = header_image_url
     ? (header_image_url.startsWith("http") ? header_image_url : `${site_url}${header_image_url}`)
@@ -259,13 +274,22 @@ export function generateNewsletterHTML(data: NewsletterData): string {
 
   // Pick 4개 → 2행
   const picks = featured_events.slice(0, 4);
-  const pickRow1 = picks.slice(0, 2).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
-  const pickRow2 = picks.slice(2, 4).map(e => pickCard(e, vol, site_url, is_email)).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const pickCardsHtml = await Promise.all(picks.map(e => pickCard(e, vol, site_url)));
+  const pickRow1 = pickCardsHtml.slice(0, 2).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const pickRow2 = pickCardsHtml.slice(2, 4).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
 
   // 행사 리스트
   const listRows = upcoming_events.map((ev, i) =>
     eventRow(ev, vol, site_url, i === upcoming_events.length - 1)
   ).join("");
+
+  // 뉴스 카테고리 4개 섹션 — 템플릿 리터럴 안에서 직접 호출하면 async를 못 기다리므로 미리 계산
+  const [miceSectionHtml, tourismSectionHtml, ezpmpSectionHtml, aiSectionHtml] = await Promise.all([
+    newsSection("MICE", mice_news, vol, site_url),
+    newsSection("Tourism", tourism_news, vol, site_url),
+    newsSection("EZPMP", ezpmp_news, vol, site_url),
+    newsSection("AI", ai_news, vol, site_url),
+  ]);
 
   return `<!DOCTYPE html>
 <html lang="ko">
@@ -358,10 +382,10 @@ export function generateNewsletterHTML(data: NewsletterData): string {
     ${sectionDivider("News")}
 
     <!-- MICE / Tourism / EZPMP / AI 뉴스 (없으면 섹션 자동 제거) -->
-    ${newsSection("MICE", mice_news, vol, site_url, is_email)}
-    ${newsSection("Tourism", tourism_news, vol, site_url, is_email)}
-    ${newsSection("EZPMP", ezpmp_news, vol, site_url, is_email)}
-    ${newsSection("AI", ai_news, vol, site_url, is_email)}
+    ${miceSectionHtml}
+    ${tourismSectionHtml}
+    ${ezpmpSectionHtml}
+    ${aiSectionHtml}
 
     <!-- ── EZ LETTER PICK 섹션 구분선 ── -->
     ${sectionDivider("ez letter Pick !")}

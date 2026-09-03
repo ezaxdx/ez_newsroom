@@ -371,7 +371,7 @@ export async function POST(req: NextRequest) {
     venue: e.venue ?? null, website: e.website ?? null,
   }));
 
-  const html = generateNewsletterHTML({
+  const html = await generateNewsletterHTML({
     vol_number, send_date, editorial_text,
     mice_news: miceNews, tourism_news: tourismNews, ai_news: aiNews, ezpmp_news: skip_ezpmp ? [] : ezpmpNews,
     featured_events: featuredEvents, upcoming_events: upcomingEvents,
