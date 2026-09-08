@@ -462,9 +462,12 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
 
         // 위아래 보정: 아래 공간 부족하면 셀 위쪽으로 플립
         const showAbove = tooltip.cellBottom + TIP_EST + MARGIN > vh;
-        const top       = showAbove
+        const rawTop    = showAbove
           ? tooltip.cellTop - TIP_EST - 6
           : tooltip.cellBottom + 6;
+        // 위로 플립해도 그 자리에 TIP_EST만큼 공간이 없으면(캘린더가 화면 위쪽에 붙어있는 경우
+        // 등) top이 음수로 튀어나가 헤더 위로 잘려 보임 — 뷰포트 안으로 한 번 더 클램핑
+        const top = Math.max(MARGIN, Math.min(rawTop, vh - TIP_EST - MARGIN));
 
         return (
           <div
