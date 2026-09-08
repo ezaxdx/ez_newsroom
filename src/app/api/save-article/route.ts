@@ -15,6 +15,23 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   const supabase = createClient(supabaseUrl, serviceKey);
+
+  // display_order 고정값(0)을 쓰면 같은 날 여러 건 직접 작성 시 전부 겹쳐서
+  // 관리자/메인 정렬이 동률 처리 순서에 따라 서로 다르게 보임 — 그 카테고리
+  // 현재 라이브 중 최솟값보다 하나 낮은 값을 매번 계산해 겹치지 않게 함
+  let display_order = 0;
+  if (body.is_published && body.category) {
+    const { data: lowest } = await supabase
+      .from("news")
+      .select("display_order")
+      .eq("is_published", true)
+      .eq("category", body.category)
+      .order("display_order", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (lowest) display_order = lowest.display_order - 1;
+  }
+
   const payload = {
     title: body.title,
     summary_short: body.summary_short,
@@ -28,7 +45,7 @@ export async function POST(req: NextRequest) {
     quality_criteria: body.quality_criteria ?? null,
     is_published: body.is_published ?? false,
     priority_score: 100,
-    display_order: 0,
+    display_order,
     published_at: new Date().toISOString(),
   };
 
