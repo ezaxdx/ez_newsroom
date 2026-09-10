@@ -79,16 +79,16 @@ export async function GET(req: NextRequest) {
       .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
       .order("display_order", { ascending: true }).limit(2);
     const live = (liveRaw ?? []) as RawNews[];
-    if (live.length >= 2) return live.map(toCard);
+    // 라이브가 1건이어도 그대로 반환 — 2주 전 기사로 억지로 채우지 않음
+    if (live.length >= 1) return live.map(toCard);
 
-    // 라이브 기사가 1건 이하면 최근 2주 내에서 실제 발행일 최신순으로 보충
-    const excludeId = live[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    // 라이브가 0건일 때만 최근 2주 내에서 실제 발행일 최신순으로 보충
     const { data: fallbackRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", twoWeeksAgo)
-      .or(orFilter).neq("id", excludeId)
-      .order("published_at", { ascending: false }).limit(2 - live.length);
-    return [...live, ...(fallbackRaw ?? []) as RawNews[]].map(toCard);
+      .or(orFilter)
+      .order("published_at", { ascending: false }).limit(2);
+    return ((fallbackRaw ?? []) as RawNews[]).map(toCard);
   }
 
   const miceNews    = await fetchCategoryNews("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%");

@@ -207,16 +207,18 @@ export async function POST(req: NextRequest) {
       .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
       .order("display_order", { ascending: true }).limit(2);
     const live = (liveRaw ?? []) as RawNews[];
-    if (live.length >= 2) return live.map(toNewsCard);
+    // 라이브가 1건이어도 그대로 반환 — EZPMP처럼 그 배치에 원래 1건뿐인 카테고리에
+    // 2주 전 기사를 억지로 채워 넣지 않음(실제 있는 만큼만 노출)
+    if (live.length >= 1) return live.map(toNewsCard);
 
-    // 라이브 기사가 1건 이하면 최근 2주 내에서 실제 발행일 최신순으로 보충
-    const excludeId = live[0]?.id ?? "00000000-0000-0000-0000-000000000000";
+    // 라이브가 0건일 때만 최근 2주 내에서 실제 발행일 최신순으로 1건 보충(섹션 자체가
+    // 안 보이는 것보다는 나음)
     const { data: fallbackRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", twoWeeksAgo)
-      .or(orFilter).neq("id", excludeId)
-      .order("published_at", { ascending: false }).limit(2 - live.length);
-    return [...live, ...(fallbackRaw ?? []) as RawNews[]].map(toNewsCard);
+      .or(orFilter)
+      .order("published_at", { ascending: false }).limit(2);
+    return ((fallbackRaw ?? []) as RawNews[]).map(toNewsCard);
   }
 
   const [miceNews, tourismNews, aiNews, ezpmpNews] = await Promise.all([

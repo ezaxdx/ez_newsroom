@@ -142,25 +142,29 @@ function newsDeepLink(id: string, site_url: string): string {
 // 카드 썸네일 폭 255px는 데스크톱·이메일 클라이언트 기준 기본값 — 실제로는 부모 td(50%)를 100% 채워
 // max-width:255px로 그 이상 커지지만 않게 캡을 씌우므로, 좁은 화면에서는 부모와 함께 비례로 줄어든다
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
-async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<string> {
+async function newsCard(item: NewsCard, vol: number, site_url: string, full = false): Promise<string> {
   const proxied = await resolveNewsImage(item.image_url, site_url);
+  const imgHeight = full ? 180 : 129;
   // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
   const img = proxied
     ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
-         <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
-           <img src="${proxied}" alt="" width="100%" height="129"
-                style="display:block;width:100%;height:129px;border:0;">
+         <tr><td height="${imgHeight}" style="width:100%;height:${imgHeight}px;overflow:hidden;line-height:0;font-size:0;">
+           <img src="${proxied}" alt="" width="100%" height="${imgHeight}"
+                style="display:block;width:100%;height:${imgHeight}px;border:0;">
          </td></tr>
        </table>`
     : `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
-         <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
+         <tr><td height="${imgHeight}" style="height:${imgHeight}px;background:#EEEBE5;text-align:center;vertical-align:middle;">
            <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
                 style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
          </td></tr>
        </table>`;
   const summary = item.summary;
+  // full=true: 그 배치에 기사가 1건뿐일 때(EZPMP 등) — 2칸짜리 자리를 억지로 안 채우고
+  // 카드 하나를 자리 전체 폭으로 넓게 보여줌
+  const widthStyle = full ? "width:100%;max-width:532px;" : "width:50%;max-width:255px;";
   return `
-<td width="50%" valign="top" style="width:50%;max-width:255px;">
+<td width="${full ? "100%" : "50%"}" valign="top" style="${widthStyle}">
   <a href="${withUTM(newsDeepLink(item.id, site_url), vol)}" style="text-decoration:none;color:inherit;display:block;">
     <table cellpadding="0" cellspacing="0" width="100%">
       <tr><td style="line-height:0;font-size:0;">${img}</td></tr>
@@ -239,8 +243,12 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
 // ── 뉴스 카테고리 블록 ────────────────────────────────────
 async function newsSection(label: string, items: NewsCard[], vol: number, site_url: string): Promise<string> {
   if (items.length === 0) return "";
-  const cards = (await Promise.all(items.slice(0, 2).map(n => newsCard(n, vol, site_url))))
-    .join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const trimmed = items.slice(0, 2);
+  // 1건뿐이면 2칸 자리를 억지로 안 채움 — 카드 하나를 전체 폭으로
+  const cards = trimmed.length === 1
+    ? await newsCard(trimmed[0], vol, site_url, true)
+    : (await Promise.all(trimmed.map(n => newsCard(n, vol, site_url))))
+        .join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
   return `
 <tr>
   <td style="background:${C.white};padding:0 32px 24px;">
