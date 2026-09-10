@@ -240,9 +240,12 @@ function eventRow(ev: EventCard, vol: number, site_url: string, isLast: boolean)
 async function newsSection(label: string, items: NewsCard[], vol: number, site_url: string): Promise<string> {
   if (items.length === 0) return "";
   const trimmed = items.slice(0, 2);
-  // 1건뿐이면 2칸 자리를 억지로 안 채움 — 카드 크기는 그대로 두고 자리만 하나만 채움
+  // 1건뿐이면 2칸 자리를 억지로 안 채움 — 카드 크기는 그대로 두고 자리만 하나만 채움.
+  // 단, 그 한 칸만 두면 table-layout:fixed가 열이 하나뿐이라 width:50%/max-width를
+  // 무시하고 남는 폭을 전부 그 칸에 몰아줘서(실측 확인됨) 카드가 크게 늘어나 보임 —
+  // 빈 스페이서 칸을 하나 더 둬서 원래 폭 비율이 유지되게 함
   const cards = trimmed.length === 1
-    ? await newsCard(trimmed[0], vol, site_url)
+    ? (await newsCard(trimmed[0], vol, site_url)) + `<td width="50%" style="width:50%;max-width:255px;"></td>`
     : (await Promise.all(trimmed.map(n => newsCard(n, vol, site_url))))
         .join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
   return `
