@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 
 import { Loader2, Sparkles, PenLine, ExternalLink, CheckCircle2 } from "lucide-react";
 import HelpPanel, { HelpTrigger, Section, Item, Def } from "@/components/admin/HelpPanel";
+import { useTabParam } from "@/lib/useTabParam";
 
 type Tab = "ai" | "manual";
 
@@ -276,7 +277,7 @@ function Fields({
 export default function NewArticlePage() {
   const router = useRouter();
   const [helpOpen, setHelpOpen] = useState(false);
-  const [tab, setTab] = useState<Tab>("ai");
+  const [tab, setTab] = useTabParam<Tab>("tab", "ai");
   const [fields, setFields] = useState<ArticleFields>({ ...EMPTY });
   const [categories, setCategories] = useState<string[]>(["AI", "MICE", "TOURISM"]);
 

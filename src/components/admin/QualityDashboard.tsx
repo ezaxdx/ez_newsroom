@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { ExternalLink, Check, Sparkles, X, RefreshCw } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note, Def } from "@/components/admin/HelpPanel";
+import { useTabParam } from "@/lib/useTabParam";
 
 type EventRow = {
   id: string;
@@ -1848,7 +1849,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
 // ── 메인 컴포넌트 ──────────────────────────────────────────────────
 export default function QualityDashboard({ news, events }: Props) {
-  const [tab, setTab] = useState<"news" | "events">("news");
+  const [tab, setTab] = useTabParam<"news" | "events">("tab", "news");
   const [helpOpen, setHelpOpen] = useState(false);
 
   return (

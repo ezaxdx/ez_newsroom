@@ -10,6 +10,7 @@ import {
 import { NewsItem } from "@/lib/types";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { HelpTriggerConnected } from "@/components/admin/HelpPanel";
+import { useTabParam } from "@/lib/useTabParam";
 
 type Tab = "live" | "staging" | "archive";
 
@@ -66,7 +67,7 @@ export default function CurationBoard({
   const [saving, setSaving] = useState(false);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
-  const [tab, setTab] = useState<Tab>("live");
+  const [tab, setTab] = useTabParam<Tab>("tab", "live");
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [republishIds, setRepublishIds] = useState<string[]>([]);
   // 대기열 일괄 처리용 선택 상태
@@ -325,7 +326,7 @@ export default function CurationBoard({
   // ── 카테고리 필터 ──
   const activeList = tab === "live" ? liveSortedByCat : tab === "staging" ? staging : archive;
   const CATEGORIES = [...new Set(items.map((i) => i.category))];
-  const [filterCat, setFilterCat] = useState("ALL");
+  const [filterCat, setFilterCat] = useTabParam<string>("cat", "ALL");
   const filtered = activeList.filter((i) => filterCat === "ALL" || i.category === filterCat);
 
   // 아카이브 날짜별 그룹핑 (KST 기준, 최신순)

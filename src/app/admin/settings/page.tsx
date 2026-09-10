@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Plus, X, Sparkles, Save, Loader2, ChevronLeft, ChevronRight, Check, ToggleLeft, ToggleRight } from "lucide-react";
 import HelpPanel, { HelpTrigger, Section, Item, Def } from "@/components/admin/HelpPanel";
+import { useTabParam } from "@/lib/useTabParam";
 
 type Preset = { label: string; prompt: string };
 
@@ -73,7 +74,7 @@ export default function SettingsPage() {
   const [navCategories, setNavCategories] = useState<string[]>(["AI", "MICE", "TOURISM"]);
   const [settings, setSettings] = useState<SettingsMap>({});
   const [levelPrompts, setLevelPrompts] = useState<CategoryLevelPrompts>({});
-  const [activeTab, setActiveTab] = useState("AI");
+  const [activeTab, setActiveTab] = useTabParam<string>("cat", "AI");
   const [autoSchedule, setAutoSchedule] = useState<{ enabled: boolean; days: number[]; hour: number }>({ enabled: false, days: [], hour: 9 });
   const [qualityThresholds, setQualityThresholds] = useState({ auto_publish: 8, staging: 5 });
   const [companyContext, setCompanyContext] = useState("");

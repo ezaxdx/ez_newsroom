@@ -6,6 +6,7 @@ import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { POPUP_PAGES } from "@/lib/popup";
 import EventHuntManager from "@/components/admin/EventHuntManager";
 import { EFFECT_LABELS, EFFECT_KEYFRAMES, EffectOverlay } from "@/components/newsroom/PopupBanner";
+import { useTabParam } from "@/lib/useTabParam";
 
 type Popup = {
   id: string;
@@ -150,7 +151,7 @@ export default function PopupManager() {
   const [filterFrom, setFilterFrom] = useState(todayKST());
   const [filterTo, setFilterTo] = useState(oneMonthFromTodayKST());
   // 예정·진행중 탭(날짜 필터 사용) vs 지난 팝업 탭(게시기간이 이미 끝난 것만, 최근 종료순)
-  const [viewMode, setViewMode] = useState<"upcoming" | "past">("upcoming");
+  const [viewMode, setViewMode] = useTabParam<"upcoming" | "past">("view", "upcoming");
   // 미리보기 화면에서 팝업을 직접 드래그로 옮기거나 모서리로 크기 조절할 때의 드래그 상태
   const [dragState, setDragState] = useState<{
     mode: "move" | "resize";

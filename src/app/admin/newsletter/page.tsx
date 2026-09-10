@@ -4,6 +4,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
 import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
+import { useTabParam } from "@/lib/useTabParam";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
@@ -42,7 +43,7 @@ type Tab = "send" | "history" | "subscribers" | "gmail" | "settings";
 const DAY_LABELS = ["일", "월", "화", "수", "목", "금", "토"];
 
 export default function NewsletterPage() {
-  const [tab, setTab] = useState<Tab>("send");
+  const [tab, setTab] = useTabParam<Tab>("tab", "send");
 
   // ── Send tab state ──
   const [editorialText, setEditorialText] = useState("");
