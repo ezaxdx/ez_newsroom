@@ -8,6 +8,17 @@ import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { sendDiscordAlert } from "@/lib/discord-alert";
 
+async function alertImageFallbacks(html: string, vol_number: number) {
+  const matches = html.match(/<!--IMG_FALLBACK:([^>]*)-->/g);
+  if (!matches || matches.length === 0) return;
+  const names = matches.map(m => m.replace(/<!--IMG_FALLBACK:|-->/g, "")).slice(0, 10);
+  await sendDiscordAlert({
+    title: `뉴스레터 Vol.${vol_number} 이미지 ${matches.length}건 로딩 실패`,
+    description: `원본 이미지에 접근할 수 없어 기본 로고로 대체됨: ${names.join(", ")}`,
+    level: "warning",
+  });
+}
+
 async function alertSendOutcome(params: { vol_number: number; total_sent: number; total_failed: number; target_count: number }) {
   if (params.total_failed === 0) return;
   const allFailed = params.total_sent === 0;
@@ -78,6 +89,7 @@ export async function POST(req: NextRequest) {
       issueId = existingIssue.id;
       await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId);
     } else {
+      await alertImageFallbacks(sendHtml, vol_number);
       const { data: newIssue, error: issueErr } = await supabase
         .from("newsletter_issues")
         .insert({
@@ -429,6 +441,7 @@ export async function POST(req: NextRequest) {
     issueId2 = existingIssue2.id;
     await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId2);
   } else {
+    await alertImageFallbacks(html, vol_number);
     const { data: newIssue2, error: issueErr2 } = await supabase
       .from("newsletter_issues")
       .insert({

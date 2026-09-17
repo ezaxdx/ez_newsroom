@@ -167,7 +167,7 @@ async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<
                 style="display:block;width:100%;height:129px;border:0;">
          </td></tr>
        </table>`
-    : `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+    : `<!--IMG_FALLBACK:${item.id}--><table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
            <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
                 style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
@@ -199,7 +199,7 @@ async function pickCard(ev: EventCard, vol: number, site_url: string): Promise<s
                 style="display:block;width:100%;height:129px;border:0;">
          </td></tr>
        </table>`
-    : `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+    : `<!--IMG_FALLBACK:${ev.name}--><table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="height:129px;background:#EEEBE5;text-align:center;vertical-align:middle;">
            <img src="${site_url}/images/ez-letter-logo.png" width="72" alt="EZ Letter"
                 style="display:inline-block;max-width:72px;height:auto;opacity:0.5;">
