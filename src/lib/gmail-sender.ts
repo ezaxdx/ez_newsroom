@@ -5,6 +5,7 @@
 import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/token-crypto";
+import { sendDiscordAlert } from "@/lib/discord-alert";
 
 export async function getGmailClient() {
   const clientId = process.env.GMAIL_CLIENT_ID;
@@ -46,7 +47,28 @@ export async function getGmailClient() {
     await supabase.from("gmail_tokens").update(updates).eq("id", "singleton");
   });
 
-  return google.gmail({ version: "v1", auth: oauth2Client });
+  const gmail = google.gmail({ version: "v1", auth: oauth2Client });
+
+  // 실제 발송을 시도하기 전에 토큰이 살아있는지 가볍게 먼저 확인 — 안 그러면 invalid_grant일
+  // 때 수신자 전원이 각자 실패하고 나서야(로그를 직접 봐야만) 알아차리게 됨. 여기서 미리
+  // 잡아서 디스코드로 알림 보내고 바로 실패시킴(같은 발송 작업 안에서 중복 알림 방지)
+  try {
+    await gmail.users.getProfile({ userId: "me" });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const isAuthError = /invalid_grant|invalid_token|unauthorized|401/i.test(message);
+    await sendDiscordAlert({
+      title: "Gmail 뉴스레터 발신 계정 재인증 필요",
+      description: isAuthError
+        ? "Gmail 토큰이 만료되었거나 취소되었습니다. 관리자 페이지 → 뉴스레터 관리 → Gmail 연동에서 다시 연결해주세요."
+        : "Gmail 토큰 확인 중 오류가 발생했습니다.",
+      level: "error",
+      fields: [{ name: "오류 내용", value: message.slice(0, 500) }],
+    });
+    throw err;
+  }
+
+  return gmail;
 }
 
 /** RFC2822 형식 이메일 메시지 생성 */
