@@ -6,6 +6,17 @@ import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/li
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
 import { calcLastScheduledRun } from "@/lib/schedule";
+import { sendDiscordAlert } from "@/lib/discord-alert";
+
+async function alertSendOutcome(params: { vol_number: number; total_sent: number; total_failed: number; target_count: number }) {
+  if (params.total_failed === 0) return;
+  const allFailed = params.total_sent === 0;
+  await sendDiscordAlert({
+    title: `뉴스레터 Vol.${params.vol_number} 발송 실패 ${allFailed ? "(전체)" : "일부"} 있음`,
+    description: `대상 ${params.target_count}명 중 성공 ${params.total_sent}건 / 실패 ${params.total_failed}건. 발송 이력(뉴스레터 관리 → 이력)에서 실패 사유 확인 필요.`,
+    level: allFailed ? "error" : "warning",
+  });
+}
 
 export const maxDuration = 60;
 
@@ -128,6 +139,11 @@ export async function POST(req: NextRequest) {
       await supabase.from("newsletter_issues")
         .update({ status: partialSent ? "partial" : "failed", total_sent, total_failed })
         .eq("id", issueId);
+      await sendDiscordAlert({
+        title: `뉴스레터 Vol.${vol_number} 발송 중 오류로 중단`,
+        description: `${err instanceof Error ? err.message : String(err)}`.slice(0, 500),
+        level: "error",
+      });
       return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
     }
 
@@ -137,6 +153,7 @@ export async function POST(req: NextRequest) {
     await supabase.from("newsletter_issues")
       .update({ status: finalStatus, total_sent, total_failed })
       .eq("id", issueId);
+    await alertSendOutcome({ vol_number, total_sent, total_failed, target_count: allRecipients.length });
 
     return NextResponse.json({ ok: true, vol_number, status: finalStatus, issue_id: issueId, target_count: allRecipients.length, total_sent, this_batch_sent: thisBatchSent, total_failed, remaining_count: remainingAfter });
   }
@@ -470,6 +487,11 @@ export async function POST(req: NextRequest) {
     await supabase.from("newsletter_issues")
       .update({ status: total_sent2 > alreadySent2.size ? "partial" : "failed", total_sent: total_sent2, total_failed: total_failed2 })
       .eq("id", issueId2);
+    await sendDiscordAlert({
+      title: `뉴스레터 Vol.${vol_number} 발송 중 오류로 중단`,
+      description: `${err instanceof Error ? err.message : String(err)}`.slice(0, 500),
+      level: "error",
+    });
     return NextResponse.json({ error: `Gmail 발송 오류: ${err instanceof Error ? err.message : String(err)}` }, { status: 500 });
   }
 
@@ -479,6 +501,7 @@ export async function POST(req: NextRequest) {
   await supabase.from("newsletter_issues")
     .update({ status: finalStatus2, total_sent: total_sent2, total_failed: total_failed2 })
     .eq("id", issueId2);
+  await alertSendOutcome({ vol_number, total_sent: total_sent2, total_failed: total_failed2, target_count: allRecipients2.length });
 
   return NextResponse.json({ ok: true, vol_number, status: finalStatus2, issue_id: issueId2, target_count: allRecipients2.length, total_sent: total_sent2, this_batch_sent: thisBatchSent2, total_failed: total_failed2, remaining_count: remainingAfter2 });
 }

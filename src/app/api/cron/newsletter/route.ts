@@ -6,6 +6,7 @@ import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { fetchEventImage } from "@/lib/fetch-event-image";
 import { verifyCronAuth } from "@/lib/verify-cron";
 import { calcLastScheduledRun } from "@/lib/schedule";
+import { sendDiscordAlert } from "@/lib/discord-alert";
 
 export const maxDuration = 60;
 
@@ -207,6 +208,11 @@ export async function GET(req: NextRequest) {
       logEntries.push(r);
     }
   } catch (err) {
+    await sendDiscordAlert({
+      title: `뉴스레터 Vol.${vol_number} 자동발송 중 오류로 중단`,
+      description: `${err instanceof Error ? err.message : String(err)}`.slice(0, 500),
+      level: "error",
+    });
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 500 });
   }
 
@@ -218,6 +224,14 @@ export async function GET(req: NextRequest) {
 
   if (issue && logEntries.length > 0) {
     await supabase.from("newsletter_send_logs").insert(logEntries.map(l => ({ ...l, issue_id: issue.id })));
+  }
+
+  if (total_failed > 0) {
+    await sendDiscordAlert({
+      title: `뉴스레터 Vol.${vol_number} 자동발송 실패 ${total_sent === 0 ? "(전체)" : "일부"} 있음`,
+      description: `대상 ${subscribers.length}명 중 성공 ${total_sent}건 / 실패 ${total_failed}건.`,
+      level: total_sent === 0 ? "error" : "warning",
+    });
   }
 
   return NextResponse.json({ ok: true, vol_number, total_sent, total_failed });
