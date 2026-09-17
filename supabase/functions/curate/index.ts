@@ -1090,6 +1090,32 @@ Deno.serve(async (req) => {
   });
   if (logError) console.error("[curation_logs insert 실패]", logError.message);
 
+  // 개별 기사 생성 실패가 이례적으로 많으면(가끔 1건 정도는 정상 범주) 디스코드로 알림 —
+  // 조용히 실패 건수만 쌓이는 걸 방지. 웹훅 실패해도 절대 큐레이션 자체를 막지 않음(best-effort)
+  if (results.failed >= 3) {
+    const webhookUrl = Deno.env.get("DISCORD_WEBHOOK_URL");
+    if (webhookUrl) {
+      try {
+        await fetch(webhookUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            embeds: [{
+              title: "🟡 경고 · 큐레이션 개별 기사 생성 실패 다수",
+              description: `이번 실행에서 ${results.failed}건 실패(발행 ${results.published}, 대기 ${results.staged}, 스킵 ${results.skipped}).`,
+              color: 0xf59e0b,
+              fields: runErrors.slice(0, 5).map((e) => ({ name: e.source, value: e.error.slice(0, 200) })),
+              timestamp: new Date().toISOString(),
+            }],
+          }),
+          signal: AbortSignal.timeout(5000),
+        });
+      } catch (err) {
+        console.error("[discord-alert] 전송 실패:", err);
+      }
+    }
+  }
+
   // 이번 실행에서 새로 발행된 콘텐츠를 백그라운드로 자동 품질 감사 — 응답은 기다리지 않고 즉시 반환.
   // audit-content는 audited_at이 null인 모든 발행 기사를 대상으로 하므로, 수동 발행(articles/new)
   // 등 다른 경로로 쌓인 미감사 기사도 이 실행을 계기로 함께 처리됨.
