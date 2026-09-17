@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
+import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
 
 /**
  * 외부 이미지 프록시
@@ -23,23 +24,14 @@ async function fallbackLogoResponse(): Promise<NextResponse> {
   });
 }
 
-export async function GET(req: NextRequest) {
-  const url = req.nextUrl.searchParams.get("url");
-  if (!url) {
-    return new NextResponse("url 파라미터가 필요합니다.", { status: 400 });
-  }
-
-  // http/https 스킴만 허용
+async function fetchImage(url: string): Promise<Response | null> {
   let parsed: URL;
   try {
     parsed = new URL(url);
   } catch {
-    return fallbackLogoResponse();
+    return null;
   }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return fallbackLogoResponse();
-  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
 
   try {
     // Referer: 이미지 원본 도메인으로 설정 → 핫링크 보호 우회
@@ -57,18 +49,41 @@ export async function GET(req: NextRequest) {
       },
       signal: AbortSignal.timeout(8000),
     });
+    if (!response.ok) return null;
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.startsWith("image/")) return null;
+    return response;
+  } catch (err) {
+    console.error("[image-proxy] fetch error:", url, err);
+    return null;
+  }
+}
 
-    if (!response.ok) {
-      return fallbackLogoResponse();
-    }
+export async function GET(req: NextRequest) {
+  const url = req.nextUrl.searchParams.get("url");
+  if (!url) {
+    return new NextResponse("url 파라미터가 필요합니다.", { status: 400 });
+  }
 
+  // http/https 스킴만 허용
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return fallbackLogoResponse();
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return fallbackLogoResponse();
+  }
+
+  const unwrapped = unwrapNextImageUrl(url);
+  const candidates = unwrapped ? [unwrapped, url] : [url];
+
+  for (const candidate of candidates) {
+    const response = await fetchImage(candidate);
+    if (!response) continue;
     const contentType = response.headers.get("content-type") ?? "image/jpeg";
-    if (!contentType.startsWith("image/")) {
-      return fallbackLogoResponse();
-    }
-
     const buffer = await response.arrayBuffer();
-
     return new NextResponse(buffer, {
       status: 200,
       headers: {
@@ -77,8 +92,7 @@ export async function GET(req: NextRequest) {
         "Access-Control-Allow-Origin": "*",
       },
     });
-  } catch (err) {
-    console.error("[image-proxy] fetch error:", err);
-    return fallbackLogoResponse();
   }
+
+  return fallbackLogoResponse();
 }

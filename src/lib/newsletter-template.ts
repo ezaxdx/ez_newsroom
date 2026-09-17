@@ -1,3 +1,5 @@
+import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
+
 export type NewsCard = {
   id: string;
   title: string;
@@ -94,20 +96,33 @@ function sectionDivider(title: string): string {
 // 꽉 채워 늘리는 스타일)에 그대로 넣으면 로고가 옆으로 늘어나 크게 보임.
 // 여기서 미리 걸러서 실패하면 null을 반환해 "이미지 없음"(작게 중앙 배치) 스타일로
 // 렌더링되게 함 — image-proxy의 대체 로직은 그래도 만약을 위한 마지막 안전망으로 유지
-async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {
-  if (!image_url) return null;
-  if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
+async function isImageReachable(url: string): Promise<boolean> {
   try {
-    const res = await fetch(image_url, {
+    const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
       signal: AbortSignal.timeout(5000),
     });
-    if (!res.ok) return null;
+    if (!res.ok) return false;
     const contentType = res.headers.get("content-type") ?? "";
-    if (!contentType.startsWith("image/")) return null;
+    return contentType.startsWith("image/");
   } catch {
-    return null;
+    return false;
   }
+}
+
+async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {
+  if (!image_url) return null;
+  if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
+
+  // 언론사 자체 Next.js 이미지 리사이저(/_next/image?url=...)는 클라우드 IP를 차단하는
+  // 경우가 있음(news1.kr에서 실제 확인) — 원본이 살아있어도 리사이저만 막혀서 여기서
+  // "접근 불가"로 오판해 image-proxy까지 못 가고 "이미지 없음"으로 떨어지던 문제.
+  // 리사이저 URL이면 감싸인 원본을 먼저 시도하고, 그것도 안 되면 원래 URL도 시도
+  const unwrapped = unwrapNextImageUrl(image_url);
+  const reachable = unwrapped
+    ? (await isImageReachable(unwrapped)) || (await isImageReachable(image_url))
+    : await isImageReachable(image_url);
+  if (!reachable) return null;
   // 미리보기/발송 모두 프록시 경유 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
   return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
 }
