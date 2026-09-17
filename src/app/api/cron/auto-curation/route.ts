@@ -1,8 +1,36 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyCronAuth } from "@/lib/verify-cron";
+import { calcLastScheduledRun } from "@/lib/schedule";
+import { sendDiscordAlert } from "@/lib/discord-alert";
 
 export const maxDuration = 10;
+
+// 이 크론이 스케줄대로(화·목) 실제로 실행됐는지, 매일 도는 이 호출 자체로 감시함 —
+// 별도 워치독 크론을 안 만드는 이유: Vercel Hobby 플랜 크론 슬롯이 제한적이라
+// 기존 슬롯을 매일 실행으로 바꾸고 그 안에서 확인하는 쪽이 안전함(vercel.json 참고).
+// "예정된 마지막 실행 시각 + 여유시간"이 지났는데 curation_logs에 그 이후 기록이
+// 없으면 크론이 침묵 실패한 것 — 아무도 모르게 며칠씩 큐레이션이 안 도는 사고를 막기 위함
+async function checkMissedRun(
+  supabase: ReturnType<typeof createAdminClient>,
+  schedule: { days: number[]; hour: number }
+) {
+  const GRACE_MS = 3 * 60 * 60 * 1000; // 3시간(Vercel 지연 1시간 + 실행시간 감안 여유)
+  const lastRun = calcLastScheduledRun(schedule.days, schedule.hour ?? 9);
+  if (Date.now() - lastRun.getTime() < GRACE_MS) return; // 아직 여유시간 이내 — 판단 보류
+
+  const { count } = await supabase
+    .from("curation_logs")
+    .select("id", { count: "exact", head: true })
+    .gte("run_at", lastRun.toISOString());
+  if (count && count > 0) return; // 정상 실행됨
+
+  await sendDiscordAlert({
+    title: "큐레이션 자동 실행 누락 감지",
+    description: `예정된 실행 시각(${lastRun.toISOString()}) 이후로 curation_logs에 기록이 없습니다. 크론이 실행되지 않았거나 실패했을 수 있습니다.`,
+    level: "error",
+  });
+}
 
 export async function GET(req: Request) {
   const unauth = verifyCronAuth(req);
@@ -19,6 +47,10 @@ export async function GET(req: Request) {
 
   if (!schedule.enabled) {
     return NextResponse.json({ skipped: "auto schedule disabled" });
+  }
+
+  if (schedule.days?.length > 0) {
+    await checkMissedRun(supabase, schedule);
   }
 
   // Vercel Hobby 플랜은 최대 1시간 지연 실행 → hour 체크 제거, day만 확인
