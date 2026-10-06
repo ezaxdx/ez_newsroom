@@ -8,7 +8,7 @@ import {
   calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, toISO, withTimeout,
 } from "./util.ts";
 import type { CatSetting } from "./ai.ts";
-import { buildHintBlock, generateArticle, judgeFit } from "./ai.ts";
+import { buildHintBlock, canonicalDomain, generateArticle, judgeFit } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
 
 /* ───────── 타입 ───────── */
@@ -507,7 +507,12 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     }
     writeTargets.push(c);
   });
-  writeTargets.sort((a, b) => readyList.indexOf(a) - readyList.indexOf(b));   // 이즈픽 먼저 등 처리 우선순위 유지
+  // 처리 순서: 이즈픽 먼저 → 적합성 높은 순(AI 1순위·MICE·관광 > AI 2순위 > …) → 기존 우선순위.
+  // 자동 발행 상한(20건)에 걸릴 때 적합성 높은 기사가 먼저 발행되고 낮은 기사가 대기열로 가게 됨
+  writeTargets.sort((a, b) =>
+    (Number(!!b.event) - Number(!!a.event)) ||
+    ((judgedMap.get(b)?.fit ?? 0) - (judgedMap.get(a)?.fit ?? 0)) ||
+    (readyList.indexOf(a) - readyList.indexOf(b)));
   log(`[4a단계] 적합성 판정 완료 — 작성 대상 ${writeTargets.length}건 (${Date.now() - runStart}ms)`);
 
   // 4b. 글 작성 + 판정·저장 (동시 5건)
@@ -556,7 +561,9 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       level: g.level ?? "Intermediate",
       image_url: c.image ?? categoryDefaultImage(g.category),
       original_url: c.link, category: g.category, quality_score: score, quality_criteria: qualityCriteria,
-      business_domains: g.business_domains ?? [], is_published: publish,
+      // AI가 회사 소개 문서의 표기("ATT(All That Travel)" 등)를 따라 써도 화면 집계와 같은 기준 이름으로 통일하고, 모르는 이름은 버림
+      business_domains: [...new Set((g.business_domains ?? []).map((d) => canonicalDomain(d)).filter((d): d is string => !!d))],
+      is_published: publish,
       priority_score: priority, display_order: 1000 - score * 10,
       published_at: publish ? new Date().toISOString() : (toISO(c.pubMs) ?? new Date().toISOString()),
       original_title: c.title.slice(0, 300), found_via: [...c.vias], coverage_count: c.coverage,
