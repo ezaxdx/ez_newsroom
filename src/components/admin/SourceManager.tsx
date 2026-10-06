@@ -188,6 +188,7 @@ function KeywordDialog({ initial, categories, onClose, onSaved }: { initial?: Rs
       <div className="flex flex-col gap-1">
         <label className={labelCls} style={labelStyle}>키워드</label>
         <input value={keyword} onChange={(e) => { setKeyword(e.target.value); setPreview(null); }} placeholder="예: 스마트관광" className="h-9 px-3 rounded-md text-sm outline-none" style={inputStyle} autoFocus />
+        <p className="text-[0.7rem] m-0" style={labelStyle}>따옴표로 감싸면(예: &quot;글로컬 관광&quot;) 그 문구가 그대로 들어간 기사만 찾아요. 다른 뜻으로 쓰이는 단어가 섞일 때 유용합니다.</p>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="flex flex-col gap-1">

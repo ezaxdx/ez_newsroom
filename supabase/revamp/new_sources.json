@@ -2,7 +2,7 @@
   { "source_name": "스마트관광", "url": "스마트관광", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
   { "source_name": "MICE", "url": "MICE", "source_type": "keyword_search", "default_category": "MICE", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
   { "source_name": "AI관광", "url": "AI관광", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
-  { "source_name": "글로컬관광", "url": "글로컬관광", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
+  { "source_name": "글로컬 관광", "url": "\"글로컬 관광\"", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
   { "source_name": "MICE Tech", "url": "MICE Tech", "source_type": "keyword_search", "default_category": "MICE", "weight": 6, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["google"] }, "is_active": true },
 
   { "source_name": "더벨트", "url": "https://thebelt.edaily.co.kr/List/Data/T50", "source_type": "web_list", "default_category": "MIXED", "weight": 8, "keyword_mode": "none", "max_items": 5,

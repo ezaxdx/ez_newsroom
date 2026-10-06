@@ -19,9 +19,10 @@ update public.rss_sources set source_type = 'keyword_search', source_name = '스
 update public.rss_sources set source_type = 'keyword_search', source_name = 'AI관광', url = 'AI관광',
   keyword_mode = 'none', max_items = 10, fetch_config = '{"engines":["naver","google"]}'::jsonb
  where source_type = 'naver_news' and lower(url) = 'ai관광';
-update public.rss_sources set source_type = 'keyword_search', source_name = '글로컬관광', url = '글로컬관광',
+update public.rss_sources set source_type = 'keyword_search', source_name = '글로컬 관광', url = '"글로컬 관광"',
   keyword_mode = 'none', max_items = 10, fetch_config = '{"engines":["naver","google"]}'::jsonb
  where source_type = 'naver_news' and url = '글로컬관광';
+-- ↑ 따옴표로 감싼 "글로컬 관광"은 그 문구가 그대로 들어간 기사만 검색 (미리보기 시험: 대학 기사 14/40건 → 3/40건)
 update public.rss_sources set source_type = 'keyword_search', source_name = 'MICE', url = 'MICE',
   keyword_mode = 'none', max_items = 10, fetch_config = '{"engines":["naver","google"]}'::jsonb
  where source_type = 'naver_news' and lower(url) = 'mice';
@@ -65,6 +66,9 @@ update public.rss_sources set is_active = false
  where source_type = 'rss' and source_name in ('연합뉴스', '뉴시스', '머니투데이', '전자신문', '이데일리');
 update public.rss_sources set is_active = false
  where source_type = 'rss' and source_name in ('대한민국 구석구석', '대한민국 정책브리핑');
+
+-- Gmail 뉴스레터(요즘it, MICE人)·공공 API(한국관광공사_지역별 관광 다양성) 소스 3개 — 수집하지 않기로 확정(2026-10-06), 모두 비활성 상태. 백업 테이블에 남아 있음
+delete from public.rss_sources where source_type in ('gmail', 'api');
 
 -- ── D. 기존 "키워드 필터" 체크 → 새 모드로 이전 ───────────────────────────────
 update public.rss_sources set keyword_mode = 'default'
