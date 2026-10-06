@@ -84,6 +84,16 @@ export function parseDateLoose(raw?: string | null): number | null {
   if (!raw) return null;
   const s = String(raw).trim();
   if (!s) return null;
+  // 구분 기호 없는 숫자 형식 — K-mice 피드의 "20260901175041"(yyyyMMddHHmmss), "20260901"(yyyyMMdd). 한국시간(KST)으로 간주
+  // (이 형식을 못 읽으면 날짜 "모름"으로 처리돼 발행 창 검사를 건너뛰고 몇 달 전 기사가 발행됨)
+  const compact = s.match(/^(\d{4})(\d{2})(\d{2})(?:(\d{2})(\d{2})(\d{2})?)?$/);
+  if (compact) {
+    const [, y, mo, d, h = "00", mi = "00", se = "00"] = compact;
+    if (+mo >= 1 && +mo <= 12 && +d >= 1 && +d <= 31) {
+      const t = Date.parse(`${y}-${mo}-${d}T${h}:${mi}:${se}+09:00`);
+      return isNaN(t) ? null : t;
+    }
+  }
   const m = s.match(/^(\d{4})[.\-/](\d{1,2})[.\-/](\d{1,2})(?:[ T](\d{1,2}):(\d{2})(?::(\d{2}))?)?\s*(Z|[+-]\d{2}:?\d{2})?$/);
   if (m) {
     const p2 = (x?: string) => (x ?? "0").padStart(2, "0");
@@ -92,7 +102,8 @@ export function parseDateLoose(raw?: string | null): number | null {
     const t = Date.parse(`${m[1]}-${p2(m[2])}-${p2(m[3])}T${p2(m[4])}:${p2(m[5])}:${p2(m[6])}${tz}`);
     return isNaN(t) ? null : t;
   }
-  const t = Date.parse(s);
+  // 문체부 보도자료 피드의 "Tue, 6 Oct 2026 08:07:30 KST" 처럼 시간대가 약어(KST)로 오면 Date.parse 가 못 읽음 → +0900 으로 치환
+  const t = Date.parse(s.replace(/\bKST\b/i, "+0900"));
   return isNaN(t) ? null : t;
 }
 export function toISO(t: number | null): string | undefined {
