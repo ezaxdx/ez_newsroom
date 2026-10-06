@@ -6,6 +6,8 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runCuration } from "./lib/pipeline.ts";
 import { sendAlert } from "./lib/alert.ts";
+import { previewSource } from "./lib/preview.ts";
+import type { PreviewInput } from "./lib/preview.ts";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
@@ -24,6 +26,14 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* 본문 없음 */ }
+
+  // 소스·키워드 추가 화면의 미리보기 — DB 에 아무것도 쓰지 않는 읽기 전용
+  if (body.preview) {
+    const result = await previewSource(body.preview as PreviewInput, {
+      naverId: Deno.env.get("NAVER_CLIENT_ID"), naverSecret: Deno.env.get("NAVER_CLIENT_SECRET"), jinaKey: Deno.env.get("JINA_API_KEY"),
+    });
+    return new Response(JSON.stringify(result), { headers: { "Content-Type": "application/json" } });
+  }
   const live = body.live === true || url.searchParams.get("live") === "1";
   const maxAi = Number(body.max_ai ?? url.searchParams.get("max_ai") ?? (live ? NaN : 6));
   const onlySource = (body.only_source as string | undefined) ?? url.searchParams.get("only_source") ?? undefined;

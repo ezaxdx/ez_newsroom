@@ -223,12 +223,44 @@ export async function resolveGoogleNewsUrl(url: string): Promise<string | null> 
 }
 
 /* ── 렌더링 서비스 (JS로 목록을 불러오는 사이트용) ── */
-export async function fetchRendered(url: string, env: FetchEnv): Promise<string> {
-  const headers: Record<string, string> = { "X-Return-Format": "html" };
+export async function fetchRendered(url: string, env: FetchEnv, format: "html" | "markdown" = "markdown"): Promise<string> {
+  // X-No-Cache: 캐시된 "렌더링 전" 결과가 아니라 실제로 브라우저가 그려낸 결과를 받기 위함
+  const headers: Record<string, string> = { "X-Return-Format": format, "X-No-Cache": "true" };
   if (env.jinaKey) headers["Authorization"] = `Bearer ${env.jinaKey}`;
   const res = await httpGet(`https://r.jina.ai/${url}`, { headers, timeoutMs: 30000 }, 1);
   if (!res.ok) throw new Error(`렌더링 서비스 HTTP ${res.status}`);
   return await res.text();
+}
+
+/** 마크다운 결과에서 링크 추출: [텍스트](주소) — 이미지 마크다운은 텍스트에서 제거 */
+function markdownEntries(md: string, baseUrl: string, cfg: ListConfig): { url: string; text: string; heading: string }[] {
+  const byUrl = new Map<string, { url: string; text: string; heading: string }>();
+  const re = /\[((?:[^\[\]]|\[[^\]]*\])*)\]\((https?:\/\/[^)\s]+|\/[^)\s]*)(?:\s+"[^"]*")?\)/g;
+  for (const m of md.matchAll(re)) {
+    let abs: string;
+    try { abs = new URL(m[2], baseUrl).toString(); } catch { continue; }
+    if (cfg.link_pattern && !new RegExp(cfg.link_pattern).test(abs)) continue;
+    const text = decodeEntities(m[1].replace(/!\[[^\]]*\]\([^)]*\)/g, " ").replace(/[*_`#>]/g, " ")).replace(/\s+/g, " ").trim();
+    const prev = byUrl.get(abs);
+    if (!prev || text.length > prev.text.length) byUrl.set(abs, { url: abs, text, heading: "" });
+  }
+  return [...byUrl.values()];
+}
+
+/** 렌더링 서비스로 목록 가져오기 — markdown 으로 먼저, 기사가 부족하면 html(onclick 링크 등)로 한 번 더 */
+export async function renderAndExtract(url: string, cfg: ListConfig, env: FetchEnv): Promise<RawItem[]> {
+  let best: RawItem[] = [];
+  let lastErr: unknown;
+  for (const format of ["markdown", "html"] as const) {
+    try {
+      const body = await fetchRendered(url, env, format);
+      const items = format === "markdown" ? buildItems(markdownEntries(body, url, cfg), cfg) : extractListItems(body, url, cfg);
+      if (items.length > best.length) best = items;
+      if (best.length >= 2) break;
+    } catch (e) { lastErr = e; }
+  }
+  if (best.length === 0 && lastErr) throw lastErr;
+  return best;
 }
 
 /* ── 웹페이지 목록 ── */
@@ -272,7 +304,11 @@ export function extractListItems(html: string, baseUrl: string, cfg: ListConfig 
     if (!prev || text.length > prev.text.length) byUrl.set(abs, { url: abs, text, heading: heading || prev?.heading || "" });
     else if (heading && !prev.heading) prev.heading = heading;
   }
-  let entries = [...byUrl.values()];
+  return buildItems([...byUrl.values()], cfg);
+}
+/** (주소, 텍스트) 후보들에서 기사 링크를 골라 제목·날짜·요약으로 정리 */
+function buildItems(allEntries: { url: string; text: string; heading: string }[], cfg: ListConfig): RawItem[] {
+  let entries = allEntries;
   if (!cfg.link_pattern) {
     // 패턴 지정이 없으면 "가장 많이 반복되는 URL 모양"을 기사 링크로 간주
     const groups = new Map<string, typeof entries>();
@@ -326,7 +362,7 @@ export async function fetchWebList(url: string, cfg: ListConfig, env: FetchEnv):
     // 직접 가져오기로 0건이면(JS로 목록을 그리는 사이트) 렌더링 서비스로 한 번 더 시도
     if (items.length === 0 && cfg.render !== false) {
       try {
-        items = extractListItems(await fetchRendered(u, env), u, cfg);
+        items = await renderAndExtract(u, cfg, env);
         if (items.length) { mode = "render"; firstError = undefined; }
       } catch (e) {
         firstError ??= (e as Error).message;
