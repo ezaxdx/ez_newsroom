@@ -19,7 +19,12 @@ export async function POST(req: NextRequest) {
 
   const supabase = createAdminClient();
 
-  const { error: updateError } = await supabase.from("news").update({ business_domains: domains }).eq("id", id);
+  // 관리자가 직접 고친 기사는 판정 완료로 표시 — 발행 후 AI 영역 판정(classifyPending)이 덮어쓰지 않게 함 (영역을 일부러 비운 경우 포함)
+  let { error: updateError } = await supabase.from("news").update({ business_domains: domains, domains_judged_at: new Date().toISOString() }).eq("id", id);
+  if (updateError) {
+    // domains_judged_at 컬럼이 아직 없는 환경(전환 SQL 03 실행 전)에서도 보정은 동작하게
+    ({ error: updateError } = await supabase.from("news").update({ business_domains: domains }).eq("id", id));
+  }
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
   // 확정 예시 누적 (같은 제목 재보정 시 기존 항목 대체, 최신순으로 최대 MAX_EXAMPLES개 유지)

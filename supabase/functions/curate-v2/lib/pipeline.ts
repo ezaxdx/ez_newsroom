@@ -561,8 +561,9 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       level: g.level ?? "Intermediate",
       image_url: c.image ?? categoryDefaultImage(g.category),
       original_url: c.link, category: g.category, quality_score: score, quality_criteria: qualityCriteria,
-      // AI가 회사 소개 문서의 표기("ATT(All That Travel)" 등)를 따라 써도 화면 집계와 같은 기준 이름으로 통일하고, 모르는 이름은 버림
-      business_domains: [...new Set((g.business_domains ?? []).map((d) => canonicalDomain(d)).filter((d): d is string => !!d))],
+      // 사업영역은 발행 후에 별도 작업(classifyPending)이 판정해서 채움 — 큐레이션(발행)을 기다리게 하지 않음.
+      // v1 프롬프트 모드(calibrated=false)에서만 작성 호출이 낸 값을 쓰며, 그때도 화면 집계와 같은 기준 이름으로 통일
+      business_domains: calibrated ? [] : [...new Set((g.business_domains ?? []).map((d) => canonicalDomain(d)).filter((d): d is string => !!d))],
       is_published: publish,
       priority_score: priority, display_order: 1000 - score * 10,
       published_at: publish ? new Date().toISOString() : (toISO(c.pubMs) ?? new Date().toISOString()),

@@ -196,7 +196,8 @@ alter table public.news
   add column if not exists related_event_id uuid references public.convention_events(id) on delete set null,
   add column if not exists category_reason  text,                    -- AI 카테고리 판단 근거 한 줄
   add column if not exists category_edited  boolean default false,   -- 관리자가 카테고리를 직접 고친 기사
-  add column if not exists fit_reason       text;                    -- AI 적합성 판정 근거 한 줄 (대기열 검토 때 표시)
+  add column if not exists fit_reason       text,                    -- AI 적합성 판정 근거 한 줄 (대기열 검토 때 표시)
+  add column if not exists domains_judged_at timestamptz;            -- 사업영역 판정 완료 시각 (비어 있고 영역도 비면 발행 후 판정 대상, 관리자가 고치면 채워짐)
 
 create index if not exists news_related_event_idx
   on public.news (related_event_id) where related_event_id is not null;

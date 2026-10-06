@@ -1,4 +1,4 @@
-// curate-v2 기사 작성 (Gemini) — v1 프롬프트를 이어받고, 카테고리가 겹칠 때만 AI가 카테고리를 판단
+﻿// curate-v2 기사 작성 (Gemini) — v1 프롬프트를 이어받고, 카테고리가 겹칠 때만 AI가 카테고리를 판단
 import { sleep } from "./util.ts";
 
 export type CatSetting = { audience: string; persona: string; keywords: string[] };
@@ -113,27 +113,52 @@ const DOMAIN_DEFS = `① 스마트립: 지역 관광 자원과 사용자 데이�
 ⑥ MEeT(의료 전시): 의료와 첨단기술, 글로벌 비즈니스 교류를 연결하는 의료 기술·산업 행사 및 플랫폼 (의료기술, 디지털헬스, 의료기기, 헬스케어, 의료 컨퍼런스)
 ⑦ AXDX: 이즈피엠피 사내 AI 전환을 추진하는 영역. AI 산업 전반의 기술·서비스·산업 적용 동향(외부 일반 AI 뉴스 포함)도 여기에 해당 (인공지능, 생성형 AI, AI 에이전트, AI 도입, 업무 자동화, 디지털 전환)`;
 
+/**
+ * 판정 호출 설정. thinking=false 면 AI의 긴 사고 단계를 끔(thinkingBudget 0) → 응답이 몇 배 빨라짐.
+ * 관리자 판정 기준으로 시험한 결과가 호출마다 달라서 따로 정함:
+ *  · 사업영역: 끄면 오히려 정답에 가까워짐 (일치 3/11 → 5/11, 3개 이상 태그 8건 → 1건) → 끔
+ *  · 적합성:   끄면 대기열 기사가 "싣지 않음"으로 떨어지는 등 경계 판정이 나빠짐 (11/12 → 10/12) → 켬(기본)
+ */
+const judgeGenConfig = (thinking: boolean) => ({
+  temperature: 0,
+  responseMimeType: "application/json",
+  ...(thinking ? {} : { thinkingConfig: { thinkingBudget: 0 } }),
+});
+
 export type DomainJudgement = { ok: true; domains: string[]; evidence: Record<string, string> } | { ok: false; error: string };
 /**
  * 사업영역 분류 전용 호출 — 기사 작성과 분리.
  * 작성 호출에서는 시사점(사업 연결 서술)을 쓴 직후에 영역을 고르게 되고 시스템 지침도 "연결 우선"이라 과다 태깅이 생김(평균 1.64개, 3개 이상 9%).
  * 여기서는 원문 본문과 영역 정의, 관리자 보정 사례만 보고 "기사의 핵심 주제가 직접 해당하는 영역"만 고름.
  */
-export async function judgeDomains(i: { apiKey: string; title: string; text: string; examples?: { title: string; business_domains: string[] }[] }): Promise<DomainJudgement> {
+/**
+ * 회사 소개 문서(company_context)에서 "7대 사업영역 정의 + 분류 판단 기준" 부분만 잘라냄 — 판정 호출이 이 문서를 그대로 읽으므로
+ * 설정 화면에서 문서를 고치면 판정에도 바로 반영됨 (기준이 두 군데로 갈라지지 않게). 구분 표시를 못 찾으면 null → 내장 정의 사용
+ */
+export function extractDomainSection(ctx: string | null | undefined): string | null {
+  const c = ctx ?? "";
+  const a = c.indexOf("【7대 사업영역】");
+  if (a < 0) return null;
+  const b = c.indexOf("【시사점 작성 기준】", a);
+  const s = c.slice(a, b > a ? b : undefined).replace(/[─━]{3,}/g, "").trim();
+  return s.length > 300 ? s : null;
+}
+
+export async function judgeDomains(i: { apiKey: string; title: string; text: string; examples?: { title: string; business_domains: string[] }[]; definitions?: string | null }): Promise<DomainJudgement> {
   const ex = (i.examples ?? []).slice(0, 30).map((e) => `  · "${e.title}" → ${JSON.stringify(e.business_domains)}`).join("\n");
+  const fromDoc = !!i.definitions;
   const prompt = `당신은 MICE·관광·AI 기업 이즈피엠피의 사업 분류 담당자입니다. 아래 기사의 "핵심 주제"가 직접 해당하는 사업영역을 고르세요.
 
-사업영역 정의:
-${DOMAIN_DEFS}
+${fromDoc ? i.definitions : `사업영역 정의:\n${DOMAIN_DEFS}`}
 
 분류 원칙:
 - 기사의 핵심 주제가 그 영역의 사업 내용과 직접 일치할 때만 고릅니다. 스쳐 지나가는 언급, 키워드 일치, 억지 연결은 제외하세요. 우리 회사 사업과 연결 지으려 애쓰지 마세요.
-- 영역별 핵심 기준 (관리자가 직접 고친 사례에서 확인된 원칙):
+${fromDoc ? "" : `- 영역별 핵심 기준 (관리자가 직접 고친 사례에서 확인된 원칙):
   · AXDX: AI 기술·서비스·산업 적용 동향이 기사의 핵심이면 기본적으로 AXDX "만" 붙입니다. 기사에 관광·행사 소재가 나와도 그것이 AI 소식의 배경일 뿐이면 다른 영역은 붙이지 않습니다.
   · AI 관광: 관광객을 대상으로 한 AI 서비스(챗봇·추천·안내·통번역)나 관광 분야의 AI 도입 자체가 기사의 핵심일 때만 추가합니다.
   · 스마트립: 관광객 개인화 서비스·관광 DX·관광 데이터 서비스가 핵심일 때만 붙입니다. 일반 관광 행사·축제·정책·시설 소식이나 "체류형 관광"·"스마트 예약" 같은 한 줄 언급만으로는 해당하지 않습니다.
   · 글로컬 관광: 지역 고유 콘텐츠의 글로벌화·K-관광·인바운드·다국어 관광이 핵심일 때만 붙입니다. 행사 유치 소식 자체는 해당하지 않습니다.
-- 대부분의 기사는 0~2개입니다. 3개 이상은 핵심 내용이 세 영역에 모두 걸칠 때만 허용됩니다. 어디에도 해당하지 않으면 빈 배열입니다.
+`}- 대부분의 기사는 0~2개입니다. 3개 이상은 핵심 내용이 세 영역에 모두 걸칠 때만 허용됩니다. 어디에도 해당하지 않으면 빈 배열입니다.
 - 고른 영역마다 근거를 기사 내용으로 한 줄 쓰세요. 근거가 단어 일치뿐이거나 설명이 억지스러우면 그 영역은 빼세요.
 ${ex ? `\n관리자가 직접 검수한 사례 (비슷한 기사는 이 판단을 따르세요):\n${ex}\n` : ""}
 JSON으로만 응답하세요: {"domains":[{"name":"영역 이름","evidence":"근거 한 줄"}]}  (해당 없으면 {"domains":[]})
@@ -148,7 +173,7 @@ ${i.text.slice(0, 5000)}`;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${i.apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }),
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: judgeGenConfig(false) }),
         signal: AbortSignal.timeout(25000),
       });
       const json = await res.json();
@@ -193,7 +218,7 @@ ${i.text.slice(0, 3500)}`;
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${i.apiKey}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }),
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: judgeGenConfig(true) }),
         signal: AbortSignal.timeout(25000),
       });
       const json = await res.json();
@@ -241,6 +266,17 @@ function scoringAndLevelV2(levelExamples: { title: string; level: string }[] | u
 레벨별 작성 지침 (판정한 레벨의 지침으로 작성):
 ${levelSection}`;
 }
+
+/** v1 방식(calibrated=false)에서만 사용: 기사 작성 호출이 사업영역도 같이 분류. 기본(분리 판정)에서는 작성 호출에서 영역 분류를 아예 뺌 */
+const V1_DOMAIN_PARAGRAPH = `business_domains(사업영역 분류): 시스템 지침(company_context)의 "7대 사업영역" 정의를 참고해,
+이 기사의 핵심 주제가 아래 7개 중 어느 것과 직접 관련되는지 판단해 배열로 반환하세요.
+  - 후보: ["스마트립","글로컬 관광","AI 관광","MICE Tech","ATT(관광 전시)","MEeT(의료 전시)","AXDX"]
+  - 기사의 핵심 주제가 해당 영역일 때만 포함 — 스쳐 지나가는 언급이나 억지 연결은 제외
+  - 시사점(implications)에서 사업 연결을 언급했다고 해서 자동으로 포함하지 말 것 — 별개 판단
+  - 특히 "MICE Tech"는 오투미트(O2MEET)·LeadX 같은 기술/플랫폼 요소가 실제로 있을 때만 — 국제회의 유치,
+    산학협력, 인력양성 등 기술과 무관한 일반 MICE 산업 뉴스는 절대 포함하지 말 것
+  - 여러 영역에 핵심적으로 걸치면 복수 반환 가능, 어디에도 해당 없으면 빈 배열 [] (억지로 채우지 말 것)
+`;
 
 const V1_SCORING_AND_LEVEL = (levelSection: string) => `퀄리티 점수 기준 (각 항목 1~10점, quality_score는 종합 판단):
 - relevance(카테고리 관련성): 카테고리·페르소나·키워드와의 일치도
@@ -307,7 +343,7 @@ function jsonSection(multi: boolean, calibrated: boolean): string {
   }
   return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이).
 아래는 형식 설명이며, 숫자 자리에는 이 기사를 직접 평가한 값을 넣으세요 (예시값을 따라 쓰지 마세요).
-{"quality_score":(1~10 정수),"quality_criteria":{"relevance":(1~10),"specificity":(1~10),"practicality":(1~10),"source_quality":(1~10),"fit":1},"level_axes":{"concept":(0~3),"practical":(0~3),"strategic":(0~3)},"level":"Beginner|Intermediate|Advanced 중 하나","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":[]${catPart}}
+{"quality_score":(1~10 정수),"quality_criteria":{"relevance":(1~10),"specificity":(1~10),"practicality":(1~10),"source_quality":(1~10),"fit":1},"level_axes":{"concept":(0~3),"practical":(0~3),"strategic":(0~3)},"level":"Beginner|Intermediate|Advanced 중 하나","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)"${catPart}}
 
 점수는 위 기준표에 따라 기사마다 직접 평가하세요. 모든 기사에 같은 점수를 주지 마세요.`;
 }
@@ -345,16 +381,7 @@ ${i.calibrated === false ? V1_SCORING_AND_LEVEL(levelSection) : scoringAndLevelV
 
 문체 규칙: '~습니다/~입니다' 경어체로 작성하되, 딱딱하지 않고 읽기 편한 뉴스레터 톤으로 작성하세요. 신문체('~다', '~한다') 사용 금지.
 
-business_domains(사업영역 분류): 시스템 지침(company_context)의 "7대 사업영역" 정의를 참고해,
-이 기사의 핵심 주제가 아래 7개 중 어느 것과 직접 관련되는지 판단해 배열로 반환하세요.
-  - 후보: ["스마트립","글로컬 관광","AI 관광","MICE Tech","ATT(관광 전시)","MEeT(의료 전시)","AXDX"]
-  - 기사의 핵심 주제가 해당 영역일 때만 포함 — 스쳐 지나가는 언급이나 억지 연결은 제외
-  - 시사점(implications)에서 사업 연결을 언급했다고 해서 자동으로 포함하지 말 것 — 별개 판단
-  - 특히 "MICE Tech"는 오투미트(O2MEET)·LeadX 같은 기술/플랫폼 요소가 실제로 있을 때만 — 국제회의 유치,
-    산학협력, 인력양성 등 기술과 무관한 일반 MICE 산업 뉴스는 절대 포함하지 말 것
-  - 여러 영역에 핵심적으로 걸치면 복수 반환 가능, 어디에도 해당 없으면 빈 배열 [] (억지로 채우지 말 것)
-
-${jsonSection(multi, !!i.calibrated)}
+${i.calibrated === false ? V1_DOMAIN_PARAGRAPH + "\n" : ""}${jsonSection(multi, !!i.calibrated)}
 
 원문 URL: ${i.url}
 ${i.articleText.length > 50 ? `원문:\n${i.articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
@@ -400,3 +427,5 @@ export async function generateArticle(i: GenInput): Promise<{ ok: true; value: G
   }
   return { ok: false, error: lastError || "생성 실패" };
 }
+
+

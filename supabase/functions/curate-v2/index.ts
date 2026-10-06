@@ -7,6 +7,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runCuration } from "./lib/pipeline.ts";
 import { sendAlert } from "./lib/alert.ts";
 import { previewSource } from "./lib/preview.ts";
+import { classifyPending } from "./lib/classify.ts";
 import type { PreviewInput } from "./lib/preview.ts";
 
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
@@ -26,6 +27,17 @@ Deno.serve(async (req) => {
   const url = new URL(req.url);
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* 본문 없음 */ }
+
+  // 발행 후 사업영역 판정 — 큐레이션이 끝나면 자동으로 호출되고, 직접 호출해서 시험할 수도 있음 ({"task":"classify_domains","dry":true})
+  if (body.task === "classify_domains") {
+    try {
+      const r = await classifyPending({ supabase, env: (k) => Deno.env.get(k) }, { dry: body.dry === true, limit: Number(body.limit) || undefined });
+      return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
+    } catch (e) {
+      console.error("[classify_domains 실패]", e);
+      return new Response(JSON.stringify({ ok: false, error: (e as Error).message }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
+  }
 
   // 소스·키워드 추가 화면의 미리보기 — DB 에 아무것도 쓰지 않는 읽기 전용
   if (body.preview) {
@@ -64,8 +76,14 @@ Deno.serve(async (req) => {
         console.error("[자동 감사 트리거 실패]", e);
         await sendAlert(webhook, { title: "품질 감사 함수 호출 실패", description: (e as Error).message, level: "error" });
       });
+      // 발행이 끝난 뒤 사업영역을 채우는 작업 — 같은 함수를 별도 호출로 띄워 새 실행 시간(150초)을 받음
+      const classifyPromise = fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/curate-v2`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${cronSecret}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ task: "classify_domains" }),
+      }).catch((e) => console.error("[사업영역 판정 호출 실패]", e));
       // @ts-ignore Supabase Edge Runtime 전역 — 응답 이후에도 백그라운드 작업이 계속되게 함
-      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) EdgeRuntime.waitUntil(auditPromise);
+      if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) { EdgeRuntime.waitUntil(auditPromise); EdgeRuntime.waitUntil(classifyPromise); }
     } catch (e) {
       console.error("[자동 감사 연결 실패]", e);
     }

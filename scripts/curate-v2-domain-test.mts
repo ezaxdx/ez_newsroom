@@ -1,11 +1,11 @@
-// 사업영역 분류 시험 — 별도 판정 호출(judgeDomains) vs 기존(기사 작성과 같은 호출) 비교
+﻿// 사업영역 분류 시험 — 별도 판정 호출(judgeDomains) vs 기존(기사 작성과 같은 호출) 비교
 //  1) 관리자가 직접 보정한 사례(정답)를 "하나씩 빼고" 맞추는지
 //  2) 기존 발행 기사 N건에서 기존 태그와 새 판정이 어떻게 다른지
 // 사용: node --experimental-strip-types --no-warnings scripts/curate-v2-domain-test.mts [--sample=50]
 // DB 는 읽기만 하고 아무것도 저장하지 않음. Gemini 는 실제 호출.
 import fs from "node:fs";
 import { createClient } from "@supabase/supabase-js";
-import { canonicalDomain, DOMAIN_NAMES, judgeDomains } from "../supabase/functions/curate-v2/lib/ai.ts";
+import { canonicalDomain, DOMAIN_NAMES, extractDomainSection, judgeDomains } from "../supabase/functions/curate-v2/lib/ai.ts";
 import { CHROME_UA, extractText, mapPool } from "../supabase/functions/curate-v2/lib/util.ts";
 import { resolveNaverBlogUrl } from "../supabase/functions/curate-v2/lib/fetchers.ts";
 
@@ -22,8 +22,10 @@ const textOf = async (url: string) => {
 const canon = (a: string[] | null | undefined) => [...new Set((a ?? []).map(canonicalDomain).filter(Boolean) as string[])].sort();
 const same = (a: string[], b: string[]) => a.length === b.length && a.every((x, i) => x === b[i]);
 
-const { data: s } = await db.from("curation_settings").select("business_domain_examples").limit(1).single();
+const { data: s } = await db.from("curation_settings").select("business_domain_examples, company_context").limit(1).single();
 const examples: { title: string; business_domains: string[] }[] = s?.business_domain_examples ?? [];
+const definitions = extractDomainSection(s?.company_context);   // 실제 파이프라인과 같이 회사 소개 문서의 정의·판단 기준을 그대로 사용
+console.log(`영역 정의 출처: ${definitions ? "회사 소개 문서(" + definitions.length + "자)" : "내장 정의(문서에서 못 찾음)"}`);
 
 /* 1) 정답(관리자 보정)을 하나씩 빼고 맞추는지 */
 console.log(`=== 1) 관리자 보정 사례 ${examples.length}건 — 하나씩 빼고 판정 ===`);
@@ -33,7 +35,7 @@ for (let k = 0; k < examples.length; k++) {
   const { data } = await db.from("news").select("title, original_url").ilike("title", `%${ex.title.slice(0, 14).replace(/[%_]/g, "")}%`).limit(1);
   const row = data?.[0]; if (!row) { console.log(`  (기사 없음) ${ex.title.slice(0, 30)}`); continue; }
   const text = await textOf(row.original_url); if (text.length < 300) { console.log(`  (원문 못 읽음) ${row.title.slice(0, 30)}`); continue; }
-  const r = await judgeDomains({ apiKey: env.GOOGLE_AI_API_KEY, title: row.title, text, examples: examples.filter((_, i) => i !== k) });
+  const r = await judgeDomains({ apiKey: env.GOOGLE_AI_API_KEY, title: row.title, text, examples: examples.filter((_, i) => i !== k), definitions });
   if (!r.ok) { console.log(`  (AI 실패) ${r.error}`); continue; }
   const want = canon(ex.business_domains), got = canon(r.domains); tested++;
   const ok = same(want, got); if (ok) exact++; if (want.some((w) => got.includes(w)) || (want.length === 0 && got.length === 0)) overlapHit++;
@@ -48,7 +50,7 @@ type Res = { title: string; cat: string; old: string[]; neu: string[]; ev: Recor
 const out: Res[] = [];
 await mapPool(pick, 6, async (row) => {
   const text = await textOf(row.original_url); if (text.length < 300) return;
-  const r = await judgeDomains({ apiKey: env.GOOGLE_AI_API_KEY, title: row.title, text, examples });
+  const r = await judgeDomains({ apiKey: env.GOOGLE_AI_API_KEY, title: row.title, text, examples, definitions });
   if (r.ok) out.push({ title: row.title, cat: row.category, old: canon(row.business_domains), neu: r.domains.slice().sort(), ev: r.evidence });
 });
 const stat = (l: string[][]) => ({ avg: (l.reduce((a, x) => a + x.length, 0) / l.length).toFixed(2), none: Math.round(l.filter((x) => x.length === 0).length / l.length * 100), three: l.filter((x) => x.length >= 3).length });
@@ -66,3 +68,4 @@ for (const o of removed.slice(0, 12)) console.log(`  [${o.cat}] ${o.title.slice(
 const added = out.filter((o) => o.neu.some((d) => !o.old.includes(d)));
 console.log(`\n--- 새 판정에서 새로 붙은 태그가 있는 기사 (${added.length}건 중 8건) ---`);
 for (const o of added.slice(0, 8)) console.log(`  [${o.cat}] ${o.title.slice(0, 40)}\n      기존 ${JSON.stringify(o.old)} → 새 ${JSON.stringify(o.neu)} | 근거: ${Object.values(o.ev)[0]?.slice(0, 70) ?? ""}`);
+
