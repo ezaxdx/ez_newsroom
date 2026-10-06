@@ -30,12 +30,15 @@ type EventRow = {
 async function fetchNews(): Promise<NewsItem[]> {
   try {
     const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("news")
-      .select("*")
-      .order("published_at", { ascending: false })
-      .limit(2000);
-    return (data ?? []) as NewsItem[];
+    // 한 번에 1000행까지만 돌려주므로 이어서 전부 가져옴 (기사가 1000건을 넘으면 오래된 기사가 집계에서 빠지던 문제 방지)
+    const out: NewsItem[] = [];
+    for (let from = 0; ; from += 1000) {
+      const { data } = await supabase.from("news").select("*")
+        .order("published_at", { ascending: false }).order("id", { ascending: true }).range(from, from + 999);
+      out.push(...((data ?? []) as NewsItem[]));
+      if ((data?.length ?? 0) < 1000) break;
+    }
+    return out;
   } catch { return []; }
 }
 
@@ -44,17 +47,21 @@ async function fetchEvents(): Promise<EventRow[]> {
     const supabase = createAdminClient();
     const base = "id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, is_published, is_ezpmp_pick, source, created_at, news_keywords";
     // seen_at(출처 배지)·is_concurrent·parent_event_id(동시개최)·hidden_reason(비공개 사유)은 05~07 SQL 적용 후 존재 — 없으면 기본 컬럼만
-    let rows: unknown[] | null = null;
-    const full = await supabase
-      .from("convention_events")
-      .select(`${base}, seen_at, is_concurrent, parent_event_id, hidden_reason`)
-      .order("start_date", { ascending: true })
-      .limit(2000);
-    if (full.error) {
-      rows = (await supabase.from("convention_events").select(base).order("start_date", { ascending: true }).limit(2000)).data;
-    } else {
-      rows = full.data;
-    }
+    // Supabase 는 한 번에 최대 1000행만 돌려주므로(.limit(2000)을 줘도 1000행에서 잘림) 1000행씩 이어서 전부 가져옴
+    // — 행사가 1000건을 넘으면서 가장 늦은 시작일의 행사부터 화면에서 빠지던 문제 방지
+    const fetchAll = async (cols: string) => {
+      const out: unknown[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await supabase.from("convention_events").select(cols)
+          .order("start_date", { ascending: true }).order("id", { ascending: true }).range(from, from + 999);
+        if (error) return { rows: null as unknown[] | null, error };
+        out.push(...(data ?? []));
+        if ((data?.length ?? 0) < 1000) break;
+      }
+      return { rows: out as unknown[] | null, error: null };
+    };
+    let { rows } = await fetchAll(`${base}, seen_at, is_concurrent, parent_event_id, hidden_reason`);
+    if (!rows) ({ rows } = await fetchAll(base));
     const events = (rows ?? []) as EventRow[];
 
     // 이즈픽 행사별 관련 기사 수·최근 발행일 (큐레이션이 related_event_id 로 연결해 둔 기사)
