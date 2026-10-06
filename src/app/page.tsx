@@ -8,7 +8,7 @@ import TopBar from "@/components/newsroom/TopBar";
 import NewsroomClient from "@/components/newsroom/NewsroomClient";
 import Footer from "@/components/newsroom/Footer";
 import PopupLayer from "@/components/newsroom/PopupLayer";
-import { fetchActivePopups, fetchEventSettings } from "@/lib/popup";
+import { fetchActivePopups } from "@/lib/popup";
 import type { CalendarEvent } from "@/components/newsroom/EventsColumn";
 
 export const dynamic = "force-dynamic"; // 항상 최신 데이터 fetch
@@ -192,13 +192,12 @@ export default async function NewsroomPage({ searchParams }: Props) {
   const { navCategories, carouselIntervalMs, lastRunISO } = await fetchSiteSettings();
 
   const heroCategories = [...navCategories, "BLOG"];
-  const [heroNews, feedAllNews, events, deepLinkItem, popups, eventSettings] = await Promise.all([
+  const [heroNews, feedAllNews, events, deepLinkItem, popups] = await Promise.all([
     fetchHeroNews(heroCategories, lastRunISO),   // 히어로: 카테고리별 라이브 중 display_order 최상위 1건
     fetchNews(lastRunISO),           // 피드: 최근 큐레이션 이후
     fetchUpcomingEvents(),
     fetchDeepLinkNews(deepLinkNewsId),
     fetchActivePopups(),
-    fetchEventSettings(),
   ]);
 
   // 히어로 슬라이드 (카테고리 순서대로)
@@ -243,7 +242,7 @@ export default async function NewsroomPage({ searchParams }: Props) {
         />
       </main>
       <Footer />
-      <PopupLayer popups={popups} event={eventSettings} pageKey="home" />
+      <PopupLayer popups={popups} pageKey="home" />
     </div>
   );
 }

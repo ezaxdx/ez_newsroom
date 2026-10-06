@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from "react";
 import { Loader2, Plus } from "lucide-react";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { POPUP_PAGES } from "@/lib/popup";
-import EventHuntManager from "@/components/admin/EventHuntManager";
 import { EFFECT_LABELS, EFFECT_KEYFRAMES, EffectOverlay } from "@/components/newsroom/PopupBanner";
 import { useTabParam } from "@/lib/useTabParam";
 
@@ -22,7 +21,6 @@ type Popup = {
   position: string;
   pages: string[];
   random_page: boolean;
-  hunt_code: string | null;
   size_px: number | null;
   pos_x: number | null;
   pos_y: number | null;
@@ -43,7 +41,6 @@ type FormState = {
   position: string;
   pages: string[];
   random_page: boolean;
-  hunt_code: string;
   size_px: number;
   pos_x: number;
   pos_y: number;
@@ -60,7 +57,7 @@ const EMPTY_FORM: FormState = {
   title: "", start_date: "", end_date: "",
   image_url: "", link_url: "", content: "", content_overrides: [], is_active: true,
   display_type: "floating", position: "bottom-right",
-  pages: ["home"], random_page: false, hunt_code: "",
+  pages: ["home"], random_page: false,
   size_px: SIZE_RANGE.floating.default,
   pos_x: 90, pos_y: 90,
   effect: "none",
@@ -271,7 +268,6 @@ export default function PopupManager() {
       position: p.position ?? "bottom-right",
       pages: p.pages?.length ? p.pages : ["home"],
       random_page: p.random_page ?? false,
-      hunt_code: p.hunt_code ?? "",
       size_px: p.size_px ?? SIZE_RANGE[p.display_type ?? "modal"]?.default ?? 420,
       pos_x: p.pos_x ?? 90,
       pos_y: p.pos_y ?? 90,
@@ -507,12 +503,6 @@ export default function PopupManager() {
                       {idx + 1}
                     </td>
                     <td style={{ padding: "9px 12px" }}>
-                      {p.hunt_code && (
-                        <span title={`찾기 코드: ${p.hunt_code}`} style={{
-                          marginRight: 5, padding: "1px 6px", borderRadius: 4, fontSize: 10,
-                          fontWeight: 700, background: "#7c3aed18", color: "#7c3aed",
-                        }}>🐱 {p.hunt_code}</span>
-                      )}
                       {p.title}
                       {live && (
                         <span style={{
@@ -703,14 +693,9 @@ export default function PopupManager() {
               <label style={labelStyle}>
                 링크 URL <span style={{ fontWeight: 400 }}>(클릭 시 이동 · 구글폼 등)</span>
               </label>
-              <input value={form.link_url} placeholder="https://..." disabled={!!form.hunt_code.trim()}
+              <input value={form.link_url} placeholder="https://..."
                 onChange={(e) => setForm((f) => ({ ...f, link_url: e.target.value }))}
-                style={{ ...inputStyle, opacity: form.hunt_code.trim() ? 0.5 : 1 }} />
-              {form.hunt_code.trim() && (
-                <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--on-surface-variant)" }}>
-                  찾기 코드가 있으면 링크 대신 코드를 알려주고 사라지므로 이 값은 사용되지 않습니다.
-                </p>
-              )}
+                style={inputStyle} />
             </div>
 
             <div style={{ marginBottom: 10 }}>
@@ -777,14 +762,6 @@ export default function PopupManager() {
               >
                 + 날짜/기간 문구 추가
               </button>
-            </div>
-
-            <div style={{ marginBottom: 10 }}>
-              <label style={labelStyle}>
-                찾기 코드 <span style={{ fontWeight: 400 }}>(입력하면 숨은 그림 찾기 이벤트 대상이 됨)</span>
-              </label>
-              <input value={form.hunt_code} placeholder="예: 관광길 (비워두면 일반 팝업)"
-                onChange={(e) => setForm((f) => ({ ...f, hunt_code: e.target.value }))} style={inputStyle} />
             </div>
 
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer", marginBottom: 12 }}>
@@ -940,7 +917,6 @@ export default function PopupManager() {
     </div>
 
     {/* 숨은 그림 찾기 이벤트 — 찾기 코드가 붙은 팝업들을 묶어서 관리 */}
-    {!loading && <EventHuntManager huntPopups={popups.filter((p) => p.hunt_code)} />}
     </>
   );
 }

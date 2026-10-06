@@ -11,19 +11,12 @@ export const POPUP_PAGES = [
 
 export type PopupPageKey = typeof POPUP_PAGES[number]["key"];
 
-export type EventSettings = {
-  enabled: boolean;
-  title: string;
-  form_url: string | null;
-  total: number; // 등록된 찾기 대상(고양이) 수
-};
-
 const POPUP_SELECT =
-  "id, title, image_url, link_url, content, content_overrides, display_type, position, pages, random_page, hunt_code, size_px, pos_x, pos_y, effect";
+  "id, title, image_url, link_url, content, content_overrides, display_type, position, pages, random_page, size_px, pos_x, pos_y, effect";
 
 /**
  * 오늘 노출 가능한 팝업 전체 — 게시기간 안 + 사용중.
- * 일반 팝업은 최신 1건만, 찾기 이벤트(hunt_code 있음)는 전부 반환한다.
+ * 표시 방식(고정/팝업)별로 최신 1건씩만 반환한다.
  * 어느 페이지에 실제로 그릴지는 pages/random_page를 보고 클라이언트가 판단한다.
  */
 export async function fetchActivePopups(): Promise<PopupData[]> {
@@ -38,46 +31,19 @@ export async function fetchActivePopups(): Promise<PopupData[]> {
       .eq("is_active", true)
       .lte("start_date", now)
       .gte("end_date", now)
+      .is("hunt_code", null)   // 종료한 숨은 그림 찾기 팝업(DB 에 남아 있어도)은 노출하지 않음
       .order("created_at", { ascending: false });
 
     const rows: PopupData[] = data ?? [];
-    const hunts = rows.filter((p) => p.hunt_code);
     // 같은 표시 방식(고정/팝업)끼리는 화면이 겹치므로 각각 가장 최근 것 하나만 노출.
     // 고정(구석 배너)과 팝업(화면 중앙)은 서로 다른 영역이라 겹치지 않으므로 동시에 띄운다.
     const normalByType = new Map<string, PopupData>();
     for (const p of rows) {
-      if (p.hunt_code) continue;
       if (!normalByType.has(p.display_type)) normalByType.set(p.display_type, p);
     }
     const normal = Array.from(normalByType.values());
-    return [...hunts, ...normal];
+    return normal;
   } catch {
     return [];
-  }
-}
-
-export async function fetchEventSettings(): Promise<EventSettings | null> {
-  if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return null;
-  try {
-    const supabase = createAdminClient();
-    const now = new Date().toISOString();
-    const [{ data: settings }, { count }] = await Promise.all([
-      supabase
-        .from("newsroom_event_settings")
-        .select("enabled, title, form_url")
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("newsroom_popups")
-        .select("id", { count: "exact", head: true })
-        .eq("is_active", true)
-        .not("hunt_code", "is", null)
-        .lte("start_date", now)
-        .gte("end_date", now),
-    ]);
-    if (!settings) return null;
-    return { ...settings, total: count ?? 0 };
-  } catch {
-    return null;
   }
 }

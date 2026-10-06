@@ -12,7 +12,6 @@ export type PopupData = {
   position: string;      // 3×3 위치 또는 random (floating 전용)
   pages: string[];       // 노출 페이지 목록
   random_page: boolean;  // true면 pages 중 한 곳에만 랜덤 노출
-  hunt_code?: string | null; // 값이 있으면 찾기 이벤트 대상 — 클릭 시 링크 대신 코드를 알려주고 사라짐
   size_px?: number | null;   // 없으면 표시 방식별 기본값(고정 150 / 팝업 420)
   pos_x?: number | null;     // position="custom"일 때만 사용 — 관리자가 미리보기를 클릭해 찍은 위치(%)
   pos_y?: number | null;
@@ -104,19 +103,15 @@ const dismissKey = (id: string) => `popup_dismissed_${id}`;
 const todayStr = () => new Date().toISOString().slice(0, 10);
 // 랜덤 페이지 모드에서 "이번 방문엔 어느 페이지에 숨을지" — 방문(세션) 내내 유지돼야
 // 페이지를 옮겨다니며 찾을 수 있으므로 sessionStorage 사용
-const huntKey = (id: string) => `popup_hunt_page_${id}`;
+const randomPageKey = (id: string) => `popup_hunt_page_${id}`;
 
 export default function PopupBanner({
-  popup, pageKey, disabled = false, alreadyFound = false, onFound,
+  popup, pageKey,
 }: {
   popup: PopupData;
   pageKey: string;
-  disabled?: boolean;      // 이벤트가 꺼져 있는 등 노출하면 안 되는 상태
-  alreadyFound?: boolean;  // 이미 찾은 고양이 — 다시 노출하지 않음
-  onFound?: (code: string) => void;
 }) {
   const isFloating = popup.display_type === "floating";
-  const huntCode = popup.hunt_code || null;
   const sizePx = popup.size_px || DEFAULT_SIZE[isFloating ? "floating" : "modal"];
   // 오늘(KST) 날짜에 맞는 문구 오버라이드가 있으면 그걸, 없으면 기본 내용을 사용 — 호버 설명·고정형 텍스트 등 모든 표시에 공통 적용
   const effectiveContent = resolveEffectiveContent(popup);
@@ -141,7 +136,6 @@ export default function PopupBanner({
   }, [popup.id, popup.position]);
 
   useEffect(() => {
-    if (disabled || alreadyFound) { setOpen(false); return; }
     // 이 페이지가 노출 대상인지 먼저 확인
     const allowed = popup.pages?.length ? popup.pages : ["home"];
     if (!allowed.includes(pageKey)) return;
@@ -150,10 +144,10 @@ export default function PopupBanner({
     if (popup.random_page && allowed.length > 1) {
       let hidden: string | null = null;
       try {
-        hidden = sessionStorage.getItem(huntKey(popup.id));
+        hidden = sessionStorage.getItem(randomPageKey(popup.id));
         if (!hidden || !allowed.includes(hidden)) {
           hidden = allowed[Math.floor(Math.random() * allowed.length)];
-          sessionStorage.setItem(huntKey(popup.id), hidden);
+          sessionStorage.setItem(randomPageKey(popup.id), hidden);
         }
       } catch {
         // 스토리지 차단 시 매 페이지 랜덤 판정으로 대체
@@ -170,7 +164,7 @@ export default function PopupBanner({
       // 스토리지 차단 환경에서는 그냥 노출
     }
     setOpen(true);
-  }, [popup.id, popup.pages, popup.random_page, pageKey, isFloating, disabled, alreadyFound]);
+  }, [popup.id, popup.pages, popup.random_page, pageKey, isFloating]);
 
   if (!open) return null;
 
@@ -322,16 +316,7 @@ export default function PopupBanner({
             {effectiveContent}
           </div>
         )}
-        {huntCode ? (
-          // 찾기 이벤트: 링크로 보내지 않고 코드를 알려준 뒤 사라짐
-          <button
-            onClick={() => { setOpen(false); onFound?.(huntCode); }}
-            title="클릭!"
-            style={{ display: "block", width: "100%", padding: 0, border: "none", background: "none", cursor: "pointer" }}
-          >
-            {inner}
-          </button>
-        ) : popup.link_url ? (
+        {popup.link_url ? (
           <a href={popup.link_url} target="_blank" rel="noopener noreferrer"
             title={popup.title} style={{ display: "block", textDecoration: "none" }}>
             {inner}

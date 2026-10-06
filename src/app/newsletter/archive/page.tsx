@@ -6,7 +6,7 @@ import TopBar from "@/components/newsroom/TopBar";
 import Footer from "@/components/newsroom/Footer";
 import NewsletterArchiveList, { ArchiveIssue } from "@/components/newsroom/NewsletterArchiveList";
 import PopupLayer from "@/components/newsroom/PopupLayer";
-import { fetchActivePopups, fetchEventSettings } from "@/lib/popup";
+import { fetchActivePopups } from "@/lib/popup";
 
 export const dynamic = "force-dynamic";
 
@@ -50,8 +50,8 @@ async function fetchNavCategories(): Promise<string[]> {
 }
 
 export default async function NewsletterArchivePage() {
-  const [issues, navCategories, popups, eventSettings] = await Promise.all([
-    fetchIssues(), fetchNavCategories(), fetchActivePopups(), fetchEventSettings(),
+  const [issues, navCategories, popups] = await Promise.all([
+    fetchIssues(), fetchNavCategories(), fetchActivePopups(),
   ]);
 
   return (
@@ -80,7 +80,7 @@ export default async function NewsletterArchivePage() {
       </main>
 
       <Footer />
-      <PopupLayer popups={popups} event={eventSettings} pageKey="archive" />
+      <PopupLayer popups={popups} pageKey="archive" />
     </div>
   );
 }
