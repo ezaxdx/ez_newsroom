@@ -141,7 +141,7 @@ export default function NewsletterPage() {
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number; duplicates: string[]; deactivated?: number } | null>(null);
   // 엑셀을 올리면 바로 저장하지 않고 인식 결과를 먼저 보여줌 — 사내 연락망처럼 양식이 다른 파일도 그대로 쓸 수 있게
-  const [excelPreview, setExcelPreview] = useState<{ fileName: string; contacts: ParsedContact[]; sheets: { name: string; count: number }[]; skipped: string[]; excluded: ParsedContact[] } | null>(null);
+  const [excelPreview, setExcelPreview] = useState<{ fileName: string; contacts: ParsedContact[]; sheets: { name: string; count: number }[]; skipped: string[]; excluded: ParsedContact[]; noEmail?: string[]; duplicates?: string[] } | null>(null);
   const [deactivateMissing, setDeactivateMissing] = useState(false);
   // 정규직만 발송 — 사내 연락망에서 직급 뒤에 ^ 가 붙은 인원(인턴·계약직 등)은 기본으로 제외
   const [excludeCaret, setExcludeCaret] = useState(true);
@@ -2108,8 +2108,7 @@ export default function NewsletterPage() {
                   </a>
                 </div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                  <strong>사내 연락망 같은 엑셀을 양식 수정 없이 그대로</strong> 올려도 됩니다. 시트·열 위치와 상관없이 이메일을 자동으로 찾고(이름은 같은 행에서 인식),
-                  이메일이 없는 시트는 건너뜁니다. 직급에 ^가 붙은 인원(정규직 외)은 자동으로 제외합니다. 올리면 바로 저장하지 않고 인식 결과를 먼저 보여드려요. 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
+                  <strong>사내 연락망을 업로드해주세요.</strong> 직급(A열, G열), 이름(B열, H열), 이메일(E열, K열)에 맞춰 필요 정보를 찾고 이메일이 없거나 계약직(직급에 ^)인 경우 제외하고 발송합니다. 엑셀 업로드 시 발송 대상 확인을 요청하니 내용을 확인해주세요. 연락망 형식이 아닌 엑셀은 시트·열 위치와 상관없이 이메일을 자동으로 찾고, 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
@@ -2151,6 +2150,12 @@ export default function NewsletterPage() {
                         {excelPreview.skipped.length > 0 && ` · 이메일이 없어 건너뛴 시트: ${excelPreview.skipped.join(", ")}`}
                         {noName > 0 && ` · 이름을 못 찾은 ${noName}명은 이름 없이 등록`}
                       </p>
+                      {((excelPreview.noEmail?.length ?? 0) > 0 || (excelPreview.duplicates?.length ?? 0) > 0) && (
+                        <p style={{ margin: "4px 0 0", color: "var(--on-surface-variant)" }}>
+                          {(excelPreview.noEmail?.length ?? 0) > 0 && <>이메일 없음 제외 {excelPreview.noEmail!.length}명 ({excelPreview.noEmail!.join(", ")})</>}
+                          {(excelPreview.duplicates?.length ?? 0) > 0 && <> · 중복 1명으로 합침 {excelPreview.duplicates!.length}명 ({excelPreview.duplicates!.join(", ")})</>}
+                        </p>
+                      )}
                       {excelPreview.excluded.length > 0 && (
                         <label style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, cursor: "pointer" }}>
                           <input type="checkbox" checked={excludeCaret} onChange={(ev) => setExcludeCaret(ev.target.checked)} style={{ marginTop: 4 }} />

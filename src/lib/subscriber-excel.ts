@@ -12,6 +12,8 @@ export type ParseResult = {
   sheets: { name: string; count: number }[];   // 이메일을 찾은 시트별 인원
   skipped: string[];                           // 이메일이 없어 건너뛴 시트
   excluded: ParsedContact[];                   // 직급에 ^ 표시가 있어 제외 대상으로 표시된 인원 (정규직 외 — 인턴·계약직 등)
+  noEmail?: string[];                          // 연락망에서 이메일 아이디가 없어 제외된 인원 ("직급/이름")
+  duplicates?: string[];                       // 같은 이메일이 두 번 나와 하나로 합친 인원 이름
 };
 
 const EMAIL_RE = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}/g;
@@ -19,7 +21,47 @@ const NAME_HEADER = /^(이름|성명|name|담당자|직원명)$/i;
 // 이름처럼 생긴 셀: 한글 2~5자, 또는 영문 이름(공백·점 허용). 숫자·전화번호·이메일·직책 같은 긴 문장은 제외
 const looksLikeName = (s: string) => /^[가-힣]{2,5}$/.test(s) || /^[A-Za-z][A-Za-z .'-]{1,30}$/.test(s);
 
+// 사내 연락망 시트 고정 열: 직급(A·G) / 이름(B·H) / 이메일 아이디(E·K) — 좌우 두 블록
+const PB_BLOCKS = [0, 6];
+const FALLBACK_DOMAIN = "ezpmp.co.kr";
+
+// 연락망 시트 읽기: 이름·아이디가 있는 행만 사람으로 봄. ^ 직급 → 제외, 아이디 없음("-" 등) → 제외, 같은 아이디 중복 → 1명
+function readPhoneBook(XLSX: typeof XLSXType, wb: XLSXType.WorkBook, sheetName: string, domain: string) {
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, raw: false, defval: "" });
+  const cell = (r: number, c: number) => String(rows[r]?.[c] ?? "").replace(/\s+/g, " ").trim();
+  const people: ParsedContact[] = []; const noEmail: string[] = []; const dupNames: string[] = [];
+  const seen = new Set<string>(); let blocks = 0;
+  for (let r = 0; r < rows.length; r++) for (const o of PB_BLOCKS) {
+    const rank = cell(r, o), name = cell(r, o + 1).replace(/\s/g, ""), id = cell(r, o + 4).toLowerCase();
+    if (!rank || !/^[가-힣]{2,5}$/.test(name)) continue;
+    blocks++;
+    const caret = rank.includes("^");
+    const email = /@/.test(id) ? id : /^[a-z0-9][a-z0-9._-]*$/.test(id) ? `${id}@${domain}` : "";
+    if (!email) { noEmail.push(`${rank}/${name}`); continue; }
+    if (seen.has(email)) { dupNames.push(name); continue; }
+    seen.add(email);
+    people.push({ email, name, sheet: sheetName, excluded: caret || undefined });
+  }
+  return { people, noEmail, dupNames, blocks };
+}
+
 export function extractContacts(XLSX: typeof XLSXType, wb: XLSXType.WorkBook): ParseResult {
+  // 연락망 형식(직급·이름·이메일 아이디 고정 열) 시트가 있으면 그 시트를 기준으로 함
+  const allText = wb.SheetNames.flatMap((n) => XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[n], { header: 1, raw: false, defval: "" }).flat().map(String)).join(" ");
+  const domains: Record<string, number> = {};
+  for (const m of allText.match(EMAIL_RE) ?? []) { const d = m.split("@")[1].toLowerCase(); domains[d] = (domains[d] ?? 0) + 1; }
+  const domain = Object.entries(domains).sort((a, b) => b[1] - a[1])[0]?.[0] ?? FALLBACK_DOMAIN;
+  for (const sheetName of wb.SheetNames) {
+    const pb = readPhoneBook(XLSX, wb, sheetName, domain);
+    if (pb.blocks >= 10 && pb.people.length >= 10) {
+      return {
+        contacts: pb.people, sheets: [{ name: sheetName, count: pb.people.length }],
+        skipped: wb.SheetNames.filter((n) => n !== sheetName),
+        excluded: pb.people.filter((c) => c.excluded),
+        noEmail: pb.noEmail, duplicates: pb.dupNames,
+      };
+    }
+  }
   const out = new Map<string, ParsedContact>();
   const sheets: ParseResult["sheets"] = [];
   const skipped: string[] = [];

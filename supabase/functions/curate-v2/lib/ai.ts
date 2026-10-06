@@ -242,6 +242,33 @@ ${i.text.slice(0, 3500)}`;
   return { ok: false, error: lastError || "적합성 판정 실패" };
 }
 
+/** 두 기사가 같은 발표·같은 사건을 다루는지 짧게 판정 (중복 보강 2단계). 실패하면 null — 호출한 쪽은 "다른 기사"로 보고 둘 다 남김 */
+export async function judgeSameStory(i: { apiKey: string; a: { title: string; text?: string | null }; b: { title: string; text?: string | null } }): Promise<boolean | null> {
+  const prompt = `두 기사가 "같은 발표·같은 사건"을 다루는지 판정하세요. 같은 사건을 다른 매체가 다른 제목으로 쓴 경우는 같음입니다. 같은 주제라도 다른 사건·다른 관점(예: 별개 행사, 사전 점검 vs 결과 발표)이면 다름입니다.
+JSON으로만 응답: {"same":true 또는 false}
+
+[기사 A] ${i.a.title}
+${(i.a.text ?? "").slice(0, 400)}
+
+[기사 B] ${i.b.title}
+${(i.b.text ?? "").slice(0, 400)}`;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${i.apiKey}`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: judgeGenConfig(true) }),
+        signal: AbortSignal.timeout(20000),
+      });
+      const json = await res.json();
+      if (!res.ok) { if ((res.status === 429 || res.status >= 500) && attempt === 0) { await sleep(1200); continue; } return null; }
+      const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
+      const raw = (parts.find((p) => !p.thought && typeof p.text === "string")?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      return JSON.parse(raw).same === true;
+    } catch { if (attempt === 0) await sleep(800); }
+  }
+  return null;
+}
+
 /** 점수·레벨 기준표 (calibrated=true, 기본). 예시 숫자를 베끼지 않도록 JSON 은 형식만 안내하고 기준은 여기서 글로 줌 */
 function scoringAndLevelV2(levelExamples: { title: string; level: string }[] | undefined, levelSection: string): string {
   const lvEx = (levelExamples ?? []).slice(0, 30).map((e) => `  · "${e.title}" → ${e.level}`).join("\n");

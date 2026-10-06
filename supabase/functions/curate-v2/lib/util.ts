@@ -60,6 +60,14 @@ export function dice(a: string, b: string): number {
   for (const g of A) if (B.has(g)) inter++;
   return (2 * inter) / (A.size + B.size);
 }
+/** 제목+요약 앞부분을 합쳐 비교하는 유사도 — 제목은 달라도 같은 발표를 다룬 기사를 찾는 용도 (보강 중복 판정 1·2단계) */
+export function storySim(a: { title: string; text?: string | null }, b: { title: string; text?: string | null }): number {
+  const f = (x: { title: string; text?: string | null }) => normTitle(x.title) + normTitle((x.text ?? "").slice(0, 150));
+  return dice(f(a), f(b));
+}
+export const STORY_SIM_SAME = 0.5;   // 이 이상이면 같은 사건으로 바로 묶음
+export const STORY_SIM_ASK = 0.3;    // 이 이상 ~ SAME 미만이면 AI 에게 짧게 물어봄
+
 /** 제목에서 고유명사 후보(3글자 이상 단어) 추출 */
 export function titleTokens(s: string): string[] {
   const cleaned = decodeEntities(s || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/[^0-9A-Za-z가-힣 ]+/g, " ");

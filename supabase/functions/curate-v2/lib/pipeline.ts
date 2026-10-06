@@ -5,10 +5,10 @@ import {
   fetchArticleData, fetchGoogleSearch, fetchJsonList, fetchNaverSearch, fetchRss, fetchWebList, resolveGoogleNewsUrl,
 } from "./fetchers.ts";
 import {
-  calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, toISO, withTimeout,
+  calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, STORY_SIM_ASK, STORY_SIM_SAME, storySim, toISO, withTimeout,
 } from "./util.ts";
 import type { CatSetting } from "./ai.ts";
-import { buildHintBlock, canonicalDomain, generateArticle, judgeFit } from "./ai.ts";
+import { buildHintBlock, canonicalDomain, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
 
 /* ───────── 타입 ───────── */
@@ -38,6 +38,7 @@ interface Cand {
   title: string; link: string; pubDate: string; pubMs: number | null; description: string; bodyText?: string;
   urlKey: string; srcs: SrcRef[]; vias: Set<string>; event: PickEvent | null; eventSearchOnly: boolean; coverage: number;
   text?: string; image?: string | null;
+  dupOf?: string;          // 최근 14일 안에 발행·대기 중인 기사 중 같은 사건으로 보이는 것의 제목 — 자동 발행하지 않고 대기열로
   dateUnknown?: boolean;   // 목록·원문 어디에서도 발행일을 못 읽은 기사 — 발행 창을 지켰는지 확인할 수 없어 자동 발행하지 않고 대기열로
 }
 interface Stat {
@@ -395,6 +396,20 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   for (let i = 0; i < afterDb.length; i++) for (let j = i + 1; j < afterDb.length; j++) {
     if (isSameStory(afterDb[i].title, afterDb[j].title)) parent[find(j)] = find(i);
   }
+  // g-2) 보강 — 제목이 달라도 제목+요약이 닮았거나, 애매하면 AI 가 "같은 사건인지" 판정해서 묶음
+  const AI_PAIR_CAP = 12;
+  const askPairs: { i: number; j: number; sim: number }[] = [];
+  for (let i = 0; i < afterDb.length; i++) for (let j = i + 1; j < afterDb.length; j++) {
+    if (find(i) === find(j)) continue;
+    const sim = storySim({ title: afterDb[i].title, text: afterDb[i].description }, { title: afterDb[j].title, text: afterDb[j].description });
+    if (sim >= STORY_SIM_SAME) parent[find(j)] = find(i);
+    else if (sim >= STORY_SIM_ASK) askPairs.push({ i, j, sim });
+  }
+  askPairs.sort((a, b) => b.sim - a.sim);
+  await Promise.all(askPairs.slice(0, AI_PAIR_CAP).map(async (p) => {
+    const same = await judgeSameStory({ apiKey, a: { title: afterDb[p.i].title, text: afterDb[p.i].description }, b: { title: afterDb[p.j].title, text: afterDb[p.j].description } });
+    if (same) parent[find(p.j)] = find(p.i);
+  }));
   const clusters = new Map<number, Cand[]>();
   afterDb.forEach((c, i) => (clusters.get(find(i)) ?? clusters.set(find(i), []).get(find(i))!).push(c));
   const reps: Cand[] = [];
@@ -413,6 +428,22 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     reps.push(rep);
   }
   funnel.afterDedup = reps.length;
+
+  // g-3) 최근 14일 안에 발행·대기 중인 기사와 같은 사건이면 폐기하지 않고 "중복 의심"으로 표시 — 자동 발행만 막고 대기열에서 사람이 판단
+  const recent14 = await fetchAll((f, t) => supabase.from("news").select("title, summary_short").gte("created_at", new Date(Date.now() - 14 * 86400000).toISOString()).range(f, t));
+  const suspects: { c: Cand; title: string; sim: number }[] = [];
+  for (const c of reps) {
+    let best = { title: "", sim: 0 };
+    for (const r of recent14 as any[]) { const sim = storySim({ title: c.title, text: c.description }, { title: r.title, text: r.summary_short }); if (sim > best.sim) best = { title: r.title, sim }; }
+    if (best.sim >= STORY_SIM_SAME) c.dupOf = best.title;
+    else if (best.sim >= STORY_SIM_ASK) suspects.push({ c, ...best });
+  }
+  suspects.sort((a, b) => b.sim - a.sim);
+  await Promise.all(suspects.slice(0, AI_PAIR_CAP).map(async (s) => {
+    const old = (recent14 as any[]).find((r) => r.title === s.title);
+    if (await judgeSameStory({ apiKey, a: { title: s.c.title, text: s.c.description }, b: { title: s.title, text: old?.summary_short } })) s.c.dupOf = s.title;
+  }));
+  funnel.dupSuspect = reps.filter((c) => c.dupOf).length;
 
   // h) 우선순위 정렬 + 소스별·행사별 상한
   const primaryOf = (c: Cand) => [...c.srcs].sort((a, b) => b.weight - a.weight)[0];
@@ -557,12 +588,14 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     // 발행일을 끝내 확인하지 못한 기사는 화·목 발행 창 안의 기사인지 알 수 없으므로 자동 발행하지 않고 대기열에서 사람이 확인 (이즈픽 기사 제외)
     let undated = false;
     if (decision === "publish" && c.dateUnknown && !isPick) { decision = "stage"; undated = true; }
+    let dupSuspect = false;
+    if (decision === "publish" && c.dupOf && !isPick) { decision = "stage"; dupSuspect = true; }
     let capped = false;
     if (decision === "publish" && !isPick && !isOwn) {
       if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
       else autoPublished++;
     }
-    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, dupSuspect, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
@@ -586,7 +619,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       published_at: publish ? new Date().toISOString() : (toISO(c.pubMs) ?? new Date().toISOString()),
       original_title: c.title.slice(0, 300), found_via: [...c.vias], coverage_count: c.coverage,
       related_event_id: c.event?.id ?? null, category_reason: g.category_reason, category_edited: false,
-      fit_reason: (judgedReason ?? g.fit_reason ?? null)?.toString().slice(0, 200) ?? null,
+      fit_reason: ((dupSuspect ? `[중복 의심: ${c.dupOf?.slice(0, 40)}] ` : "") + (judgedReason ?? g.fit_reason ?? "")).slice(0, 240) || null,
     }, { onConflict: "original_url", ignoreDuplicates: true }).select("id");
     if (error) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: error.message }); return; }
     const newId = ins?.[0]?.id;
