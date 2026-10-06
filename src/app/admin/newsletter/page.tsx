@@ -5,6 +5,7 @@ import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, 
 import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { useTabParam } from "@/lib/useTabParam";
+import { extractContacts, type ParsedContact } from "@/lib/subscriber-excel";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
@@ -138,7 +139,10 @@ export default function NewsletterPage() {
   // ── 수신자 탭 - 엑셀 업로드 ──
   const excelFileRef = useRef<HTMLInputElement>(null);
   const [excelUploading, setExcelUploading] = useState(false);
-  const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number; duplicates: string[] } | null>(null);
+  const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number; duplicates: string[]; deactivated?: number } | null>(null);
+  // 엑셀을 올리면 바로 저장하지 않고 인식 결과를 먼저 보여줌 — 사내 연락망처럼 양식이 다른 파일도 그대로 쓸 수 있게
+  const [excelPreview, setExcelPreview] = useState<{ fileName: string; contacts: ParsedContact[]; sheets: { name: string; count: number }[]; skipped: string[] } | null>(null);
+  const [deactivateMissing, setDeactivateMissing] = useState(false);
 
   // ── AI 인사말 생성 ──
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
@@ -857,32 +861,23 @@ export default function NewsletterPage() {
     }
   }
 
+  // 엑셀 읽기 — 시트·열 위치와 상관없이 이메일을 찾아 미리보기를 보여줌 (저장은 "반영" 버튼에서)
   async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setExcelUploading(true);
     setExcelResult(null);
+    setExcelPreview(null);
+    setSubError(null);
     try {
       const XLSX = await import("xlsx");
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array" });
-      const ws = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { raw: false, defval: "" });
-      const subs = rows.map(r => ({
-        email: String(r["email"] ?? r["이메일"] ?? "").trim().toLowerCase(),
-        name: String(r["name"] ?? r["이름"] ?? "").trim() || undefined,
-      })).filter(s => s.email.includes("@")); // @ 없는 행은 무시
-      const res = await fetch("/api/admin/newsletter/subscribers/bulk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ subscribers: subs }),
-      });
-      const json = await res.json();
-      if (res.ok) {
-        setExcelResult({ inserted: json.inserted, skipped: json.skipped, duplicates: json.duplicates ?? [] });
-        await fetchSubscribers();
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const parsed = extractContacts(XLSX, wb);
+      if (parsed.contacts.length === 0) {
+        setSubError(`이메일을 찾지 못했어요. (확인한 시트: ${wb.SheetNames.join(", ")})`);
       } else {
-        setSubError(json.error ?? "업로드 실패");
+        setExcelPreview({ fileName: file.name, ...parsed });
+        setDeactivateMissing(false);
       }
     } catch {
       setSubError("파일 파싱 오류");
@@ -892,6 +887,50 @@ export default function NewsletterPage() {
     }
   }
 
+  // 미리보기 내용 계산 — 신규 / 이미 등록 / 파일에 없는 기존 수신자(같은 도메인)
+  function excelPlan() {
+    if (!excelPreview) return null;
+    const existing = new Map(subscribers.map((s) => [s.email.toLowerCase(), s]));
+    const inFile = new Set(excelPreview.contacts.map((c) => c.email));
+    const fresh = excelPreview.contacts.filter((c) => !existing.has(c.email));
+    const domains = new Set(excelPreview.contacts.map((c) => c.email.split("@")[1]));
+    const missing = subscribers.filter((s) => s.is_active && !inFile.has(s.email.toLowerCase()) && domains.has(s.email.split("@")[1]?.toLowerCase() ?? ""));
+    return { fresh, already: excelPreview.contacts.length - fresh.length, missing, domains: [...domains] };
+  }
+
+  async function applyExcelImport() {
+    const plan = excelPlan();
+    if (!plan || !excelPreview) return;
+    setExcelUploading(true);
+    setSubError(null);
+    try {
+      let inserted = 0, skipped = 0, duplicates: string[] = [];
+      if (plan.fresh.length > 0) {
+        const res = await fetch("/api/admin/newsletter/subscribers/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ subscribers: plan.fresh.map((c) => ({ email: c.email, name: c.name })) }),
+        });
+        const json = await res.json();
+        if (!res.ok) { setSubError(json.error ?? "업로드 실패"); return; }
+        inserted = json.inserted ?? 0; skipped = json.skipped ?? 0; duplicates = json.duplicates ?? [];
+      }
+      let deactivated = 0;
+      if (deactivateMissing && plan.missing.length > 0) {
+        await Promise.all(plan.missing.map((s) => fetch(`/api/admin/newsletter/subscribers/${s.id}`, {
+          method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ is_active: false }),
+        })));
+        deactivated = plan.missing.length;
+      }
+      setExcelResult({ inserted, skipped: skipped + plan.already, duplicates, deactivated });
+      setExcelPreview(null);
+      await fetchSubscribers();
+    } catch {
+      setSubError("반영 중 오류가 발생했어요");
+    } finally {
+      setExcelUploading(false);
+    }
+  }
   async function autoFetchOgImage(ev: EventForImage) {
     setImageAutoFetching((prev) => new Set(prev).add(ev.id));
     try {
@@ -2064,8 +2103,8 @@ export default function NewsletterPage() {
                   </a>
                 </div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                  <strong>email</strong> (필수) · <strong>name</strong> (선택) 컬럼이 있는 xlsx 파일을 업로드하세요.
-                  템플릿을 먼저 받아서 작성하면 편해요.
+                  <strong>사내 연락망 같은 엑셀을 양식 수정 없이 그대로</strong> 올려도 됩니다. 시트·열 위치와 상관없이 이메일을 자동으로 찾고(이름은 같은 행에서 인식),
+                  이메일이 없는 시트는 건너뜁니다. 올리면 바로 저장하지 않고 인식 결과를 먼저 보여드려요. 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
@@ -2083,7 +2122,7 @@ export default function NewsletterPage() {
                   </button>
                   {excelResult && (
                     <div style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-                      <span>✅ 추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명</span>
+                      <span>✅ 추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명{excelResult.deactivated ? ` / 비활성화 ${excelResult.deactivated}명` : ""}</span>
                       {excelResult.duplicates.length > 0 && (
                         <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 6, background: "#FFF3CD", color: "#856404", lineHeight: 1.6 }}>
                           <strong>이미 등록된 이메일 ({excelResult.duplicates.length}명):</strong><br />
@@ -2093,6 +2132,45 @@ export default function NewsletterPage() {
                     </div>
                   )}
                 </div>
+                {excelPreview && (() => {
+                  const plan = excelPlan();
+                  if (!plan) return null;
+                  const noName = excelPreview.contacts.filter((c) => !c.name).length;
+                  const nothingToDo = plan.fresh.length === 0 && !(deactivateMissing && plan.missing.length > 0);
+                  return (
+                    <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 8, background: "var(--surface-container)", border: "1px solid var(--surface-container-highest)", fontSize: 13, lineHeight: 1.7 }}>
+                      <p style={{ margin: 0, fontWeight: 700 }}>{excelPreview.fileName}</p>
+                      <p style={{ margin: "2px 0 0", color: "var(--on-surface-variant)" }}>
+                        이메일 <strong>{excelPreview.contacts.length}명</strong> 인식
+                        {excelPreview.sheets.map((s) => ` · 시트 "${s.name}" ${s.count}명`).join("")}
+                        {excelPreview.skipped.length > 0 && ` · 이메일이 없어 건너뛴 시트: ${excelPreview.skipped.join(", ")}`}
+                        {noName > 0 && ` · 이름을 못 찾은 ${noName}명은 이름 없이 등록`}
+                      </p>
+                      <p style={{ margin: "6px 0 0" }}>
+                        신규 등록 <strong style={{ color: "#10b981" }}>{plan.fresh.length}명</strong> · 이미 등록 {plan.already}명
+                        {plan.missing.length > 0 && <> · 파일에 없는 기존 수신자({plan.domains.join(", ")}) <strong style={{ color: "#d97706" }}>{plan.missing.length}명</strong></>}
+                      </p>
+                      {plan.missing.length > 0 && (
+                        <>
+                          <label style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, cursor: "pointer" }}>
+                            <input type="checkbox" checked={deactivateMissing} onChange={(ev) => setDeactivateMissing(ev.target.checked)} style={{ marginTop: 4 }} />
+                            <span>파일에 없는 기존 수신자 {plan.missing.length}명을 비활성화 <span style={{ color: "var(--on-surface-variant)" }}>(퇴사자 정리용 — 삭제가 아니라 비활성화라 목록에서 다시 켤 수 있어요)</span></span>
+                          </label>
+                          <p style={{ margin: "2px 0 0 22px", fontSize: 12, color: "var(--on-surface-variant)" }}>
+                            대상: {plan.missing.slice(0, 8).map((s) => s.name ?? s.email).join(", ")}{plan.missing.length > 8 ? ` 외 ${plan.missing.length - 8}명` : ""}
+                          </p>
+                        </>
+                      )}
+                      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                        <button onClick={applyExcelImport} disabled={excelUploading || nothingToDo}
+                          style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: excelUploading || nothingToDo ? 0.5 : 1 }}>
+                          {excelUploading ? "반영 중..." : "반영"}
+                        </button>
+                        <button onClick={() => setExcelPreview(null)} style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", background: "transparent", color: "var(--on-surface)", fontSize: 13, cursor: "pointer" }}>취소</button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <input
                   ref={excelFileRef}
                   type="file"

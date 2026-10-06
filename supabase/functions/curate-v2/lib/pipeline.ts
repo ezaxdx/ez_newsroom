@@ -499,6 +499,11 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       judgedMap.set(c, { fit: 10, reason: `이즈픽 행사(${c.event.name}) 관련 기사 — 적합성 관문 면제` });
       writeTargets.push(c); return;
     }
+    // 자사 콘텐츠(EZPMP 카테고리: 우리 블로그·오투미트 등) — 발행 주기가 길어서 적합성 관문과 자동 발행 상한을 적용하지 않고, 발행 창에 맞으면 모두 발행
+    if (cats.length === 1 && cats[0] === "EZPMP") {
+      judgedMap.set(c, { fit: 10, reason: "자사 콘텐츠(EZPMP) — 적합성 관문 면제" });
+      writeTargets.push(c); return;
+    }
     if (!calibrated) { writeTargets.push(c); return; }   // v1 프롬프트 모드: 작성 호출의 fit 을 그대로 씀
     const j = await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/") });
     if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `적합성 판정 실패: ${j.error}` }); return; }
@@ -513,8 +518,10 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   });
   // 처리 순서: 이즈픽 먼저 → 적합성 높은 순(AI 1순위·MICE·관광 > AI 2순위 > …) → 기존 우선순위.
   // 자동 발행 상한(20건)에 걸릴 때 적합성 높은 기사가 먼저 발행되고 낮은 기사가 대기열로 가게 됨
+  const isOwnContent = (c: Cand) => !c.event && (() => { const k = categoriesFor(c); return k.length === 1 && k[0] === "EZPMP"; })();
   writeTargets.sort((a, b) =>
     (Number(!!b.event) - Number(!!a.event)) ||
+    (Number(isOwnContent(b)) - Number(isOwnContent(a))) ||
     ((judgedMap.get(b)?.fit ?? 0) - (judgedMap.get(a)?.fit ?? 0)) ||
     (readyList.indexOf(a) - readyList.indexOf(b)));
   log(`[4a단계] 적합성 판정 완료 — 작성 대상 ${writeTargets.length}건 (${Date.now() - runStart}ms)`);
@@ -540,7 +547,8 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     scoreDist[score] = (scoreDist[score] ?? 0) + 1;
     const isPick = !!c.event;
     let decision: "publish" | "stage" | "discard_score" | "discard_fit";
-    if (isPick) decision = score >= PICK_PUBLISH_SCORE ? "publish" : "stage";   // 적합성 관문 면제
+    const isOwn = !isPick && cats.length === 1 && cats[0] === "EZPMP";   // 자사 콘텐츠 — 이즈픽 기사와 같이 적합성 관문 면제, 자동 발행 상한에도 안 셈
+    if (isPick || isOwn) decision = score >= PICK_PUBLISH_SCORE ? "publish" : "stage";   // 적합성 관문 면제
     else if (score < (thresholds.staging ?? 5)) decision = "discard_score";
     else if (fit < FIT_DISCARD) decision = "discard_fit";
     else decision = score >= (thresholds.auto_publish ?? 8) && fit >= FIT_PUBLISH ? "publish" : "stage";
@@ -550,7 +558,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     let undated = false;
     if (decision === "publish" && c.dateUnknown && !isPick) { decision = "stage"; undated = true; }
     let capped = false;
-    if (decision === "publish" && !isPick) {
+    if (decision === "publish" && !isPick && !isOwn) {
       if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
       else autoPublished++;
     }
