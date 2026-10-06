@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   // 발행 후 사업영역 판정 — 큐레이션이 끝나면 자동으로 호출되고, 직접 호출해서 시험할 수도 있음 ({"task":"classify_domains","dry":true})
   if (body.task === "classify_domains") {
     try {
-      const r = await classifyPending({ supabase, env: (k) => Deno.env.get(k) }, { dry: body.dry === true, limit: Number(body.limit) || undefined });
+      const r = await classifyPending({ supabase, env: (k) => Deno.env.get(k) }, { dry: body.dry === true, limit: Number(body.limit) || undefined, maxAgeDays: Number(body.max_age_days) || undefined });
       return new Response(JSON.stringify(r), { headers: { "Content-Type": "application/json" } });
     } catch (e) {
       console.error("[classify_domains 실패]", e);

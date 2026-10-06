@@ -15,7 +15,8 @@ export interface ClassifyOptions {
   dry?: boolean;          // true: 판정만 하고 저장하지 않음
   budgetMs?: number;      // 처리 시간 예산
   limit?: number;         // 1회 최대 건수
-  maxAgeDays?: number;    // 이보다 오래된 기사는 대상에서 제외 (기본 60일)
+  maxAgeDays?: number;    // 이보다 오래된 기사는 대상에서 제외 (기본 3일 = 새로 들어온 기사만)
+                          // 기존 미분류 기사는 예전 AI가 "해당 없음"으로 판단했을 수 있어 기본적으로 건드리지 않음 (미분류가 많은 것 자체는 문제가 아님 — 정확성 우선)
 }
 
 export async function classifyPending(deps: ClassifyDeps, opts: ClassifyOptions = {}) {
@@ -31,7 +32,7 @@ export async function classifyPending(deps: ClassifyDeps, opts: ClassifyOptions 
   const examples: { title: string; business_domains: string[] }[] = Array.isArray(settings?.business_domain_examples) ? settings.business_domain_examples : [];
 
   // 대상: 영역이 비어 있고(관리자가 이미 고친 기사는 태그가 있거나 판정 완료 표시가 있어 제외) 아직 판정하지 않은 기사, 최신순
-  const since = new Date(Date.now() - (opts.maxAgeDays ?? 60) * 86400000).toISOString();
+  const since = new Date(Date.now() - (opts.maxAgeDays ?? 3) * 86400000).toISOString();
   const { data: targets, error } = await supabase.from("news")
     .select("id, title, summary_short, content_long, original_url")
     .is("domains_judged_at", null).eq("business_domains", "{}").gte("created_at", since)
