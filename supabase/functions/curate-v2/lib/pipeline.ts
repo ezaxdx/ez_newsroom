@@ -38,6 +38,7 @@ interface Cand {
   title: string; link: string; pubDate: string; pubMs: number | null; description: string; bodyText?: string;
   urlKey: string; srcs: SrcRef[]; vias: Set<string>; event: PickEvent | null; eventSearchOnly: boolean; coverage: number;
   text?: string; image?: string | null;
+  dateUnknown?: boolean;   // 목록·원문 어디에서도 발행일을 못 읽은 기사 — 발행 창을 지켰는지 확인할 수 없어 자동 발행하지 않고 대기열로
 }
 interface Stat {
   key: string; id?: string; name: string; type: string; fetched: number; status: "ok" | "empty" | "error" | "skipped";
@@ -455,6 +456,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       if (v === "too_old") { bump(st, "too_old"); markSeen(c, "too_old"); return; }
       if (v === "too_new") { bump(st, "too_new"); return; }
     }
+    c.dateUnknown = c.pubMs == null;
     const text = scraped.text.length >= 200 ? scraped.text : (c.description.length > scraped.text.length ? c.description : scraped.text);
     if (text.length < 200) {
       bump(st, scraped.ok ? "too_short" : "fetch_failed");
@@ -544,12 +546,15 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     else decision = score >= (thresholds.auto_publish ?? 8) && fit >= FIT_PUBLISH ? "publish" : "stage";
     // 한 번에 자동 발행하는 건수 상한 — 초과분은 대기열로 (이즈픽 행사 기사는 제외).
     // AI 점수가 거의 8점대로 몰려 품질 관문이 걸러내지 못하는 동안, 소스 전체가 매번 돌면서 발행량이 갑자기 늘지 않게 하는 안전장치
+    // 발행일을 끝내 확인하지 못한 기사는 화·목 발행 창 안의 기사인지 알 수 없으므로 자동 발행하지 않고 대기열에서 사람이 확인 (이즈픽 기사 제외)
+    let undated = false;
+    if (decision === "publish" && c.dateUnknown && !isPick) { decision = "stage"; undated = true; }
     let capped = false;
     if (decision === "publish" && !isPick) {
       if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
       else autoPublished++;
     }
-    decisions.push({ title: g.title, original_title: c.title, link: c.link, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
