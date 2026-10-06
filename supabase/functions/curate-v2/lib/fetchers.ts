@@ -399,10 +399,22 @@ export async function fetchJsonList(url: string, cfg: ListConfig): Promise<Fetch
   return { items };
 }
 
+/**
+ * 네이버 블로그 RSS 링크(blog.naver.com/{id}/{글번호})는 그대로 열면 iframe 껍데기(약 3KB)만 와서
+ * 대표 이미지(og:image)와 본문이 없음 → 실제 글 페이지(PostView) 주소로 바꿔서 읽음. (수동 기사 작성 쪽에는 이미 있던 처리)
+ */
+export function resolveNaverBlogUrl(u: string): string {
+  const m = u.match(/(?:m\.)?blog\.naver\.com\/([^/?#]+)\/(\d+)/);
+  if (!m || m[1] === "PostView.naver") return u;
+  return `https://blog.naver.com/PostView.naver?blogId=${m[1]}&logNo=${m[2]}&isRedirectFromMobile=true`;
+}
 /* ── 기사 원문 1회 fetch → 본문·이미지·발행일 ── */
 export async function fetchArticleData(url: string): Promise<{ text: string; image_url: string | null; published_at: string | null; ok: boolean }> {
   try {
-    const res = await fetch(url, { headers: { "User-Agent": CHROME_UA, "Accept-Language": "ko-KR,ko;q=0.9" }, signal: AbortSignal.timeout(8000), redirect: "follow" });
+    const target = resolveNaverBlogUrl(url);
+    const headers: Record<string, string> = { "User-Agent": CHROME_UA, "Accept-Language": "ko-KR,ko;q=0.9" };
+    if (target !== url) headers["Referer"] = "https://blog.naver.com/";
+    const res = await fetch(target, { headers, signal: AbortSignal.timeout(8000), redirect: "follow" });
     const html = await res.text();
     if (!res.ok) return { text: "", image_url: null, published_at: null, ok: false };
     return { text: extractText(html), image_url: extractOgImage(html), published_at: extractPublishedDate(html), ok: true };
