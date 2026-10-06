@@ -2154,7 +2154,7 @@ export default function NewsletterPage() {
                   </a>
                 </div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-                  <strong>사내 연락망을 업로드해주세요.</strong> 직급(A열, G열), 이름(B열, H열), 이메일(E열, K열)에 맞춰 필요 정보를 찾고 이메일이 없거나 계약직(직급에 ^)인 경우 제외하고 발송합니다. 엑셀 업로드 시 발송 대상 확인을 요청하니 내용을 확인해주세요. 연락망 형식이 아닌 엑셀은 시트·열 위치와 상관없이 이메일을 자동으로 찾고, 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
+                  <strong>사내 연락망을 업로드해주세요.</strong> 직급(A열, G열), 이름(B열, H열), 이메일(E열, K열)에 맞춰 필요 정보를 찾고 이메일이 없거나 계약직(직급에 ^)인 경우 제외하고 발송합니다.<br />엑셀 업로드 시 발송 대상 확인을 요청하니 내용을 확인해주세요.<br />연락망 형식이 아닌 엑셀은 시트·열 위치와 상관없이 이메일을 자동으로 찾고, 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
