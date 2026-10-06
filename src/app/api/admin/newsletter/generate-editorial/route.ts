@@ -27,6 +27,7 @@ export async function POST(req: NextRequest) {
   const nowKST = new Date(Date.now() + 9 * 60 * 60 * 1000);
   const month = nowKST.getUTCMonth() + 1;
   const day = nowKST.getUTCDate();
+  const weekday = ["일", "월", "화", "수", "목", "금", "토"][nowKST.getUTCDay()];
 
   let newsTitles: string;
   let eventNames: string;
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   const { data: cfg } = await createAdminClient().from("newsletter_cron_settings").select("editorial_prompt").single();
-  const prompt = fillEditorialPrompt((cfg?.editorial_prompt as string | null)?.trim() || DEFAULT_EDITORIAL_PROMPT, { month, day, news: newsTitles, events: eventNames });
+  const prompt = fillEditorialPrompt((cfg?.editorial_prompt as string | null)?.trim() || DEFAULT_EDITORIAL_PROMPT, { month, day, weekday, news: newsTitles, events: eventNames });
   const geminiRes = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
     {
