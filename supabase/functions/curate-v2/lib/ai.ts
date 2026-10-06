@@ -93,6 +93,85 @@ export function fitRubricText(fitAnchors: { title: string; fit: number }[] = FIT
 ${anchors}`;
 }
 
+/** 7대 사업영역 기준 이름 — 화면 집계(DOMAINS)와 같은 표기. 저장할 때 이 이름으로 통일 */
+export const DOMAIN_NAMES = ["스마트립", "글로컬 관광", "AI 관광", "MICE Tech", "ATT(관광 전시)", "MEeT(의료 전시)", "AXDX"] as const;
+/** AI가 변형해서 쓴 이름 → 기준 이름 (회사 소개 문서의 표기 "ATT(All That Travel)" 등이 섞여 들어옴) */
+export function canonicalDomain(name: string): string | null {
+  const n = (name ?? "").replace(/\s+/g, "").toLowerCase();
+  if (n.startsWith("att")) return "ATT(관광 전시)";
+  if (n.startsWith("meet")) return "MEeT(의료 전시)";
+  return DOMAIN_NAMES.find((d) => d.replace(/\s+/g, "").toLowerCase() === n) ?? null;
+}
+
+const DOMAIN_DEFS = `① 스마트립: 지역 관광 자원과 사용자 데이터를 연결해 여행 전·중·후 경험을 개인화하는 스마트 관광 서비스 (스마트 관광, 관광 DX, 맞춤형 여행, 체류형 관광, 로컬 콘텐츠, 관광 데이터)
+② 글로컬 관광: 지역 고유 콘텐츠를 글로벌 관광객이 경험할 수 있게 재구성해 지역성과 국제 경쟁력을 함께 강화 (글로컬 관광, K-관광, 다국어 관광, 지역 브랜딩, 국제행사 연계, 인바운드)
+③ AI 관광: 관광객의 질문·선호·위치·행동 데이터 기반의 맞춤 안내·추천·운영 지원 지능형 관광 서비스 (AI 관광, 관광 챗봇, 개인화 추천, 생성형 AI, 관광 자동화, 다국어 안내)
+④ MICE Tech: MICE 산업 전반이 아니라, 행사 기획·등록·매칭·전시·현장 운영·성과 분석을 플랫폼과 AI 기술로 "실제로 연결·자동화"하는 것 자체 (O2MEET, LeadX, 행사 자동화, 전시 DX, 하이브리드 행사, 비즈니스 매칭). 국제회의 유치·산학협력·인력양성·지역 경제효과처럼 기술·플랫폼 요소가 없는 일반 MICE 뉴스는 해당 없음
+⑤ ATT(관광 전시): 관광 산업의 다양한 주체와 콘텐츠를 연결해 관광 비즈니스·트렌드·기술을 종합적으로 선보이는 관광 행사·브랜드 (All That Travel, 관광 박람회, 관광 B2B, 지역 관광 홍보)
+⑥ MEeT(의료 전시): 의료와 첨단기술, 글로벌 비즈니스 교류를 연결하는 의료 기술·산업 행사 및 플랫폼 (의료기술, 디지털헬스, 의료기기, 헬스케어, 의료 컨퍼런스)
+⑦ AXDX: 이즈피엠피 사내 AI 전환을 추진하는 영역. AI 산업 전반의 기술·서비스·산업 적용 동향(외부 일반 AI 뉴스 포함)도 여기에 해당 (인공지능, 생성형 AI, AI 에이전트, AI 도입, 업무 자동화, 디지털 전환)`;
+
+export type DomainJudgement = { ok: true; domains: string[]; evidence: Record<string, string> } | { ok: false; error: string };
+/**
+ * 사업영역 분류 전용 호출 — 기사 작성과 분리.
+ * 작성 호출에서는 시사점(사업 연결 서술)을 쓴 직후에 영역을 고르게 되고 시스템 지침도 "연결 우선"이라 과다 태깅이 생김(평균 1.64개, 3개 이상 9%).
+ * 여기서는 원문 본문과 영역 정의, 관리자 보정 사례만 보고 "기사의 핵심 주제가 직접 해당하는 영역"만 고름.
+ */
+export async function judgeDomains(i: { apiKey: string; title: string; text: string; examples?: { title: string; business_domains: string[] }[] }): Promise<DomainJudgement> {
+  const ex = (i.examples ?? []).slice(0, 30).map((e) => `  · "${e.title}" → ${JSON.stringify(e.business_domains)}`).join("\n");
+  const prompt = `당신은 MICE·관광·AI 기업 이즈피엠피의 사업 분류 담당자입니다. 아래 기사의 "핵심 주제"가 직접 해당하는 사업영역을 고르세요.
+
+사업영역 정의:
+${DOMAIN_DEFS}
+
+분류 원칙:
+- 기사의 핵심 주제가 그 영역의 사업 내용과 직접 일치할 때만 고릅니다. 스쳐 지나가는 언급, 키워드 일치, 억지 연결은 제외하세요. 우리 회사 사업과 연결 지으려 애쓰지 마세요.
+- 영역별 핵심 기준 (관리자가 직접 고친 사례에서 확인된 원칙):
+  · AXDX: AI 기술·서비스·산업 적용 동향이 기사의 핵심이면 기본적으로 AXDX "만" 붙입니다. 기사에 관광·행사 소재가 나와도 그것이 AI 소식의 배경일 뿐이면 다른 영역은 붙이지 않습니다.
+  · AI 관광: 관광객을 대상으로 한 AI 서비스(챗봇·추천·안내·통번역)나 관광 분야의 AI 도입 자체가 기사의 핵심일 때만 추가합니다.
+  · 스마트립: 관광객 개인화 서비스·관광 DX·관광 데이터 서비스가 핵심일 때만 붙입니다. 일반 관광 행사·축제·정책·시설 소식이나 "체류형 관광"·"스마트 예약" 같은 한 줄 언급만으로는 해당하지 않습니다.
+  · 글로컬 관광: 지역 고유 콘텐츠의 글로벌화·K-관광·인바운드·다국어 관광이 핵심일 때만 붙입니다. 행사 유치 소식 자체는 해당하지 않습니다.
+- 대부분의 기사는 0~2개입니다. 3개 이상은 핵심 내용이 세 영역에 모두 걸칠 때만 허용됩니다. 어디에도 해당하지 않으면 빈 배열입니다.
+- 고른 영역마다 근거를 기사 내용으로 한 줄 쓰세요. 근거가 단어 일치뿐이거나 설명이 억지스러우면 그 영역은 빼세요.
+${ex ? `\n관리자가 직접 검수한 사례 (비슷한 기사는 이 판단을 따르세요):\n${ex}\n` : ""}
+JSON으로만 응답하세요: {"domains":[{"name":"영역 이름","evidence":"근거 한 줄"}]}  (해당 없으면 {"domains":[]})
+영역 이름은 다음 중에서만: ${DOMAIN_NAMES.join(", ")}
+
+기사 제목: ${i.title}
+기사 내용:
+${i.text.slice(0, 5000)}`;
+  let lastError = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${i.apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }),
+        signal: AbortSignal.timeout(25000),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        lastError = `Gemini HTTP ${res.status}`;
+        if ((res.status === 429 || res.status >= 500) && attempt === 0) { await sleep(1200); continue; }
+        return { ok: false, error: lastError };
+      }
+      const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
+      const raw = (parts.find((p) => !p.thought && typeof p.text === "string")?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      const parsed = JSON.parse(raw);
+      const domains: string[] = []; const evidence: Record<string, string> = {};
+      for (const d of Array.isArray(parsed.domains) ? parsed.domains : []) {
+        const name = canonicalDomain(typeof d === "string" ? d : d?.name);
+        if (name && !domains.includes(name)) { domains.push(name); evidence[name] = String(d?.evidence ?? "").slice(0, 160); }
+      }
+      return { ok: true, domains, evidence };
+    } catch (e) {
+      lastError = (e as Error).message;
+      if (attempt === 0) await sleep(800);
+    }
+  }
+  return { ok: false, error: lastError || "사업영역 판정 실패" };
+}
+
 export type FitJudgement = { ok: true; fit: number; reason: string } | { ok: false; error: string };
 /** 적합성 판정 전용 짧은 호출 — 회사 소개(시스템 지침) 없이, 편집장 입장에서 "이 뉴스룸에 실을 기사인가"만 판단 */
 export async function judgeFit(i: { apiKey: string; title: string; text: string; category: string; fitAnchors?: { title: string; fit: number }[] }): Promise<FitJudgement> {
