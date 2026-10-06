@@ -141,8 +141,10 @@ export default function NewsletterPage() {
   const [excelUploading, setExcelUploading] = useState(false);
   const [excelResult, setExcelResult] = useState<{ inserted: number; skipped: number; duplicates: string[]; deactivated?: number } | null>(null);
   // 엑셀을 올리면 바로 저장하지 않고 인식 결과를 먼저 보여줌 — 사내 연락망처럼 양식이 다른 파일도 그대로 쓸 수 있게
-  const [excelPreview, setExcelPreview] = useState<{ fileName: string; contacts: ParsedContact[]; sheets: { name: string; count: number }[]; skipped: string[] } | null>(null);
+  const [excelPreview, setExcelPreview] = useState<{ fileName: string; contacts: ParsedContact[]; sheets: { name: string; count: number }[]; skipped: string[]; excluded: ParsedContact[] } | null>(null);
   const [deactivateMissing, setDeactivateMissing] = useState(false);
+  // 정규직만 발송 — 사내 연락망에서 직급 뒤에 ^ 가 붙은 인원(인턴·계약직 등)은 기본으로 제외
+  const [excludeCaret, setExcludeCaret] = useState(true);
 
   // ── AI 인사말 생성 ──
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
@@ -878,6 +880,7 @@ export default function NewsletterPage() {
       } else {
         setExcelPreview({ fileName: file.name, ...parsed });
         setDeactivateMissing(false);
+        setExcludeCaret(true);
       }
     } catch {
       setSubError("파일 파싱 오류");
@@ -890,12 +893,14 @@ export default function NewsletterPage() {
   // 미리보기 내용 계산 — 신규 / 이미 등록 / 파일에 없는 기존 수신자(같은 도메인)
   function excelPlan() {
     if (!excelPreview) return null;
+    // ^ 표시 인원을 제외하면 "파일에 없는 사람"으로 취급 — 이미 등록돼 있다면 아래 비활성화 대상에 들어감
+    const active = excelPreview.contacts.filter((c) => !(excludeCaret && c.excluded));
     const existing = new Map(subscribers.map((s) => [s.email.toLowerCase(), s]));
-    const inFile = new Set(excelPreview.contacts.map((c) => c.email));
-    const fresh = excelPreview.contacts.filter((c) => !existing.has(c.email));
+    const inFile = new Set(active.map((c) => c.email));
+    const fresh = active.filter((c) => !existing.has(c.email));
     const domains = new Set(excelPreview.contacts.map((c) => c.email.split("@")[1]));
     const missing = subscribers.filter((s) => s.is_active && !inFile.has(s.email.toLowerCase()) && domains.has(s.email.split("@")[1]?.toLowerCase() ?? ""));
-    return { fresh, already: excelPreview.contacts.length - fresh.length, missing, domains: [...domains] };
+    return { fresh, already: active.length - fresh.length, missing, domains: [...domains], activeCount: active.length };
   }
 
   async function applyExcelImport() {
@@ -2104,7 +2109,7 @@ export default function NewsletterPage() {
                 </div>
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--on-surface-variant)" }}>
                   <strong>사내 연락망 같은 엑셀을 양식 수정 없이 그대로</strong> 올려도 됩니다. 시트·열 위치와 상관없이 이메일을 자동으로 찾고(이름은 같은 행에서 인식),
-                  이메일이 없는 시트는 건너뜁니다. 올리면 바로 저장하지 않고 인식 결과를 먼저 보여드려요. 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
+                  이메일이 없는 시트는 건너뜁니다. 직급에 ^가 붙은 인원(정규직 외)은 자동으로 제외합니다. 올리면 바로 저장하지 않고 인식 결과를 먼저 보여드려요. 템플릿(name · email 열)도 그대로 쓸 수 있습니다.
                 </p>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button
@@ -2135,17 +2140,23 @@ export default function NewsletterPage() {
                 {excelPreview && (() => {
                   const plan = excelPlan();
                   if (!plan) return null;
-                  const noName = excelPreview.contacts.filter((c) => !c.name).length;
+                  const noName = excelPreview.contacts.filter((c) => !c.name && !(excludeCaret && c.excluded)).length;
                   const nothingToDo = plan.fresh.length === 0 && !(deactivateMissing && plan.missing.length > 0);
                   return (
                     <div style={{ marginTop: 10, padding: "12px 14px", borderRadius: 8, background: "var(--surface-container)", border: "1px solid var(--surface-container-highest)", fontSize: 13, lineHeight: 1.7 }}>
                       <p style={{ margin: 0, fontWeight: 700 }}>{excelPreview.fileName}</p>
                       <p style={{ margin: "2px 0 0", color: "var(--on-surface-variant)" }}>
-                        이메일 <strong>{excelPreview.contacts.length}명</strong> 인식
+                        이메일 <strong>{excelPreview.contacts.length}명</strong> 인식{excludeCaret && excelPreview.excluded.length > 0 ? <> → 발송 대상 <strong>{plan.activeCount}명</strong></> : null}
                         {excelPreview.sheets.map((s) => ` · 시트 "${s.name}" ${s.count}명`).join("")}
                         {excelPreview.skipped.length > 0 && ` · 이메일이 없어 건너뛴 시트: ${excelPreview.skipped.join(", ")}`}
                         {noName > 0 && ` · 이름을 못 찾은 ${noName}명은 이름 없이 등록`}
                       </p>
+                      {excelPreview.excluded.length > 0 && (
+                        <label style={{ display: "flex", alignItems: "flex-start", gap: 6, marginTop: 6, cursor: "pointer" }}>
+                          <input type="checkbox" checked={excludeCaret} onChange={(ev) => setExcludeCaret(ev.target.checked)} style={{ marginTop: 4 }} />
+                          <span>직급에 <strong>^</strong>가 붙은 인원 {excelPreview.excluded.length}명 제외 <span style={{ color: "var(--on-surface-variant)" }}>(정규직만 발송 · {excelPreview.excluded.map((c) => c.name ?? c.email).join(", ")})</span></span>
+                        </label>
+                      )}
                       <p style={{ margin: "6px 0 0" }}>
                         신규 등록 <strong style={{ color: "#10b981" }}>{plan.fresh.length}명</strong> · 이미 등록 {plan.already}명
                         {plan.missing.length > 0 && <> · 파일에 없는 기존 수신자({plan.domains.join(", ")}) <strong style={{ color: "#d97706" }}>{plan.missing.length}명</strong></>}

@@ -6,11 +6,12 @@
 
 import type * as XLSXType from "xlsx";
 
-export type ParsedContact = { email: string; name?: string; sheet: string };
+export type ParsedContact = { email: string; name?: string; sheet: string; excluded?: boolean };
 export type ParseResult = {
   contacts: ParsedContact[];
   sheets: { name: string; count: number }[];   // 이메일을 찾은 시트별 인원
   skipped: string[];                           // 이메일이 없어 건너뛴 시트
+  excluded: ParsedContact[];                   // 직급에 ^ 표시가 있어 제외 대상으로 표시된 인원 (정규직 외 — 인턴·계약직 등)
 };
 
 const EMAIL_RE = /[A-Za-z0-9._%+\-]+@[A-Za-z0-9\-]+(?:\.[A-Za-z0-9\-]+)*\.[A-Za-z]{2,}/g;
@@ -22,6 +23,8 @@ export function extractContacts(XLSX: typeof XLSXType, wb: XLSXType.WorkBook): P
   const out = new Map<string, ParsedContact>();
   const sheets: ParseResult["sheets"] = [];
   const skipped: string[] = [];
+  const excludedIds = new Set<string>();     // ^ 표시 인원의 이메일 아이디 (연락망 시트에서 읽음)
+  const excludedNames = new Set<string>();   // 아이디를 못 읽은 행은 이름으로 보조 매칭
 
   for (const sheetName of wb.SheetNames) {
     const rows = XLSX.utils.sheet_to_json<unknown[]>(wb.Sheets[sheetName], { header: 1, raw: false, defval: "" });
@@ -31,6 +34,21 @@ export function extractContacts(XLSX: typeof XLSXType, wb: XLSXType.WorkBook): P
     let nameCol = -1;
     for (let r = 0; r < Math.min(rows.length, 15) && nameCol < 0; r++) {
       for (let c = 0; c < (rows[r]?.length ?? 0); c++) if (NAME_HEADER.test(cell(r, c))) { nameCol = c; break; }
+    }
+
+    // 직급 칸에 ^ 가 붙은 인원 찾기 — 예: "사 원^", "인 턴^". 같은 행 오른쪽에 [이름, 내선, 휴대폰, 이메일 아이디] 순으로 이어짐
+    // (이름·번호 사이에 빈 칸이 끼어도 연속된 칸 묶음 안에서 마지막 영문 아이디를 이메일 아이디로 봄)
+    for (let r = 0; r < rows.length; r++) {
+      const width = rows[r]?.length ?? 0;
+      for (let c = 0; c < width; c++) {
+        const t = cell(r, c);
+        if (!t.includes("^") || t.includes("@") || t.length > 12) continue;
+        let id: string | undefined; const run: string[] = [];
+        for (let k = c + 1; k < Math.min(width, c + 7); k++) { const v = cell(r, k); if (!v) break; run.push(v); }
+        for (let i = run.length - 1; i >= 0; i--) if (/^[A-Za-z][A-Za-z0-9._-]{1,29}$/.test(run[i])) { id = run[i].toLowerCase(); break; }
+        if (id) excludedIds.add(id);
+        else if (run[0] && looksLikeName(run[0])) excludedNames.add(run[0]);
+      }
     }
 
     let found = 0;
@@ -62,5 +80,10 @@ export function extractContacts(XLSX: typeof XLSXType, wb: XLSXType.WorkBook): P
     }
     if (found > 0) sheets.push({ name: sheetName, count: found }); else skipped.push(sheetName);
   }
-  return { contacts: [...out.values()], sheets, skipped };
+  const contacts = [...out.values()];
+  for (const c of contacts) {
+    const id = c.email.split("@")[0];
+    if (excludedIds.has(id) || (c.name && excludedNames.has(c.name))) c.excluded = true;
+  }
+  return { contacts, sheets, skipped, excluded: contacts.filter((c) => c.excluded) };
 }
