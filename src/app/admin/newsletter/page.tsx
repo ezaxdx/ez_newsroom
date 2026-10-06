@@ -1266,6 +1266,7 @@ export default function NewsletterPage() {
                 <label style={{ fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>
                   에디터 인사말
                 </label>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <button
                   onClick={handleGenerateEditorial}
                   disabled={generatingEditorial}
@@ -1287,10 +1288,11 @@ export default function NewsletterPage() {
                 <button
                   onClick={() => { setPromptOpen((o) => !o); setPromptMsg(null); }}
                   title="AI 인사말 프롬프트 설정"
-                  style={{ marginLeft: 6, display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container)", color: "var(--on-surface-variant)", fontWeight: 600, fontSize: 12, cursor: "pointer" }}
+                  style={{ display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container)", color: "var(--on-surface-variant)", fontWeight: 600, fontSize: 12, cursor: "pointer" }}
                 >
                   <Settings size={12} /> 설정
                 </button>
+                </div>
               </div>
               {promptOpen && (
                 <div style={{ marginBottom: 10, padding: "12px 14px", borderRadius: 8, background: "var(--surface-container)", border: "1px solid var(--surface-container-highest)" }}>
