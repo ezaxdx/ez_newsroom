@@ -10,6 +10,7 @@ import {
 import { NewsItem } from "@/lib/types";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { HelpTriggerConnected } from "@/components/admin/HelpPanel";
+import CategoryEditor from "@/components/admin/CategoryEditor";
 import { useTabParam } from "@/lib/useTabParam";
 
 type Tab = "live" | "staging" | "archive";
@@ -193,6 +194,10 @@ export default function CurationBoard({
       return prev.map((item) => orderMap.has(item.id) ? { ...item, display_order: orderMap.get(item.id)! } : item);
     });
   };
+
+  // 카테고리 변경·다시 쓰기처럼 서버에 이미 저장된 변경을 화면 목록에 반영
+  const patchItem = (id: string, patch: Partial<NewsItem>) =>
+    setItems((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
 
   const remove = (id: string) => {
     if (!confirm("이 기사를 삭제할까요?")) return;
@@ -574,6 +579,7 @@ export default function CurationBoard({
                         onRemove={remove}
                         onRepublish={republish}
                         onEdit={setEditingItem}
+                  onPatch={patchItem}
                         LEVEL_STYLE={LEVEL_STYLE}
                       />
                     </div>
@@ -597,6 +603,7 @@ export default function CurationBoard({
                   onRemove={remove}
                   onRepublish={republish}
                   onEdit={setEditingItem}
+                  onPatch={patchItem}
                   LEVEL_STYLE={LEVEL_STYLE}
                   selected={tab === "staging" ? selectedIds.has(item.id) : undefined}
                   onToggleSelect={tab === "staging" ? toggleSelect : undefined}
@@ -638,6 +645,7 @@ export default function CurationBoard({
                     onRemove={remove}
                     onRepublish={republish}
                     onEdit={setEditingItem}
+                  onPatch={patchItem}
                     LEVEL_STYLE={LEVEL_STYLE}
                   />
                 ))}
@@ -766,7 +774,7 @@ function EditArticleModal({
 function ArticleCard({
   item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
-  onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish, onEdit,
+  onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish, onEdit, onPatch,
   LEVEL_STYLE, selected, onToggleSelect,
 }: {
   item: NewsItem;
@@ -783,6 +791,7 @@ function ArticleCard({
   onRemove: (id: string) => void;
   onRepublish: (id: string) => void;
   onEdit: (item: NewsItem) => void;
+  onPatch: (id: string, patch: Partial<NewsItem>) => void;
   LEVEL_STYLE: Record<string, { bg: string; color: string }>;
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
@@ -832,12 +841,7 @@ function ArticleCard({
               <TrendingUp size={9} /> TOP
             </span>
           )}
-          <span
-            className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
-            style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)" }}
-          >
-            {item.category}
-          </span>
+          <CategoryEditor item={item} onPatch={(p) => onPatch(item.id, p)} />
           <button
             title="클릭해서 레벨 변경"
             onClick={() => onCycleLevel(item.id)}

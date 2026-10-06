@@ -21,6 +21,9 @@ type EventRow = {
   is_ezpmp_pick: boolean;
   source: string | null;
   created_at: string;
+  news_keywords?: string[] | null;   // 이즈픽 행사 뉴스 검색 별칭 (행사명 외)
+  news_count?: number;               // 이 행사를 다룬 수집 기사 수 (news.related_event_id)
+  news_last?: string | null;         // 가장 최근 관련 기사 발행일
 };
 
 type Props = { news: NewsItem[]; events: EventRow[] };
@@ -1283,6 +1286,19 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     recent: events.filter((e) => e.created_at >= weekAgo).length,
   }), [events, weekAgo, isIncomplete]);
 
+  // 이즈픽 행사 뉴스 검색어(별칭) 편집 — 큐레이션이 행사명 + 이 별칭으로 네이버·구글에서 관련 기사를 찾음
+  const [kwEdit, setKwEdit] = useState<{ id: string; text: string } | null>(null);
+  async function saveNewsKeywords(id: string, text: string) {
+    const list = text.split(/[,\n]/).map((k) => k.trim()).filter(Boolean);
+    setKwEdit(null);
+    setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, news_keywords: list } : e)));
+    await fetch("/api/admin/events", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, news_keywords: list }),
+    });
+  }
+
   async function togglePick(id: string, current: boolean) {
     setToggling(id);
     try {
@@ -1780,6 +1796,32 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
                   <EditableCell id={e.id} field="event_name" value={e.event_name} />
+                  {e.is_ezpmp_pick && (
+                    <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "0.66rem", color: "var(--on-surface-variant)" }}>
+                      <span title="이 행사를 다룬 기사 (자동 수집, 시작 30일 전 ~ 종료 30일 후)">
+                        📰 관련 기사 <b style={{ color: (e.news_count ?? 0) > 0 ? "var(--on-surface)" : "#dc2626" }}>{e.news_count ?? 0}건</b>
+                        {e.news_last ? ` · 최근 ${new Date(e.news_last).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" })}` : ""}
+                      </span>
+                      {kwEdit?.id === e.id ? (
+                        <input
+                          autoFocus value={kwEdit.text}
+                          onChange={(ev) => setKwEdit({ id: e.id, text: ev.target.value })}
+                          onKeyDown={(ev) => { if (ev.key === "Enter") void saveNewsKeywords(e.id, kwEdit.text); if (ev.key === "Escape") setKwEdit(null); }}
+                          onBlur={() => void saveNewsKeywords(e.id, kwEdit.text)}
+                          placeholder="별칭을 쉼표로: KME, 코리아마이스엑스포"
+                          style={{ flex: 1, minWidth: 160, padding: "2px 6px", fontSize: "0.68rem", borderRadius: 4, border: "1px solid var(--primary)", outline: "none", background: "var(--surface-container-lowest)", color: "var(--on-surface)" }}
+                        />
+                      ) : (
+                        <button
+                          onClick={() => setKwEdit({ id: e.id, text: (e.news_keywords ?? []).join(", ") })}
+                          title="뉴스 검색어 편집 — 행사명은 자동으로 검색되고, 여기에는 약칭·영문명 등 별칭을 추가하세요"
+                          style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--on-surface-variant)", fontSize: "0.66rem" }}
+                        >
+                          검색어: {(e.news_keywords ?? []).length ? (e.news_keywords ?? []).join(", ") : "행사명 자동"} ✎
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

@@ -471,6 +471,9 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     if (cats.includes("MIXED")) return [...new Set([...ALL_CATS, ...real])];
     return real.length ? real : ["MICE"];
   };
+  const maxAutoPublish: number = Number.isFinite(Number(thresholds.max_auto_publish)) && Number(thresholds.max_auto_publish) > 0 ? Number(thresholds.max_auto_publish) : 15;
+  let autoPublished = 0;
+  let cappedCount = 0;
   const aiTargets = opts.dry && opts.maxAi != null ? readyList.slice(0, opts.maxAi) : readyList;
   let aiCalls = 0;
   await mapPool(aiTargets, 4, async (c) => {
@@ -493,7 +496,14 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     else if (score < (thresholds.staging ?? 5)) decision = "discard_score";
     else if (fit < FIT_DISCARD) decision = "discard_fit";
     else decision = score >= (thresholds.auto_publish ?? 8) && fit >= FIT_PUBLISH ? "publish" : "stage";
-    decisions.push({ title: g.title, original_title: c.title, link: c.link, category: g.category, category_reason: g.category_reason, cats, score, fit, decision, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+    // 한 번에 자동 발행하는 건수 상한 — 초과분은 대기열로 (이즈픽 행사 기사는 제외).
+    // AI 점수가 거의 8점대로 몰려 품질 관문이 걸러내지 못하는 동안, 소스 전체가 매번 돌면서 발행량이 갑자기 늘지 않게 하는 안전장치
+    let capped = false;
+    if (decision === "publish" && !isPick) {
+      if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
+      else autoPublished++;
+    }
+    decisions.push({ title: g.title, original_title: c.title, link: c.link, category: g.category, category_reason: g.category_reason, cats, score, fit, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
@@ -558,6 +568,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     }
     await supabase.from("curation_seen").delete().lt("seen_at", seenCutoff);
 
+    if (cappedCount > 0) alerts.push({ title: "자동 발행 상한 초과분을 대기열로 보냄", description: `이번 실행에서 자동 발행 상한(${maxAutoPublish}건)을 넘은 ${cappedCount}건은 대기열에 있습니다. 큐레이션 보드의 대기열에서 검토 후 발행하세요.`, level: "warning" });
     if (deferredTotal > 0) alerts.push({ title: "시간 초과로 처리 못 한 후보가 남음", description: `시간 예산을 다 써서 ${deferredTotal}건이 다음 실행으로 넘어갔습니다. (다음 실행에서 다시 후보가 됩니다)`, level: "warning" });
     if (results.failed >= 3) alerts.push({ title: "큐레이션 개별 기사 생성 실패 다수", description: `이번 실행에서 ${results.failed}건 실패(발행 ${results.published}, 대기 ${results.staged}).`, level: "warning", fields: runErrors.slice(0, 5).map((e) => ({ name: e.source, value: e.error.slice(0, 200) })) });
 
@@ -592,7 +603,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   }
   if (live) for (const a of alerts) await sendAlert(webhook, a);
 
-  return { ok: true, mode: live ? "live" : "dry", ...results, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
+  return { ok: true, mode: live ? "live" : "dry", ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
 }
 
 function categoryDefaultImage(category: string): string {
