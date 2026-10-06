@@ -52,6 +52,7 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
   const [error, setError] = useState<string | null>(null);
   const [parentPick, setParentPick] = useState<Record<string, string>>({});   // 동시개최 묶음별로 고른 대표 행사
   const [allowed, setAllowed] = useState<Set<string>>(new Set());
+  const [sel, setSel] = useState<Set<string>>(new Set());   // 일괄 처리용 체크된 항목
 
   const apply = useCallback((json: { pending?: Change[]; history?: Change[]; unavailable?: boolean }, first: boolean) => {
     const p = json.pending ?? [];
@@ -115,31 +116,50 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
     return () => { alive = false; };
   }, [tab, dropped]);
 
+  useEffect(() => { setSel(new Set()); if (tab === "history") void load(); }, [tab, load]);
+
   const counts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const p of pending) c[p.kind] = (c[p.kind] ?? 0) + 1;
     return c;
   }, [pending]);
   const total = pending.length;
+  const list = pending.filter((p) => p.kind === tab);
 
-  async function post(body: Record<string, unknown>, busyKey: string) {
-    setBusy(busyKey); setError(null);
+  // 처리는 화면에서 먼저 빼고(낙관적 갱신) 서버 저장은 뒤에서 — 실패하면 목록을 다시 불러와 되돌림
+  function dropLocal(ids: string[]) {
+    const gone = new Set(ids);
+    setPending((prev) => { const next = prev.filter((x) => !gone.has(x.id)); onCount?.(next.length); return next; });
+    setSel((prev) => { const next = new Set(prev); ids.forEach((i) => next.delete(i)); return next; });
+  }
+  async function post(body: Record<string, unknown>, busyKey: string, removeIds: string[] = []) {
+    setError(null);
+    if (removeIds.length) dropLocal(removeIds); else setBusy(busyKey);
     try {
       const res = await fetch("/api/admin/event-changes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json();
-      if (!res.ok) { setError(json.error ?? "처리 실패"); return false; }
+      if (!res.ok) { setError(json.error ?? "처리 실패"); await load(); return false; }
       if (json.patch) onPatch(json.patch.id, json.patch.fields);
       for (const p of json.patches ?? []) onPatch(p.id, p.fields);
       if (json.added) onAdd(json.added);
-      await load();
+      for (const a of json.addedList ?? []) onAdd(a);
+      if (json.failed?.length) { setError(`${json.failed.length}건은 처리하지 못했습니다: ${json.failed[0].error}`); await load(); }
+      else if (!removeIds.length) await load();
       return true;
-    } finally { setBusy(null); }
+    } catch { setError("처리 실패"); await load(); return false; }
+    finally { setBusy(null); }
   }
-  const act = (id: string, action: string, extra: Record<string, unknown> = {}) => post({ id, action, ...extra }, id);
-
+  const act = (id: string, action: string, extra: Record<string, unknown> = {}) => post({ id, action, ...extra }, id, [id]);
+  const bulk = (action: string, label: string) => {
+    const ids = list.filter((c) => sel.has(c.id)).map((c) => c.id);
+    if (!ids.length) return;
+    if (!confirm(`선택한 ${ids.length}건을 "${label}" 처리할까요?`)) return;
+    void post({ ids, action }, "bulk", ids);
+  };
   async function ackAllNew() {
     if (!confirm(`신규 ${counts.new}건을 모두 확인 처리할까요? (행사는 그대로 공개 상태로 남습니다)`)) return;
     await post({ action: "ack_all_new" }, "all");
+    await load();
   }
 
   async function allowDropped(d: DroppedItem & { key: string }) {
@@ -179,8 +199,6 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
   const rowStyle = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "8px 10px", borderRadius: 8, background: "var(--surface-container-low)", border: "1px solid var(--surface-container-high)" } as const;
   const note = (text: React.ReactNode) => <p style={{ margin: "0 0 8px", fontSize: "0.7rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>{text}</p>;
 
-  const list = pending.filter((p) => p.kind === tab);
-
   return (
     <div id="event-changes-panel" style={{ marginBottom: 16, border: `1px solid ${total ? "var(--primary)" : "var(--surface-container-high)"}`, borderRadius: 10, overflow: "hidden" }}>
       <button
@@ -214,13 +232,33 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
 
           {error && <p style={{ margin: "0 0 8px", fontSize: "0.73rem", color: "#dc2626" }}>⚠️ {error}</p>}
 
-          {tab === "date_suspect" && note(<>이름이 거의 같은데 시작일이 다른 행사입니다. <b>일정 변경</b>은 기존 행사의 일정만 새 값으로 바꾸고(공개 여부·이즈픽·연결 기사 유지), <b>타 행사</b>는 새로 등록하며 다시 묻지 않습니다.</>)}
+          {tab === "date_suspect" && note(<>이름이 거의 같은데 시작일이 다른 행사입니다. <b>일정 변경</b>은 기존 행사의 일정만 새 값으로 바꾸고(공개 여부·이즈픽·연결 기사 유지), <b>변경 안 함</b>은 기존 일정이 맞을 때 소스 값을 무시하며(같은 값은 다시 묻지 않음), <b>타 행사</b>는 새로 등록하며 다시 묻지 않습니다.</>)}
           {tab === "duplicate_suspect" && note(<>같은 날 같은 주최·장소에 이름이 비슷한 행사가 있습니다. <b>동일 행사</b>는 새로 등록하지 않고 기존 행사의 빈 항목만 채우고, <b>타 행사</b>는 새로 등록하며 다시 묻지 않습니다.</>)}
           {tab === "concurrent" && note(<>같은 주최가 같은 날짜·장소에서 연 행사들입니다. 대표 행사를 고르면 나머지는 <b>동시개최</b>로 연결되어 목록에서 접히고 뉴스레터에서 제외됩니다. 한 번 묶은 그룹에 새로 들어오는 같은 조건의 행사는 자동 연결됩니다.</>)}
           {tab === "field_change" && note("이미 값이 있는 항목이 소스와 다를 때만 나옵니다. 자동으로 덮어쓰지 않습니다.")}
           {tab === "missing" && note("이전 수집에서 확인됐지만 이번 수집 목록에는 없는 행사입니다. 취소·삭제됐을 수 있고, 다른 소스에는 아직 있을 수 있습니다.")}
           {tab === "dropped" && note(<>비공개 규칙에 걸려 이번 수집에서 등록되지 않은 행사입니다(소스별 최신 수집 기준). 잘못 걸린 행사는 <b>제외하지 않기</b>를 누르면 바로 공개로 등록하고, 이후 수집에서도 규칙에 걸리지 않습니다.</>)}
           {tab === "new" && counts.new > 0 && <div style={{ marginBottom: 8 }}>{btn(`전체 확인 (${counts.new})`, ackAllNew, "plain", busy === "all")}</div>}
+          {tab !== "concurrent" && PENDING_KINDS.includes(tab as Kind) && list.length > 0 && (() => {
+            const allOn = list.every((c) => sel.has(c.id));
+            const BULK: Partial<Record<Kind, [string, string, "primary" | "plain" | "danger"][]>> = {
+              new: [["ack", "확인", "plain"], ["hide", "비공개", "danger"]],
+              date_suspect: [["date_changed", "일정 변경", "primary"], ["keep_old", "변경 안 함", "plain"], ["separate", "타 행사", "plain"]],
+              duplicate_suspect: [["same", "동일 행사", "primary"], ["other", "타 행사", "plain"]],
+              field_change: [["apply", "반영", "primary"], ["dismiss", "유지", "plain"]],
+              missing: [["hide", "비공개 처리", "danger"], ["keep", "유지", "plain"]],
+            };
+            return (
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 8, padding: "6px 10px", borderRadius: 8, background: "var(--surface-container)" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.73rem", fontWeight: 600, cursor: "pointer" }}>
+                  <input type="checkbox" checked={allOn} onChange={() => setSel(allOn ? new Set() : new Set(list.map((c) => c.id)))} />
+                  전체 선택
+                </label>
+                <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>{sel.size}건 선택</span>
+                {sel.size > 0 && (BULK[tab as Kind] ?? []).map(([a, l, tone]) => btn(`선택 ${l}`, () => bulk(a, l), tone))}
+              </div>
+            );
+          })()}
 
           <div style={{ maxHeight: 360, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6 }}>
             {PENDING_KINDS.includes(tab as Kind) && list.length === 0 && <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>대기 중인 항목이 없습니다.</span>}
@@ -255,7 +293,9 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
 
               return (
                 <div key={c.id} style={rowStyle}>
-                  <div style={{ minWidth: 0, fontSize: "0.76rem", lineHeight: 1.55 }}>
+                  <input type="checkbox" checked={sel.has(c.id)} style={{ flexShrink: 0 }}
+                    onChange={() => setSel((prev) => { const n = new Set(prev); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })} />
+                  <div style={{ minWidth: 0, flex: 1, fontSize: "0.76rem", lineHeight: 1.55 }}>
                     <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                       {chip(src, "#2563eb")}
                       <b style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{name}</b>
@@ -289,7 +329,7 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
                   </div>
                   <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                     {c.kind === "new" && <>{btn("확인", () => act(c.id, "ack"), "plain", b)}{btn("비공개", () => act(c.id, "hide"), "danger", b)}</>}
-                    {c.kind === "date_suspect" && <>{btn("일정 변경", () => act(c.id, "date_changed"), "primary", b)}{btn("타 행사", () => act(c.id, "separate"), "plain", b)}</>}
+                    {c.kind === "date_suspect" && <>{btn("일정 변경", () => act(c.id, "date_changed"), "primary", b)}{btn("변경 안 함", () => act(c.id, "keep_old"), "plain", b)}{btn("타 행사", () => act(c.id, "separate"), "plain", b)}</>}
                     {c.kind === "duplicate_suspect" && <>{btn("동일 행사", () => act(c.id, "same"), "primary", b)}{btn("타 행사", () => act(c.id, "other"), "plain", b)}</>}
                     {c.kind === "field_change" && <>{btn("반영", () => act(c.id, "apply"), "primary", b)}{btn("유지", () => act(c.id, "dismiss"), "plain", b)}</>}
                     {c.kind === "missing" && <>{btn("비공개 처리", () => act(c.id, "hide"), "danger", b)}{btn("유지", () => act(c.id, "keep"), "plain", b)}</>}

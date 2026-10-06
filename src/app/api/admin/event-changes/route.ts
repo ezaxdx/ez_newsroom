@@ -49,8 +49,8 @@ export async function GET() {
 
 /**
  * POST /api/admin/event-changes
- * body: { id, action } 또는 { action: "ack_all_new" }
- *   date_suspect : date_changed(일정 변경 — 기존 행사의 일정을 새 값으로) | separate(타 행사 — 새로 등록하고 다시 묻지 않음)
+ * body: { id, action } | { ids: string[], action }(여러 건 한 번에 — 같은 액션을 각각 적용) | { action: "ack_all_new" }
+ *   date_suspect : date_changed(일정 변경 — 기존 행사의 일정을 새 값으로) | keep_old(변경 안 함 — 기존 일정이 맞음, 소스 값 무시) | separate(타 행사 — 새로 등록하고 다시 묻지 않음)
  *   duplicate_suspect : same(동일 행사 — 기존 행사에 빈 필드만 채움) | other(타 행사 — 새로 등록하고 다시 묻지 않음)
  *   concurrent   : group(+parent_id: 대표 행사를 고르면 나머지를 동시개최로 연결) | separate(각각 별개 행사)
  *   field_change : apply(소스 값으로 반영) | dismiss(유지)
@@ -61,7 +61,30 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
-  const body = (await req.json()) as { id?: string; action?: string; parent_id?: string };
+  const body = (await req.json()) as { id?: string; ids?: string[]; action?: string; parent_id?: string };
+
+  // 여러 건 일괄 처리 — 건별로 같은 처리를 적용하고 결과(patch/added)를 모아서 돌려줌. 일부 실패해도 나머지는 진행
+  if (Array.isArray(body.ids) && body.action) {
+    const patches: unknown[] = []; const added: unknown[] = []; const failed: { id: string; error: string }[] = [];
+    const queue = [...body.ids]; let done = 0;
+    await Promise.all(Array.from({ length: 5 }, async () => {
+      while (queue.length) {
+        const id = queue.shift()!;
+        const res = await processOne({ id, action: body.action });
+        const json = await res.json();
+        if (!res.ok) { failed.push({ id, error: json.error ?? "처리 실패" }); continue; }
+        done++;
+        if (json.patch) patches.push(json.patch);
+        for (const p of json.patches ?? []) patches.push(p);
+        if (json.added) added.push(json.added);
+      }
+    }));
+    return NextResponse.json({ ok: failed.length === 0, count: done, patches, addedList: added, failed });
+  }
+  return processOne(body);
+}
+
+async function processOne(body: { id?: string; action?: string; parent_id?: string }): Promise<NextResponse> {
   const { id, action } = body;
   const supabase = createAdminClient();
   const now = new Date().toISOString();
@@ -200,6 +223,11 @@ export async function POST(req: NextRequest) {
       const r = await patchEvent(fields); if (r.error) return fail(r.error);
       await resolve("reverted", "reverted");
       return NextResponse.json({ ok: true, patch: { id: c.event_id, fields } });
+    }
+    if (action === "keep_old") {
+      // 변경 안 함 — 기존 일정이 맞고 소스 값이 틀린 경우. 같은 짝은 dedupe_key 때문에 다시 묻지 않음
+      await resolve("dismissed", "kept_old");
+      return NextResponse.json({ ok: true });
     }
     if (action === "separate") {
       // 타 행사 — 새로 등록. dedupe_key 가 남아 있어 다음 수집부터 같은 짝을 다시 묻지 않음

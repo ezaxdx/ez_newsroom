@@ -1027,49 +1027,42 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     });
   }
 
+  // 토글은 눌렀을 때 화면을 먼저 바꾸고(낙관적 갱신) 서버 저장은 뒤에서 — 실패하면 되돌림
   async function togglePick(id: string, current: boolean) {
-    setToggling(id);
+    const apply = (v: boolean) => setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, is_ezpmp_pick: v } : e)));
+    apply(!current);
     try {
       const res = await fetch("/api/admin/events", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, is_ezpmp_pick: !current }),
       });
-      if (res.ok) {
-        setEvents((prev) =>
-          prev.map((e) => e.id === id ? { ...e, is_ezpmp_pick: !current } : e)
-        );
-      }
-    } finally {
-      setToggling(null);
-    }
+      if (!res.ok) apply(current);
+    } catch { apply(current); }
   }
 
   async function togglePublish(id: string, current: boolean, eventName?: string) {
-    setToggling(id);
+    const apply = (published: boolean) => setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, is_published: published, hidden_reason: published ? null : "manual" } : e)));
+    const prevRow = events.find((e) => e.id === id);
+    apply(!current);
+    // 공개→비공개 전환 시 행 아래에 규칙 제안 줄을 잠깐 띄움 (다시 공개하면 닫음)
+    if (current && eventName) {
+      setHideBar({ id, eventName, category: prevRow?.category ?? null, keywordOpen: false });
+      setPromptKeyword("");
+    } else if (hideBar?.id === id) {
+      setHideBar(null);
+    }
     try {
       const res = await fetch("/api/admin/events", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, is_published: !current }),
       });
-      if (res.ok) {
-        setEvents((prev) =>
-          prev.map((e) => e.id === id ? { ...e, is_published: !current, hidden_reason: current ? "manual" : null } : e)
-        );
-        // 공개→비공개 전환 시 행 아래에 규칙 제안 줄을 잠깐 띄움 (다시 공개하면 닫음)
-        if (current && eventName) {
-          setHideBar({ id, eventName, category: events.find((e) => e.id === id)?.category ?? null, keywordOpen: false });
-          setPromptKeyword("");
-        } else if (hideBar?.id === id) {
-          setHideBar(null);
-        }
-      }
-    } finally {
-      setToggling(null);
+      if (!res.ok) { setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, is_published: current, hidden_reason: prevRow?.hidden_reason ?? null } : e))); if (hideBar?.id === id) setHideBar(null); }
+    } catch {
+      setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, is_published: current, hidden_reason: prevRow?.hidden_reason ?? null } : e)));
     }
   }
-
   async function loadFilters() {
     const res = await fetch("/api/admin/event-filters");
     const json = await res.json();
