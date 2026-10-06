@@ -14,9 +14,13 @@ const env: Record<string, string> = Object.fromEntries(
 const arg = (name: string) => process.argv.find((a) => a.startsWith(`--${name}=`))?.split("=").slice(1).join("=");
 const supabase = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
+// --new-sources: DB 의 소스 대신 supabase/revamp/new_sources.json(전환 후 설정)만 사용해 시험 — DB 는 바꾸지 않음
+const newSources = process.argv.includes("--new-sources")
+  ? JSON.parse(fs.readFileSync(new URL("../supabase/revamp/new_sources.json", import.meta.url), "utf8"))
+  : undefined;
 const result = await runCuration(
   { supabase, env: (k) => env[k], log: (m) => console.log(m) },
-  { dry: true, maxAi: Number(arg("max-ai") ?? 4), onlySource: arg("only"), budgetMs: 150_000, writeLog: process.argv.includes("--log") },
+  { dry: true, maxAi: Number(arg("max-ai") ?? 4), onlySource: arg("only"), budgetMs: 150_000, writeLog: process.argv.includes("--log"), extraSources: newSources, replaceSources: !!newSources, calibrated: process.argv.includes("--calibrated") ? true : undefined },
 );
 const { sources, decisions, selected, ...summary } = result as any;
 console.log("\n===== 요약 =====\n" + JSON.stringify(summary, null, 1));

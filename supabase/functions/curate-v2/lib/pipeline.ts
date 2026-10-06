@@ -16,6 +16,9 @@ export interface RunOptions {
   dry: boolean;              // true: 기사·소스상태·건너뜀 기록을 저장하지 않음 (시험 실행)
   maxAi?: number;            // 시험 실행에서 AI 작성 건수 상한 (비용 보호)
   onlySource?: string;       // 소스명 일부 — 해당 소스만 실행
+  extraSources?: Partial<Source>[];   // 시험용: DB를 바꾸지 않고 메모리에서 소스 설정을 얹어 시험 (dry 에서만)
+  replaceSources?: boolean;  // true 면 DB 의 소스 대신 extraSources 만 사용
+  calibrated?: boolean;      // 시험 실행에서 점수 보정 프롬프트를 강제로 켜기/끄기
   budgetMs?: number;         // 처리 시간 예산
   writeLog?: boolean;        // curation_logs 기록 여부 (기본 true)
 }
@@ -109,10 +112,14 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const webhook = env("DISCORD_WEBHOOK_URL");
 
   /* ── 0. 준비 ── */
-  let q = supabase.from("rss_sources").select("*").eq("is_active", true);
-  const { data: sourcesRaw, error: srcErr } = await q;
-  if (srcErr) throw new Error(`rss_sources 조회 실패: ${srcErr.message}`);
-  let sources: Source[] = [...(sourcesRaw ?? [])].sort((a: Source, b: Source) => (b.weight ?? 0) - (a.weight ?? 0));
+  let dbSources: Source[] = [];
+  if (!(opts.dry && opts.replaceSources)) {
+    const { data: sourcesRaw, error: srcErr } = await supabase.from("rss_sources").select("*").eq("is_active", true);
+    if (srcErr) throw new Error(`rss_sources 조회 실패: ${srcErr.message}`);
+    dbSources = sourcesRaw ?? [];
+  }
+  const extra: Source[] = opts.dry ? (opts.extraSources ?? []).map((e, i) => ({ id: `x${i}`, is_active: true, weight: 5, default_category: "MICE", ...e }) as Source) : [];
+  let sources: Source[] = [...dbSources, ...extra].sort((a: Source, b: Source) => (b.weight ?? 0) - (a.weight ?? 0));
   if (opts.onlySource) sources = sources.filter((s) => s.source_name.includes(opts.onlySource!));
   if (!sources.length && !opts.onlySource) throw new Error("활성 소스 없음");
 
@@ -127,6 +134,8 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const catSettings: Record<string, CatSetting> = settings?.category_settings ?? {};
   const levelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const thresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
+  // 점수 보정 프롬프트 사용 여부 — DB 설정(quality_thresholds.calibrated)으로 켜고 끔. 시험 실행은 옵션으로 덮어쓸 수 있음
+  const calibrated = opts.dry && opts.calibrated != null ? opts.calibrated : thresholds.calibrated === true;
   const focusKeywords: string[] = (settings?.focus_keywords?.length ? settings.focus_keywords : DEFAULT_FOCUS).map((k: string) => k.toLowerCase());
   const domainExamples: { title: string; business_domains: string[] }[] = Array.isArray(settings?.business_domain_examples) ? settings.business_domain_examples : [];
   const qualityNotes: string[] = Array.isArray(settings?.content_quality_notes) ? settings.content_quality_notes : [];
@@ -257,13 +266,32 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   funnel.afterWindow = inWindow.length;
 
   // b) 구글 링크 → 원문 URL 복원 (상한 적용, 최신순)
+  // b0) 구글 후보는 복원하기 전에 제목으로 먼저 거름 — 네이버 등이 이미 잡은 기사, 이미 등록된 기사, 구글끼리 중복인 기사는
+  //     원문 URL을 복원할 필요가 없음 (복원은 구글에 요청을 보내는 일이라 횟수를 줄일수록 안정적)
+  const isGoogle = (l: string) => l.includes("news.google.com");
+  const extraVias = new Map<number, Set<string>>();
+  const dropped = new Set<number>();
+  const nonGoogle = inWindow.map((c, i) => ({ c, i })).filter(({ c }) => !isGoogle(c.item.link));
+  const googleOrdered = inWindow.map((c, i) => ({ c, i })).filter(({ c }) => isGoogle(c.item.link))
+    .sort((a, b) => (Number(!!b.c.src.eventId) - Number(!!a.c.src.eventId)) || (b.c.src.weight - a.c.src.weight) || ((b.c.pubMs ?? 0) - (a.c.pubMs ?? 0)));
+  const keptGoogleTitles: string[] = [];
+  for (const { c, i } of googleOrdered) {
+    const st = stats.get(c.src.key)!;
+    const t = c.item.title;
+    const hit = nonGoogle.find((x) => isSameStory(t, x.c.item.title));
+    if (hit) { (extraVias.get(hit.i) ?? extraVias.set(hit.i, new Set()).get(hit.i)!).add("google"); dropped.add(i); bump(st, "dup_pre_resolve"); continue; }
+    if (recentTitles.some((rt) => isSameStory(t, rt))) { dropped.add(i); bump(st, "dup_published"); continue; }
+    if (keptGoogleTitles.some((kt) => isSameStory(t, kt))) { dropped.add(i); bump(st, "dup_pre_resolve"); continue; }
+    keptGoogleTitles.push(t);
+  }
+
   // 같은 구글 링크는 한 번만 복원 (행사 검색어끼리 결과가 많이 겹침). 이즈픽 후보 → 중요도 → 최신순으로 우선 복원
   const googleLinks = new Map<string, number>();
-  for (const c of inWindow) {
-    if (!c.item.link.includes("news.google.com")) continue;
+  inWindow.forEach((c, i) => {
+    if (!isGoogle(c.item.link) || dropped.has(i)) return;
     const score = (c.src.eventId ? 1e12 : 0) + c.src.weight * 1e9 + (c.pubMs ?? 0) / 1e3;
     googleLinks.set(c.item.link, Math.max(googleLinks.get(c.item.link) ?? 0, score));
-  }
+  });
   const toResolve = [...googleLinks.entries()].sort((a, b) => b[1] - a[1]).slice(0, GOOGLE_RESOLVE_CAP).map(([l]) => l);
   const resolvedByLink = new Map<string, string | null>();
   await mapPool(toResolve, 4, async (link) => {
@@ -271,16 +299,17 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     if (!r) { await sleep(700); r = await resolveGoogleNewsUrl(link); }   // 구글이 일시적으로 제한할 수 있어 1회 재시도
     resolvedByLink.set(link, r);
   });
-  const resolved: { item: RawItem; src: SrcRef; pubMs: number | null; link: string }[] = [];
-  for (const c of inWindow) {
+  const resolved: { item: RawItem; src: SrcRef; pubMs: number | null; link: string; extra?: Set<string> }[] = [];
+  inWindow.forEach((c, i) => {
+    if (dropped.has(i)) return;
     const st = stats.get(c.src.key)!;
-    if (c.item.link.includes("news.google.com")) {
-      if (!resolvedByLink.has(c.item.link)) { bump(st, "over_cap"); continue; }
+    if (isGoogle(c.item.link)) {
+      if (!resolvedByLink.has(c.item.link)) { bump(st, "over_cap"); return; }
       const l = resolvedByLink.get(c.item.link);
-      if (!l) { bump(st, "unresolved"); continue; }
+      if (!l) { bump(st, "unresolved"); return; }
       resolved.push({ ...c, link: l });
-    } else resolved.push({ ...c, link: c.item.link });
-  }
+    } else resolved.push({ ...c, link: c.item.link, extra: extraVias.get(i) });
+  });
   funnel.afterResolve = resolved.length;
 
   // c) 이미 등록된/건너뛴 URL 제외
@@ -321,12 +350,13 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     if (!prev) {
       merged.set(urlKey, {
         title: c.item.title, link: c.link, pubDate: toISO(c.pubMs) ?? c.item.pubDate, pubMs: c.pubMs, description: c.item.description,
-        bodyText: c.item.bodyText, urlKey, srcs: [c.src], vias: new Set([c.item.via ?? c.src.via]), event: null,
+        bodyText: c.item.bodyText, urlKey, srcs: [c.src], vias: new Set([c.item.via ?? c.src.via, ...(c.extra ?? [])]), event: null,
         eventSearchOnly: !!c.src.eventId, coverage: 1,
       });
     } else {
       prev.srcs.push(c.src);
       prev.vias.add(c.item.via ?? c.src.via);
+      for (const v of c.extra ?? []) prev.vias.add(v);
       if (!c.src.eventId) prev.eventSearchOnly = false;
       // 네이버 쪽 정보를 우선 (발행일·요약이 항상 있음)
       if ((c.item.via === "naver") && c.item.description) { prev.description = c.item.description; if (c.pubMs) { prev.pubMs = c.pubMs; prev.pubDate = toISO(c.pubMs) ?? prev.pubDate; } }
@@ -450,7 +480,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     const cats = categoriesFor(c);
     const gen = await generateArticle({
       apiKey, articleText: c.text!, url: c.link, categories: cats, catSettings, levelPrompts, companyContext,
-      hintBlock: cats.length > 1 ? hintBlock : undefined, eventName: c.event?.name,
+      hintBlock: cats.length > 1 ? hintBlock : undefined, eventName: c.event?.name, calibrated,
     });
     if (!gen.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `generateArticle 실패: ${gen.error}` }); return; }
     const g = gen.value;

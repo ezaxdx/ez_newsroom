@@ -36,11 +36,17 @@ export function hostOf(urlKey: string): string {
 }
 
 /* ── 제목 유사도 (한국어는 2글자 단위 bigram + Dice 계수가 잘 맞음) ── */
+const normCache = new Map<string, string>();
 export function normTitle(s: string): string {
-  return decodeEntities(s || "")
+  const hit = normCache.get(s);
+  if (hit !== undefined) return hit;
+  const out = decodeEntities(s || "")
     .toLowerCase()
     .replace(/\[[^\]]*\]|\([^)]*\)|【[^】]*】/g, " ") // [포토] (종합) 같은 말머리 제거
     .replace(/[^0-9a-z가-힣]+/g, "");
+  if (normCache.size > 20000) normCache.clear();
+  normCache.set(s, out);
+  return out;
 }
 function bigrams(s: string): Set<string> {
   const set = new Set<string>();

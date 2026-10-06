@@ -111,14 +111,28 @@ export async function fetchRss(url: string): Promise<FetchResult> {
 function stripNaverMarkup(s: string): string {
   return decodeEntities((s || "").replace(/<\/?b>/g, "")).trim();
 }
+// 네이버 검색 API는 초당 호출 수 제한이 있어 동시에 많이 보내면 429 — 요청 시작 간격을 벌려서 보냄
+let naverNextSlot = 0;
+async function naverSlot(): Promise<void> {
+  const now = Date.now();
+  const at = Math.max(now, naverNextSlot);
+  naverNextSlot = at + 150;
+  if (at > now) await sleep(at - now);
+}
 export async function fetchNaverSearch(query: string, env: FetchEnv, display = 20): Promise<FetchResult> {
   if (!env.naverId || !env.naverSecret) throw new Error("NAVER_CLIENT_ID/SECRET 환경변수 없음");
   const params = new URLSearchParams({ query, display: String(display), sort: "date" });
-  const res = await httpGet(`https://openapi.naver.com/v1/search/news.json?${params}`, {
-    headers: { "X-Naver-Client-Id": env.naverId, "X-Naver-Client-Secret": env.naverSecret },
-    timeoutMs: 10000,
-  });
-  if (!res.ok) throw new Error(`네이버 API HTTP ${res.status}`);
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await naverSlot();
+    res = await httpGet(`https://openapi.naver.com/v1/search/news.json?${params}`, {
+      headers: { "X-Naver-Client-Id": env.naverId, "X-Naver-Client-Secret": env.naverSecret },
+      timeoutMs: 10000,
+    }, 1);
+    if (res.status !== 429) break;
+    await sleep(1200 * (attempt + 1));   // 제한에 걸리면 잠시 쉬었다가 재시도
+  }
+  if (!res || !res.ok) throw new Error(`네이버 API HTTP ${res?.status}`);
   const json = await res.json();
   const arr = Array.isArray(json.items) ? json.items : [];
   const items: RawItem[] = arr.map((it: Record<string, string>) => ({

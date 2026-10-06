@@ -12,6 +12,7 @@ export interface GenInput {
   companyContext?: string;
   hintBlock?: string;                                    // AI 판단 시 참고할 카테고리 힌트 키워드
   eventName?: string;                                    // 이즈픽 행사 관련 기사면 행사명
+  calibrated?: boolean;                                  // true: 점수 예시값 베끼기 방지 + 분포 가이드 (curation_settings.quality_thresholds.calibrated)
 }
 export interface Generated {
   title: string;
@@ -55,6 +56,28 @@ function levelBlock(cat: string, lp: Record<string, Record<string, string>>): st
 
 function defaultSetting(cat: string): CatSetting {
   return { audience: "MICE·관광 업계 종사자", persona: `당신은 ${cat} 전문 에디터입니다. 업계 종사자 관점에서 핵심 시사점을 분석합니다.`, keywords: [] };
+}
+
+/**
+ * 응답 JSON 형식 안내.
+ * 기본(calibrated=false)은 v1과 동일 — 예시값(품질 8, 적합 9)이 들어 있어 AI가 그 숫자를 거의 그대로 베끼는 문제가 있음
+ * (운영 기사 682건 중 품질 8~9점이 99%, 적합성 4점 이하 0건 → 적합성 관문이 작동하지 않음).
+ * calibrated=true 는 예시값 대신 형식만 안내하고 점수 분포 가이드를 줌.
+ */
+function jsonSection(multi: boolean, calibrated: boolean): string {
+  const catPart = multi ? ',"category":"후보 중 하나","category_reason":"카테고리 판단 근거 한 줄"' : "";
+  if (!calibrated) {
+    return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
+{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":["AI 관광"]${catPart.replace('"후보 중 하나"', '"MICE"')}}`;
+  }
+  return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이).
+아래는 형식 설명이며, 숫자 자리에는 이 기사를 직접 평가한 값을 넣으세요 (예시값을 따라 쓰지 마세요).
+{"quality_score":(1~10 정수),"quality_criteria":{"relevance":(1~10),"specificity":(1~10),"practicality":(1~10),"source_quality":(1~10),"fit":(1~10)},"level":"Beginner|Intermediate|Advanced 중 하나","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":[]${catPart}}
+
+점수 부여 원칙 (엄격하게):
+- 대부분의 일반 기사는 quality_score 5~7점입니다. 8점 이상은 구체적 수치·사례가 풍부하고 실무에 바로 쓸 수 있는 뚜렷하게 우수한 기사에만 주세요. 9~10점은 매우 드뭅니다.
+- fit(회사 적합성)은 MICE·관광 실무와의 접점을 냉정하게 평가하세요. 접점이 약하면 3~5점, 무관하면 1~2점입니다. 접점이 분명한 경우에만 8점 이상.
+- 점수는 기사마다 달라야 합니다. 모든 기사에 같은 점수를 주지 마세요.`;
 }
 
 export function buildPrompt(i: GenInput): string {
@@ -137,8 +160,7 @@ business_domains(사업영역 분류): 시스템 지침(company_context)의 "7�
     산학협력, 인력양성 등 기술과 무관한 일반 MICE 산업 뉴스는 절대 포함하지 말 것
   - 여러 영역에 핵심적으로 걸치면 복수 반환 가능, 어디에도 해당 없으면 빈 배열 [] (억지로 채우지 말 것)
 
-다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
-{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":["AI 관광"]${multi ? ',"category":"MICE","category_reason":"카테고리 판단 근거 한 줄"' : ""}}
+${jsonSection(multi, !!i.calibrated)}
 
 원문 URL: ${i.url}
 ${i.articleText.length > 50 ? `원문:\n${i.articleText}` : "(원문 접근 불가 — 제목과 URL을 바탕으로 작성해주세요)"}`;
