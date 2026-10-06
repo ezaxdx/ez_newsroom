@@ -119,40 +119,63 @@ async function naverSlot(): Promise<void> {
   naverNextSlot = at + 150;
   if (at > now) await sleep(at - now);
 }
-export async function fetchNaverSearch(query: string, env: FetchEnv, display = 20): Promise<FetchResult> {
+/**
+ * 네이버 뉴스 검색 (최신순).
+ * 예전에는 최신 20건만 가져와서, 발행 기간(보통 3~5일) 안의 기사가 20건보다 많은 키워드에서는 기간 안 기사를 놓쳤음
+ * (스마트관광: 기간 안 기사 1건 / 후보 120건 중 99건이 기간보다 오래됨). → 100건씩 여러 쪽을 이어서 가져오되,
+ * 한 쪽의 가장 오래된 기사가 기간 시작보다 앞서면 그만 가져옴 (불필요한 호출 방지)
+ */
+export async function fetchNaverSearch(
+  query: string, env: FetchEnv, display = 20, opts: { pages?: number; stopBefore?: number } = {},
+): Promise<FetchResult> {
   if (!env.naverId || !env.naverSecret) throw new Error("NAVER_CLIENT_ID/SECRET 환경변수 없음");
-  const params = new URLSearchParams({ query, display: String(display), sort: "date" });
-  let res: Response | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    await naverSlot();
-    res = await httpGet(`https://openapi.naver.com/v1/search/news.json?${params}`, {
-      headers: { "X-Naver-Client-Id": env.naverId, "X-Naver-Client-Secret": env.naverSecret },
-      timeoutMs: 10000,
-    }, 1);
-    if (res.status !== 429) break;
-    await sleep(1200 * (attempt + 1));   // 제한에 걸리면 잠시 쉬었다가 재시도
+  const per = Math.max(1, Math.min(display, 100));
+  const pages = Math.max(1, Math.min(opts.pages ?? 1, 5));
+  const items: RawItem[] = [];
+  for (let p = 0; p < pages; p++) {
+    const params = new URLSearchParams({ query, display: String(per), start: String(1 + p * per), sort: "date" });
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await naverSlot();
+      res = await httpGet(`https://openapi.naver.com/v1/search/news.json?${params}`, {
+        headers: { "X-Naver-Client-Id": env.naverId, "X-Naver-Client-Secret": env.naverSecret },
+        timeoutMs: 10000,
+      }, 1);
+      if (res.status !== 429) break;
+      await sleep(1200 * (attempt + 1));   // 제한에 걸리면 잠시 쉬었다가 재시도
+    }
+    if (!res || !res.ok) {
+      if (p > 0 && items.length) break;   // 뒤쪽 쪽에서 실패하면 이미 받은 것까지만 사용
+      throw new Error(`네이버 API HTTP ${res?.status}`);
+    }
+    const json = await res.json();
+    const arr = Array.isArray(json.items) ? json.items : [];
+    const page: RawItem[] = arr.map((it: Record<string, string>) => ({
+      title: stripNaverMarkup(it.title ?? ""),
+      link: it.originallink || it.link || "",
+      pubDate: it.pubDate ?? "",
+      description: stripNaverMarkup(it.description ?? ""),
+      via: "naver" as const,
+    })).filter((it: RawItem) => it.title && it.link);
+    items.push(...page);
+    if (arr.length < per) break;   // 더 없음
+    if (opts.stopBefore != null) {
+      const oldest = Math.min(...page.map((it) => parseDateLoose(it.pubDate) ?? Infinity));
+      if (oldest < opts.stopBefore) break;   // 기간 시작보다 오래된 기사까지 왔으니 충분
+    }
   }
-  if (!res || !res.ok) throw new Error(`네이버 API HTTP ${res?.status}`);
-  const json = await res.json();
-  const arr = Array.isArray(json.items) ? json.items : [];
-  const items: RawItem[] = arr.map((it: Record<string, string>) => ({
-    title: stripNaverMarkup(it.title ?? ""),
-    link: it.originallink || it.link || "",
-    pubDate: it.pubDate ?? "",
-    description: stripNaverMarkup(it.description ?? ""),
-    via: "naver",
-  })).filter((it: RawItem) => it.title && it.link);
   return { items };
 }
 
 /* ── 구글 뉴스 RSS 검색 ── */
-export async function fetchGoogleSearch(query: string): Promise<FetchResult> {
-  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=ko&gl=KR&ceid=KR:ko`;
+// whenDays: 최근 N일 기사만 (구글 검색 연산자 when:Nd) — 안 주면 오래된 기사까지 섞여 100건 중 기간 안 기사가 적었음
+export async function fetchGoogleSearch(query: string, whenDays?: number): Promise<FetchResult> {
+  const q = whenDays ? `${query} when:${Math.max(1, Math.min(Math.ceil(whenDays), 30))}d` : query;
+  const url = `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=ko&gl=KR&ceid=KR:ko`;
   const { items } = await fetchRss(url);
   // 구글 제목은 "제목 - 매체명" 형태 → 매체명 꼬리 제거 (중복 판정 정확도용)
   return { items: items.map((it) => ({ ...it, title: it.title.replace(/\s+-\s+[^-]{2,30}$/, ""), via: "google" })) };
 }
-
 /* ── 구글 뉴스 링크 → 언론사 원문 URL ── */
 function decodeGoogleNewsArticleUrl(googleUrl: string): string | null {
   try {

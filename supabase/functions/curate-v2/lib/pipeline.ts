@@ -153,6 +153,8 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     (catExamples.length ? `\n\n【카테고리 확정 예시 — 관리자가 직접 고침, 비슷한 제목은 이 사례를 참고해 카테고리를 판단하세요】\n` + catExamples.slice(0, 30).map((e) => `- "${e.title}" → ${e.category}`).join("\n") : "") +
     (qualityNotes.length ? `\n\n【콘텐츠 품질 감사에서 실제로 발견·수정된 문제 유형 — 아래와 같은 실수를 반복하지 마세요】\n` + qualityNotes.slice(0, 30).map((n) => `- ${n}`).join("\n") : "");
   const hintBlock = buildHintBlock(settings?.category_hints);
+  // 구글 검색은 발행 창 시작일부터 오늘까지로 범위를 좁힘 (하루 여유)
+  const whenDays = (Date.now() - windowStart) / 86400000 + 1;
   log(`[발행 창] ${new Date(windowStart).toISOString()} ~ ${new Date(windowEnd).toISOString()}`);
 
   // 기존 기사·건너뛴 URL·최근 제목 (정규화해서 비교)
@@ -206,8 +208,8 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     const t = s.source_type;
     if (t === "keyword_search" || t === "naver_news") {
       const engines = t === "naver_news" ? ["naver"] : (cfg.engines?.length ? cfg.engines : ["naver"]);
-      if (engines.includes("naver")) tasks.push({ key, via: "naver", src: srcRefOf(s, "naver"), run: () => fetchNaverSearch(s.url, fenv, 20) });
-      if (engines.includes("google")) tasks.push({ key, via: "google", src: srcRefOf(s, "google"), run: () => fetchGoogleSearch(s.url) });
+      if (engines.includes("naver")) tasks.push({ key, via: "naver", src: srcRefOf(s, "naver"), run: () => fetchNaverSearch(s.url, fenv, 100, { pages: 3, stopBefore: windowStart }) });
+      if (engines.includes("google")) tasks.push({ key, via: "google", src: srcRefOf(s, "google"), run: () => fetchGoogleSearch(s.url, whenDays) });
     } else if (t === "rss") {
       const via = s.url.includes("news.google.com") ? "google" : `rss:${s.source_name}`;
       tasks.push({ key, via, src: srcRefOf(s, via), run: () => fetchRss(s.url) });
