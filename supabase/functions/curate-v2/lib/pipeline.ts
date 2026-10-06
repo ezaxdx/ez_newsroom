@@ -565,7 +565,9 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       // v1 프롬프트 모드(calibrated=false)에서만 작성 호출이 낸 값을 쓰며, 그때도 화면 집계와 같은 기준 이름으로 통일
       business_domains: calibrated ? [] : [...new Set((g.business_domains ?? []).map((d) => canonicalDomain(d)).filter((d): d is string => !!d))],
       is_published: publish,
-      priority_score: priority, display_order: 1000 - score * 10,
+      // 표시 순서(홈 히어로·큐레이션 보드 탑뉴스·뉴스레터 카테고리별 상위 2건이 이 값으로 정렬) — 적합성(fit)이 1순위, 품질점수는 동점 처리, 이즈픽 기사는 가산.
+      // 예전엔 품질점수만 반영했는데 8~9점에 99%가 몰려 사실상 동점이라 적합성·AI 우선순위가 순서에 안 드러났음
+      priority_score: priority, display_order: Math.round(1000 - (fit * 10 + score + (isPick ? 20 : 0))),
       published_at: publish ? new Date().toISOString() : (toISO(c.pubMs) ?? new Date().toISOString()),
       original_title: c.title.slice(0, 300), found_via: [...c.vias], coverage_count: c.coverage,
       related_event_id: c.event?.id ?? null, category_reason: g.category_reason, category_edited: false,

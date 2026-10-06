@@ -12,6 +12,12 @@
 
 begin;
 
+-- ── 0. source_type CHECK 제약에 새 방식 3개 추가 ─────────────────────────────
+-- 운영 DB 에는 rss_sources_source_type_check 제약이 있어(repo 의 schema.sql 에는 없음) 새 값을 넣으면 거부됨 — 먼저 넓힘
+alter table public.rss_sources drop constraint if exists rss_sources_source_type_check;
+alter table public.rss_sources add constraint rss_sources_source_type_check
+  check (source_type in ('rss', 'url', 'api', 'gmail', 'naver_news', 'keyword_search', 'web_list', 'json_list'));
+
 -- ── A. 검색 키워드: 네이버 4개 → keyword_search (네이버+구글 동시 검색), 구글 RSS 행은 통합 ──
 update public.rss_sources set source_type = 'keyword_search', source_name = '스마트관광', url = '스마트관광',
   keyword_mode = 'none', max_items = 10, fetch_config = '{"engines":["naver","google"]}'::jsonb

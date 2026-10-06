@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { ChevronLeft, ChevronRight, ExternalLink, MapPin, Calendar } from "lucide-react";
 import { logEvent } from "@/lib/analytics";
-import { selectEzpmpPickIds, isEzpmpPartner } from "@/lib/event-score";
+import { selectEzpmpPickIds, isEzpmpPartner, type ScoringContext } from "@/lib/event-score";
 
 export type ConventionEvent = {
   id: string;
@@ -21,7 +21,7 @@ export type ConventionEvent = {
   is_ezpmp_pick?: boolean;
 };
 
-type Props = { events: ConventionEvent[] };
+type Props = { events: ConventionEvent[]; scoring?: ScoringContext };
 
 // 이즈픽 선정·파트너 판별은 홈 캘린더와 공유 — @/lib/event-score
 
@@ -52,7 +52,7 @@ const CATEGORY_LIST = ["전체", "전시", "회의", "이벤트", "문화행사"
 const DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 const MONTHS = ["1월","2월","3월","4월","5월","6월","7월","8월","9월","10월","11월","12월"];
 
-export default function EventsClient({ events }: Props) {
+export default function EventsClient({ events, scoring }: Props) {
   const today = new Date();
   const todayDateStr = today.toISOString().split("T")[0];
 
@@ -65,7 +65,7 @@ export default function EventsClient({ events }: Props) {
   // ── 이즈픽 추천 — 홈 캘린더와 동일 로직 (어드민 ⭐ 최우선 + 자동 점수, 공통 슬롯 수)
   const recommendations = useMemo(() => {
     const upcoming = events.filter((e) => e.start_date >= todayDateStr); // 지난 행사 제외 (KST 기준 오늘 포함)
-    const pickIds = selectEzpmpPickIds(upcoming, today);
+    const pickIds = selectEzpmpPickIds(upcoming, today, undefined, scoring);
     return upcoming
       .filter((e) => pickIds.has(e.id))
       .sort((a, b) => a.start_date.localeCompare(b.start_date));

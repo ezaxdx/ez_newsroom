@@ -3,6 +3,7 @@ import { NewsItem } from "@/lib/types";
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { selectEzpmpPickIds } from "@/lib/event-score";
+import { loadScoringContext } from "@/lib/event-score-context";
 import TopBar from "@/components/newsroom/TopBar";
 import NewsroomClient from "@/components/newsroom/NewsroomClient";
 import Footer from "@/components/newsroom/Footer";
@@ -168,7 +169,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       is_ezpmp_pick?: boolean;
     };
     const rawEvents = data as RawEvent[];
-    const pickIds = selectEzpmpPickIds(rawEvents, today);
+    const pickIds = selectEzpmpPickIds(rawEvents, today, undefined, await loadScoringContext(supabase));
 
     return rawEvents.map((e) => ({
       id:         e.id,

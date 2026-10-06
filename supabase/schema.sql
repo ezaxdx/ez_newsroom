@@ -111,6 +111,7 @@ alter table public.rss_sources
   add column if not exists api_config     jsonb,
   add column if not exists keyword_filter boolean default false,
   -- 큐레이션 개편(2026-10): source_type 신규 값 keyword_search|web_list|json_list, default_category 신규 값 MIXED(AI 판단)
+  -- 운영 DB 에는 rss_sources_source_type_check 제약이 있어 02_cutover.sql 0단계에서 rss|url|api|gmail|naver_news|keyword_search|web_list|json_list 로 넓힘
   add column if not exists keyword_mode    text    default 'none',   -- none(전체)|default(기본 관심 키워드)|custom(지정 키워드)
   add column if not exists custom_keywords text[]  default '{}',
   add column if not exists max_items       integer default 10,
@@ -176,7 +177,7 @@ create table if not exists public.convention_events (
   is_published   boolean default true,
   is_ezpmp_pick  boolean default false not null,  -- 어드민 수동 픽 — 자동 점수보다 최우선
   is_concurrent  boolean default false,           -- 동시개최 부속행사 (메인 행사 아님, 뉴스레터에서 제외)
-  source         text default 'manual',           -- showala|keoa|manual
+  source         text default 'manual',           -- akei|keoa|showala|manual
   created_at     timestamptz default now()
 );
 
@@ -186,7 +187,74 @@ alter table public.convention_events
   add column if not exists is_ezpmp_pick boolean default false not null,
   add column if not exists is_concurrent boolean default false,
   add column if not exists source        text default 'manual',
-  add column if not exists news_keywords text[] default '{}';        -- 이즈픽 행사 뉴스 검색 별칭 (행사명 외)
+  add column if not exists news_keywords text[] default '{}',        -- 이즈픽 행사 뉴스 검색 별칭 (행사명 외)
+  add column if not exists publish_locked boolean not null default false,  -- 관리자가 공개/비공개를 직접 바꾼 행사 (수집·규칙 소급 적용이 덮어쓰지 않음)
+  add column if not exists seen_at jsonb not null default '{}'::jsonb,      -- 소스별 마지막 확인 시각 {"akei":ts,"keoa":ts} — 소스에서 사라진 행사 감지용
+  add column if not exists parent_event_id uuid references public.convention_events(id) on delete set null,  -- 동시개최: 대표 행사 (is_concurrent=true 인 행이 가짐)
+  add column if not exists hidden_reason text;                               -- manual|rule|missing — 비공개 사유 (기존 비공개는 null)
+
+create index if not exists convention_events_parent_idx
+  on public.convention_events (parent_event_id) where parent_event_id is not null;
+
+-- ── event_org_affinity / event_scoring_settings — 행사 점수 개편 (08_event_scoring.sql) ──
+-- tier: client(수행실적 발주처 — 엑셀로 갱신) | peer(동종 업계) | venue(장소 운영사) | peo(PEO 계열, 후순위)
+create table if not exists public.event_org_affinity (
+  id          uuid primary key default gen_random_uuid(),
+  org_key     text not null,
+  org_name    text not null,
+  tier        text not null,
+  source      text not null default 'manual',   -- manual | track_record
+  hit_count   integer not null default 0,
+  last_year   integer,
+  created_at  timestamptz not null default now(),
+  unique (org_key, tier)
+);
+create index if not exists event_org_affinity_tier_idx on public.event_org_affinity (tier);
+create table if not exists public.event_scoring_settings (
+  id                 integer primary key default 1 check (id = 1),
+  track_record_at    timestamptz,
+  track_record_file  text,
+  track_record_rows  integer,
+  weights            jsonb not null default '{}'::jsonb,
+  updated_at         timestamptz not null default now()
+);
+insert into public.event_scoring_settings (id) values (1) on conflict (id) do nothing;
+alter table public.event_org_affinity     enable row level security;
+alter table public.event_scoring_settings enable row level security;
+drop policy if exists "admin all event_org_affinity"     on public.event_org_affinity;
+drop policy if exists "admin all event_scoring_settings" on public.event_scoring_settings;
+create policy "admin all event_org_affinity"     on public.event_org_affinity     for all using (auth.role() = 'authenticated');
+create policy "admin all event_scoring_settings" on public.event_scoring_settings for all using (auth.role() = 'authenticated');
+
+-- ── event_filter_exceptions — 비공개 규칙 예외 ("제외하지 않기") ─────────
+create table if not exists public.event_filter_exceptions (
+  id          uuid primary key default gen_random_uuid(),
+  name_key    text not null unique,      -- 정규화한 행사명
+  event_name  text,
+  created_at  timestamptz not null default now()
+);
+alter table public.event_filter_exceptions enable row level security;
+drop policy if exists "admin all event_filter_exceptions" on public.event_filter_exceptions;
+create policy "admin all event_filter_exceptions" on public.event_filter_exceptions for all using (auth.role() = 'authenticated');
+
+-- ── event_changes — 행사 수집 변경 내역 (검토 대기열 + 처리 이력) ─────────
+create table if not exists public.event_changes (
+  id          uuid primary key default gen_random_uuid(),
+  created_at  timestamptz not null default now(),
+  resolved_at timestamptz,
+  kind        text not null,                  -- new | date_suspect | field_change | missing
+  status      text not null default 'pending',-- pending | applied | dismissed | reverted
+  resolution  text,                           -- date_changed | separate | applied | kept | hidden | acknowledged | reverted
+  event_id    uuid references public.convention_events(id) on delete cascade,
+  source      text,
+  dedupe_key  text not null unique,           -- 같은 변경을 다시 묻지 않기 위한 키
+  payload     jsonb not null default '{}'::jsonb
+);
+create index if not exists event_changes_status_kind_idx on public.event_changes (status, kind);
+create index if not exists event_changes_event_idx       on public.event_changes (event_id);
+alter table public.event_changes enable row level security;
+drop policy if exists "admin all event_changes" on public.event_changes;
+create policy "admin all event_changes" on public.event_changes for all using (auth.role() = 'authenticated');
 
 -- ── news 확장 (큐레이션 개편 2026-10) — convention_events FK 때문에 여기서 추가 ──
 alter table public.news
@@ -232,12 +300,12 @@ create index if not exists convention_events_venue_idx      on public.convention
 create index if not exists convention_events_category_idx   on public.convention_events(category);
 
 -- ── event_keyword_filters ─────────────────────────────────────────────
--- 행사 자동 비공개 키워드 (name: 행사명 매칭, industry: 전시분야 매칭)
+-- 행사 자동 비공개 규칙 (name: 행사명 매칭, industry: 품목·분야 매칭, category: AKEI 전시분야 매칭)
 create table if not exists public.event_keyword_filters (
   id          uuid primary key default gen_random_uuid(),
   keyword     text not null,
   memo        text,
-  filter_type text not null default 'name',  -- name|industry
+  filter_type text not null default 'name',  -- name|industry|category
   created_at  timestamptz default now()
 );
 
@@ -307,6 +375,14 @@ create table if not exists public.scrape_logs (
   elapsed_sec      numeric,
   error            text
 );
+
+alter table public.scrape_logs
+  add column if not exists source        text,      -- akei|keoa|showala (소스별로 따로 실행·기록)
+  add column if not exists akei_scraped  integer,
+  add column if not exists dropped_count integer,
+  add column if not exists dropped       jsonb,     -- 규칙으로 제외된 행사 [{name,date,reason,source,c(후보 행사)}]
+  add column if not exists dropped_by_rule jsonb,   -- 규칙별 제외 건수 {"행사명:베이비": 8}
+  add column if not exists source_errors jsonb;
 
 -- ── curation_logs ─────────────────────────────────────────────────────
 -- 뉴스 큐레이션(curate Edge Function) 실행 이력

@@ -1,11 +1,14 @@
 "use client";
 
-import { useState, useMemo, useRef, useEffect, useCallback } from "react";
+import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from "react";
 import { useRouter } from "next/navigation";
 import { ExternalLink, Check, Sparkles, X, RefreshCw } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note, Def } from "@/components/admin/HelpPanel";
 import { useTabParam } from "@/lib/useTabParam";
+import EventChangesPanel from "@/components/admin/EventChangesPanel";
+import EventCollectBar from "@/components/admin/EventCollectBar";
+import EventOrgAffinityPanel from "@/components/admin/EventOrgAffinityPanel";
 
 type EventRow = {
   id: string;
@@ -22,6 +25,10 @@ type EventRow = {
   source: string | null;
   created_at: string;
   news_keywords?: string[] | null;   // 이즈픽 행사 뉴스 검색 별칭 (행사명 외)
+  seen_at?: Record<string, string> | null;  // 소스별 마지막 확인 시각 — 출처 배지
+  is_concurrent?: boolean | null;    // 동시개최로 딸린 행사
+  parent_event_id?: string | null;   // 동시개최 대표 행사
+  hidden_reason?: string | null;     // manual | rule | missing (기존 비공개는 비어 있음)
   news_count?: number;               // 이 행사를 다룬 수집 기사 수 (news.related_event_id)
   news_last?: string | null;         // 가장 최근 관련 기사 발행일
 };
@@ -897,344 +904,48 @@ function NewsTab({ news }: { news: NewsItem[] }) {
 }
 
 // ── 행사 정보 가져오기 패널 ──────────────────────────────────────
-type ImportPreview = {
-  new_count: number; merge_count: number; skip_count: number;
-  preview_new:   { name: string; date: string; venue: string }[];
-  preview_merge: { name: string; date: string; fields: string[] }[];
-} | null;
-
-type ScrapeLog = {
-  id: string; created_at: string; ok: boolean;
-  showala_scraped: number | null; keoa_scraped: number | null;
-  inserted: number | null; updated: number | null; auto_hidden: number | null;
-  elapsed_sec: number | null; error: string | null;
-};
-
-function ManualOpsPanel() {
-  const [scrapeStatus, setScrapeStatus] = useState<"idle" | "running" | "done" | "error">("idle");
-  const [lastLog, setLastLog] = useState<ScrapeLog | null>(null);
-  const [open, setOpen] = useState(false);
-
-  // AKEI 가져오기
-  const importFileRef = useRef<HTMLInputElement>(null);
-  const [importRows,   setImportRows]   = useState<unknown[] | null>(null);
-  const [importPreview, setImportPreview] = useState<ImportPreview>(null);
-  const [importStatus, setImportStatus] = useState<"idle" | "parsing" | "previewing" | "ready" | "running" | "done" | "error">("idle");
-  const [importMsg,    setImportMsg]    = useState("");
-
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    setImportStatus("parsing");
-    setImportPreview(null);
-    setImportMsg("");
-    try {
-      const XLSX = await import("xlsx");
-      const buf  = await file.arrayBuffer();
-      const wb   = XLSX.read(buf, { type: "array" });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws);
-      setImportRows(rows);
-      // 자동으로 미리보기 요청
-      const res  = await fetch("/api/admin/import-exhibitions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows, dry_run: true }),
-      });
-      const data = await res.json();
-      setImportPreview(data);
-      setImportStatus("ready");
-    } catch (err) {
-      setImportStatus("error");
-      setImportMsg(err instanceof Error ? err.message : "파일 파싱 오류");
-    }
-  }
-
-  async function runImport() {
-    if (!importRows) return;
-    setImportStatus("running");
-    try {
-      const res  = await fetch("/api/admin/import-exhibitions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: importRows, dry_run: false }),
-      });
-      const data = await res.json();
-      if (data.ok) {
-        setImportMsg(`신규 ${data.inserted}건 추가 · ${data.updated}건 보강 · ${data.skipped}건 스킵`);
-        setImportStatus("done");
-      } else {
-        setImportMsg(data.error ?? "오류 발생");
-        setImportStatus("error");
-      }
-    } catch {
-      setImportStatus("error");
-      setImportMsg("실행 실패");
-    }
-  }
-
-  function resetImport() {
-    setImportRows(null); setImportPreview(null);
-    setImportStatus("idle"); setImportMsg("");
-    if (importFileRef.current) importFileRef.current.value = "";
-  }
-
-  const fetchLastLog = useCallback(async () => {
-    try {
-      const res = await fetch("/api/admin/scrape-logs");
-      const { data } = await res.json();
-      if (data?.length) setLastLog(data[0]);
-    } catch { /* 무시 */ }
-  }, []);
-
-  useEffect(() => {
-    if (open) fetchLastLog();
-  }, [open, fetchLastLog]);
-
-  async function handleScrape() {
-    setScrapeStatus("running");
-    const prevLogId = lastLog?.id ?? null;
-    try {
-      const res = await fetch("/api/admin/scrape-events", { method: "POST" });
-      if (!res.ok) { setScrapeStatus("error"); return; }
-      // 백그라운드 실행 — 새 로그가 생길 때까지 15초 간격 폴링 (최대 3분)
-      for (let i = 0; i < 12; i++) {
-        await new Promise((r) => setTimeout(r, 15000));
-        const logRes = await fetch("/api/admin/scrape-logs");
-        const { data } = await logRes.json();
-        if (data?.length && data[0].id !== prevLogId) {
-          setLastLog(data[0]);
-          setScrapeStatus(data[0].ok ? "done" : "error");
-          return;
-        }
-      }
-      setScrapeStatus("done"); // 타임아웃 — 로그는 나중에 확인
-    } catch {
-      setScrapeStatus("error");
-    }
-  }
-
-  const scrapeColor: Record<string, string> = {
-    idle: "#64748b", running: "#f59e0b", done: "#10b981", error: "#ef4444",
-  };
-  const scrapeLabel: Record<string, string> = {
-    idle: "스크래핑 실행", running: "실행 중...", done: "완료 ✓", error: "오류 — 재시도",
-  };
-
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <button
-        onClick={() => setOpen((v) => !v)}
-        style={{
-          display: "flex", alignItems: "center", gap: 8, background: "none",
-          border: "none", cursor: "pointer", padding: "0 0 12px", width: "100%",
-        }}
-      >
-        <span style={{ fontWeight: 700, fontSize: "0.88rem", color: "var(--on-surface)" }}>
-          📥 행사 정보 가져오기
-        </span>
-        <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
-          {open ? "▲" : "▼"}
-        </span>
-      </button>
-
-      {open && (
-        <div className="grid grid-cols-1 sm:grid-cols-2" style={{
-          gap: 16,
-          padding: 20, borderRadius: 12,
-          border: "1px solid var(--surface-container-high)",
-          background: "var(--surface-container-lowest)",
-          marginBottom: 4,
-        }}>
-          {/* ── 스크래핑 ── */}
-          <div>
-            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.82rem" }}>
-              📡 행사 데이터 수집
-            </p>
-            <p style={{ margin: "0 0 12px", fontSize: "0.73rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
-              쇼알라 + 한국전시주최자협회에서 최신 행사를 수집합니다.
-              수집은 백그라운드에서 진행되며 약 1~2분 소요됩니다.
-            </p>
-            <button
-              onClick={handleScrape}
-              disabled={scrapeStatus === "running"}
-              style={{
-                padding: "7px 18px", borderRadius: 8, fontSize: "0.78rem",
-                fontWeight: 700, cursor: scrapeStatus === "running" ? "wait" : "pointer",
-                border: `1px solid ${scrapeColor[scrapeStatus]}40`,
-                background: scrapeColor[scrapeStatus] + "18",
-                color: scrapeColor[scrapeStatus],
-                transition: "all 0.2s",
-              }}
-            >
-              {scrapeLabel[scrapeStatus]}
-            </button>
-            {scrapeStatus === "running" && (
-              <p style={{ margin: "8px 0 0", fontSize: "0.72rem", color: "#f59e0b" }}>
-                수집 중... 완료되면 결과가 아래에 표시됩니다. (1~2분 소요)
-              </p>
-            )}
-            {lastLog && (
-              <div style={{
-                marginTop: 10, padding: "10px 12px", borderRadius: 8,
-                background: "var(--surface-container)",
-                border: `1px solid ${lastLog.ok && !lastLog.error ? "var(--surface-container-high)" : "#f59e0b60"}`,
-                fontSize: "0.72rem", color: "var(--on-surface-variant)", lineHeight: 1.7,
-              }}>
-                <p style={{ margin: 0, fontWeight: 700, fontSize: "0.73rem", color: "var(--on-surface)" }}>
-                  마지막 수집: {new Date(lastLog.created_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
-                  {lastLog.ok ? " ✓" : " ✗ 실패"}
-                </p>
-                {lastLog.ok && (
-                  <p style={{ margin: 0 }}>
-                    쇼알라 {lastLog.showala_scraped ?? 0}건 · KEOA {lastLog.keoa_scraped ?? 0}건 수집
-                    → 신규 <b style={{ color: "#10b981" }}>{lastLog.inserted ?? 0}</b> · 보강 {lastLog.updated ?? 0} · 비공개 {lastLog.auto_hidden ?? 0}
-                    {lastLog.elapsed_sec != null && ` (${Math.round(lastLog.elapsed_sec)}초)`}
-                  </p>
-                )}
-                {lastLog.error && (
-                  <p style={{ margin: 0, color: "#d97706", fontWeight: 600 }}>⚠️ {lastLog.error}</p>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* ── AKEI 엑셀 가져오기 ── */}
-          <div>
-            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.82rem" }}>
-              📥 AKEI 엑셀 가져오기
-            </p>
-            <p style={{ margin: "0 0 12px", fontSize: "0.73rem", color: "var(--on-surface-variant)", lineHeight: 1.5 }}>
-              한국전시산업진흥회 크롤러 엑셀을 업로드하면 중복 분석 후 신규 추가·빈 필드 보강을 수행합니다.
-            </p>
-
-            {importStatus === "idle" && (
-              <label style={{
-                display: "inline-flex", alignItems: "center", gap: 6,
-                padding: "7px 14px", borderRadius: 8, fontSize: "0.78rem",
-                fontWeight: 600, cursor: "pointer",
-                border: "1px solid var(--surface-container-high)",
-                background: "transparent", color: "var(--on-surface-variant)",
-              }}>
-                📂 엑셀 선택
-                <input
-                  ref={importFileRef}
-                  type="file"
-                  accept=".xlsx,.xls"
-                  style={{ display: "none" }}
-                  onChange={handleFileChange}
-                />
-              </label>
-            )}
-
-            {importStatus === "parsing" && (
-              <p style={{ fontSize: "0.73rem", color: "#f59e0b", margin: 0 }}>⏳ 파일 분석 중...</p>
-            )}
-
-            {importStatus === "ready" && importPreview && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                <div style={{
-                  padding: "10px 12px", borderRadius: 8,
-                  background: "var(--surface-container)",
-                  border: "1px solid var(--surface-container-high)",
-                  fontSize: "0.73rem",
-                }}>
-                  <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: "0.75rem", color: "var(--on-surface)" }}>미리보기</p>
-                  <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                    <span>✅ 신규 <b style={{ color: "#10b981" }}>{importPreview.new_count}건</b></span>
-                    <span>🔄 보강 <b style={{ color: "#f59e0b" }}>{importPreview.merge_count}건</b></span>
-                    <span>⏭ 스킵 <b style={{ color: "#94a3b8" }}>{importPreview.skip_count}건</b></span>
-                  </div>
-                  {importPreview.preview_new.length > 0 && (
-                    <div style={{ marginTop: 8 }}>
-                      <p style={{ margin: "0 0 3px", fontSize: "0.65rem", fontWeight: 600, color: "#10b981", textTransform: "uppercase", letterSpacing: "0.04em" }}>신규 샘플</p>
-                      {importPreview.preview_new.map((r, i) => (
-                        <p key={i} style={{ margin: "1px 0", fontSize: "0.68rem", color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {r.name} · {r.date}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                  {importPreview.preview_merge.length > 0 && (
-                    <div style={{ marginTop: 6 }}>
-                      <p style={{ margin: "0 0 3px", fontSize: "0.65rem", fontWeight: 600, color: "#f59e0b", textTransform: "uppercase", letterSpacing: "0.04em" }}>보강 샘플</p>
-                      {importPreview.preview_merge.map((r, i) => (
-                        <p key={i} style={{ margin: "1px 0", fontSize: "0.68rem", color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {r.name} · +{r.fields.join(", ")}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button onClick={resetImport} style={{
-                    padding: "7px 12px", borderRadius: 8, fontSize: "0.75rem",
-                    fontWeight: 600, cursor: "pointer",
-                    border: "1px solid var(--surface-container-high)",
-                    background: "transparent", color: "var(--on-surface-variant)",
-                  }}>취소</button>
-                  <button onClick={runImport} style={{
-                    padding: "7px 14px", borderRadius: 8, fontSize: "0.78rem",
-                    fontWeight: 700, cursor: "pointer",
-                    border: "1px solid #10b98140",
-                    background: "#10b98118", color: "#10b981",
-                  }}>가져오기 실행</button>
-                </div>
-              </div>
-            )}
-
-            {importStatus === "running" && (
-              <p style={{ fontSize: "0.73rem", color: "#f59e0b", margin: 0 }}>⏳ 가져오는 중...</p>
-            )}
-
-            {importStatus === "done" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <p style={{ margin: 0, fontSize: "0.73rem", color: "#10b981", fontWeight: 600 }}>✅ {importMsg}</p>
-                <button onClick={resetImport} style={{
-                  alignSelf: "flex-start", padding: "5px 12px", borderRadius: 8,
-                  fontSize: "0.73rem", cursor: "pointer",
-                  border: "1px solid var(--surface-container-high)",
-                  background: "transparent", color: "var(--on-surface-variant)",
-                }}>다시 가져오기</button>
-              </div>
-            )}
-
-            {importStatus === "error" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                <p style={{ margin: 0, fontSize: "0.73rem", color: "#ef4444" }}>⚠️ {importMsg}</p>
-                <button onClick={resetImport} style={{
-                  alignSelf: "flex-start", padding: "5px 12px", borderRadius: 8,
-                  fontSize: "0.73rem", cursor: "pointer",
-                  border: "1px solid var(--surface-container-high)",
-                  background: "transparent", color: "var(--on-surface-variant)",
-                }}>다시 시도</button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
+// ── 행사 출처 배지 ────────────────────────────────────────────────
+const SOURCE_NAME: Record<string, string> = { akei: "AKEI", keoa: "KEOA", showala: "쇼알라", manual: "수동" };
+const SOURCE_TONE: Record<string, string> = { akei: "#059669", keoa: "#7c3aed", showala: "#2563eb", manual: "#94a3b8" };
+// 이 행사를 확인한 소스 전부 — seen_at 에 기록된 소스 + 처음 등록한 소스
+function sourceBadges(e: { source: string | null; seen_at?: Record<string, string> | null }): string[] {
+  const set = new Set<string>(Object.keys(e.seen_at ?? {}));
+  if (e.source) set.add(e.source);
+  if (set.size === 0) set.add("manual");
+  return ["akei", "keoa", "showala", "manual"].filter((s) => set.has(s));
 }
 
 // ── 행사 관리 탭 ─────────────────────────────────────────────────
 function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
+  const router = useRouter();
   const [events, setEvents] = useState(initialEvents);
+  // 서버에서 새 목록이 내려오면(수집 후 router.refresh) 화면 상태도 맞춤 — 렌더 중 파생 상태 갱신 패턴
+  const [prevInitial, setPrevInitial] = useState(initialEvents);
+  if (prevInitial !== initialEvents) { setPrevInitial(initialEvents); setEvents(initialEvents); }
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "published" | "hidden" | "picks" | "incomplete" | "recent">("all");
+  const [hiddenFilter, setHiddenFilter] = useState<"all" | "manual" | "rule" | "missing">("all");
+  const [foldConcurrent, setFoldConcurrent] = useState(true);
+  const [expandedParents, setExpandedParents] = useState<Set<string>>(new Set());
+  const [pendingCount, setPendingCount] = useState(0);
+  const [changesRefresh, setChangesRefresh] = useState(0);
+  const [lastNew, setLastNew] = useState<number | null>(null);
+  // 비공개 직후 행 아래에 잠깐 띄우는 규칙 제안
+  const [hideBar, setHideBar] = useState<{ id: string; eventName: string; category: string | null; keywordOpen: boolean } | null>(null);
   const [venueFilter, setVenueFilter] = useState("전체");
   const [toggling, setToggling] = useState<string | null>(null);
   // 키워드 필터 관리
   type KeywordFilter = { id: string; keyword: string; memo: string | null; filter_type: string | null };
   const [filters, setFilters] = useState<KeywordFilter[]>([]);
-  const [newFilterType, setNewFilterType] = useState<"name" | "industry">("name");
+  const [newFilterType, setNewFilterType] = useState<"name" | "industry" | "category">("name");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [newKeyword, setNewKeyword] = useState("");
   const [newMemo, setNewMemo] = useState("");
   const [addingKeyword, setAddingKeyword] = useState(false);
-  // 비공개 시 키워드 추가 팝업
-  const [keywordPrompt, setKeywordPrompt] = useState<{ id: string; eventName: string } | null>(null);
+  // 비공개 직후 규칙 제안 — 키워드 입력값, 규칙 추가 결과 안내
+  const [ruleMsg, setRuleMsg] = useState<string | null>(null);
   const [promptKeyword, setPromptKeyword] = useState("");
+  const [ruleStats, setRuleStats] = useState<{ stats: Record<string, number>; ready: boolean }>({ stats: {}, ready: false });
   // 행사 추가
   const [showAddModal, setShowAddModal] = useState(false);
   const [newEvent, setNewEvent] = useState({
@@ -1264,18 +975,35 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     []
   );
 
+  // 동시개최: 대표 행사별 딸린 행사 수 / 대표가 목록에 있는 딸린 행사의 id
+  const childCount = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const e of events) if (e.parent_event_id) m.set(e.parent_event_id, (m.get(e.parent_event_id) ?? 0) + 1);
+    return m;
+  }, [events]);
+  const eventIds = useMemo(() => new Set(events.map((e) => e.id)), [events]);
+
   const filtered = useMemo(() => {
     return events.filter((e) => {
+      // 방금 비공개한 행사는 필터와 상관없이 제안 줄이 사라질 때까지 제자리에 둠
+      if (hideBar?.id === e.id) return true;
       if (statusFilter === "published" && !e.is_published) return false;
       if (statusFilter === "hidden" && e.is_published) return false;
+      if (statusFilter === "hidden" && hiddenFilter !== "all") {
+        // 사유가 비어 있는 기존 비공개는 "수동·기존"으로 취급
+        const reason = e.hidden_reason ?? "manual";
+        if (reason !== hiddenFilter) return false;
+      }
       if (statusFilter === "picks" && !e.is_ezpmp_pick) return false;
       if (statusFilter === "incomplete" && !isIncomplete(e)) return false;
       if (statusFilter === "recent" && e.created_at < weekAgo) return false;
       if (venueFilter !== "전체" && e.venue !== venueFilter) return false;
       if (search && !e.event_name.toLowerCase().includes(search.toLowerCase())) return false;
+      // 동시개최로 딸린 행사는 대표 행사 밑에 접어 둠 (검색 중에는 펼쳐서 보여줌)
+      if (foldConcurrent && !search && e.parent_event_id && eventIds.has(e.parent_event_id) && !expandedParents.has(e.parent_event_id)) return false;
       return true;
     });
-  }, [events, statusFilter, venueFilter, search, weekAgo, isIncomplete]);
+  }, [events, statusFilter, hiddenFilter, venueFilter, search, weekAgo, isIncomplete, hideBar, foldConcurrent, expandedParents, eventIds]);
 
   const stats = useMemo(() => ({
     total: events.length,
@@ -1327,12 +1055,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       });
       if (res.ok) {
         setEvents((prev) =>
-          prev.map((e) => e.id === id ? { ...e, is_published: !current } : e)
+          prev.map((e) => e.id === id ? { ...e, is_published: !current, hidden_reason: current ? "manual" : null } : e)
         );
-        // 공개→비공개 전환 시 키워드 추가 팝업
+        // 공개→비공개 전환 시 행 아래에 규칙 제안 줄을 잠깐 띄움 (다시 공개하면 닫음)
         if (current && eventName) {
-          setKeywordPrompt({ id, eventName });
+          setHideBar({ id, eventName, category: events.find((e) => e.id === id)?.category ?? null, keywordOpen: false });
           setPromptKeyword("");
+        } else if (hideBar?.id === id) {
+          setHideBar(null);
         }
       }
     } finally {
@@ -1344,7 +1074,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     const res = await fetch("/api/admin/event-filters");
     const json = await res.json();
     setFilters(json.data ?? []);
+    setRuleStats({ stats: json.stats ?? {}, ready: !!json.statsReady });
   }
+
 
   async function addKeyword() {
     if (!newKeyword.trim()) return;
@@ -1359,6 +1091,11 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         const json = await res.json();
         setFilters((prev) => [json.data, ...prev]);
         setNewKeyword(""); setNewMemo("");
+        if (json.hidden_ids?.length) {
+          const ids = new Set<string>(json.hidden_ids);
+          setEvents((prev) => prev.map((e) => (ids.has(e.id) ? { ...e, is_published: false, hidden_reason: "rule" } : e)));
+        }
+        if (json.hidden != null) { setRuleMsg(`규칙 추가 — 기존 공개 행사 ${json.hidden}건도 함께 비공개 처리했습니다.`); setTimeout(() => setRuleMsg(null), 6000); }
       }
     } finally { setAddingKeyword(false); }
   }
@@ -1372,27 +1109,57 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     setFilters((prev) => prev.filter((f) => f.id !== id));
   }
 
-  async function addKeywordFromPrompt() {
-    if (!promptKeyword.trim()) { setKeywordPrompt(null); return; }
-    await fetch("/api/admin/event-filters", {
+  // 비공개 처리 직후 규칙 추가 — 새 규칙은 이미 들어와 있는 공개 행사에도 바로 적용됨
+  async function addRuleFromPrompt(keyword: string, type: "name" | "category") {
+    const kw = keyword.trim();
+    if (!kw) { setHideBar(null); return; }
+    const res = await fetch("/api/admin/event-filters", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ keyword: promptKeyword.trim(), memo: "비공개 처리 시 추가" }),
+      body: JSON.stringify({ keyword: kw, memo: "비공개 처리 시 추가", filter_type: type }),
     });
-    setKeywordPrompt(null);
+    if (res.ok) {
+      const json = await res.json() as { data: KeywordFilter; hidden?: number; hidden_ids?: string[] };
+      setFilters((prev) => (prev.length ? [json.data, ...prev] : prev));
+      if (json.hidden_ids?.length) {
+        const ids = new Set(json.hidden_ids);
+        setEvents((prev) => prev.map((e) => (ids.has(e.id) ? { ...e, is_published: false, hidden_reason: "rule" } : e)));
+      }
+      setRuleMsg(`규칙 추가 — 기존 공개 행사 ${json.hidden ?? 0}건도 함께 비공개 처리했습니다.`);
+      setTimeout(() => setRuleMsg(null), 6000);
+    }
+    setHideBar(null);
     setPromptKeyword("");
   }
 
+  // 규칙을 추가했을 때 영향받는 행사 수 (화면에 로드된 행사 기준, 방금 비공개한 행사 제외)
+  const impactOf = useCallback((kind: "name" | "category", kw: string) => {
+    const k = kw.trim().toLowerCase();
+    if (!k) return null;
+    const hit = events.filter((e) => e.id !== hideBar?.id && (kind === "name" ? e.event_name.toLowerCase().includes(k) : (e.category ?? "").toLowerCase().includes(k)));
+    return {
+      published: hit.filter((e) => e.is_published && !e.is_ezpmp_pick).length,
+      hidden: hit.filter((e) => !e.is_published).length,
+      picks: hit.filter((e) => e.is_ezpmp_pick).length,
+    };
+  }, [events, hideBar]);
+
+  // 비공개 제안 줄의 "다시 공개" — 비공개를 풀고 공개로 되돌림
+  async function undoHide() {
+    if (!hideBar) return;
+    await togglePublish(hideBar.id, false);
+  }
+
   async function deleteAsDuplicate() {
-    if (!keywordPrompt) return;
+    if (!hideBar) return;
     await fetch("/api/admin/dedup-events", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: [keywordPrompt.id] }),
+      body: JSON.stringify({ ids: [hideBar.id] }),
     });
     // 로컬 상태에서 제거
-    setEvents((prev) => prev.filter((e) => e.id !== keywordPrompt.id));
-    setKeywordPrompt(null);
+    setEvents((prev) => prev.filter((e) => e.id !== hideBar.id));
+    setHideBar(null);
   }
 
   function startEdit(id: string, field: EditField, currentValue: string) {
@@ -1511,70 +1278,76 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
   return (
     <div>
-      {/* 수동 관리 패널 */}
-      <ManualOpsPanel />
-
-      {/* 비공개 시 키워드 추가 팝업 */}
-      {keywordPrompt && (
-        <div style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{ background: "var(--surface-container-lowest)", borderRadius: 12, padding: 24, width: 400, boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 15 }}>차단 키워드 추가</p>
-            <p style={{ margin: "0 0 14px", fontSize: 12, color: "var(--on-surface-variant)" }}>
-              <b>{keywordPrompt.eventName}</b>을 비공개 처리했어요.<br/>
-              앞으로 비슷한 행사도 자동 비공개하려면 키워드를 입력하세요.
-            </p>
-            <input
-              autoFocus
-              value={promptKeyword}
-              onChange={(e) => setPromptKeyword(e.target.value)}
-              placeholder="예: 총회, 웨딩, 설명회..."
-              onKeyDown={(e) => e.key === "Enter" && addKeywordFromPrompt()}
-              style={{
-                width: "100%", height: 34, padding: "0 10px", borderRadius: 6, fontSize: 13,
-                border: "1px solid var(--surface-container-highest)",
-                background: "var(--surface-container-low)",
-                color: "var(--on-surface)", outline: "none", boxSizing: "border-box", marginBottom: 14,
+      {/* ① KPI 카드 — 클릭 시 해당 필터 적용 / 검토 대기는 변경 내역 패널로 이동 */}
+      <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: 12, marginBottom: 16 }}>
+        {([
+          { key: "all",       label: "전체",             value: stats.total,     color: "var(--on-surface)", desc: "" },
+          { key: "published", label: "공개",             value: stats.published, color: "#2563eb", desc: "" },
+          { key: "picks",     label: "EZPMP픽",          value: stats.picks,     color: "#f59e0b", desc: "" },
+          { key: "review",    label: "검토 대기",        value: pendingCount,    color: "#2563eb", desc: pendingCount > 0 ? "눌러서 이동" : "처리할 항목 없음" },
+          { key: "recent",    label: "마지막 수집 신규", value: lastNew ?? 0,    color: "#10b981", desc: lastNew == null ? "수집 기록 없음" : "최근 7일 수집분 보기" },
+        ] as const).map(({ key, label, value, color, desc }) => {
+          const active = key !== "review" && statusFilter === key;
+          const review = key === "review" && pendingCount > 0;
+          return (
+            <button key={label}
+              onClick={() => {
+                if (key === "review") { document.getElementById("event-changes-panel")?.scrollIntoView({ behavior: "smooth", block: "start" }); return; }
+                setStatusFilter(key);
               }}
-            />
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", flexWrap: "wrap" }}>
-              <button onClick={() => setKeywordPrompt(null)} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}>
-                그냥 비공개만
-              </button>
-              <button onClick={deleteAsDuplicate} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "#fee2e2", color: "#dc2626", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                🗑 중복 삭제
-              </button>
-              <button onClick={addKeywordFromPrompt} style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                키워드 추가
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+              style={{
+                padding: "14px 16px", borderRadius: 10, textAlign: "left", cursor: "pointer",
+                background: active || review ? `${color === "var(--on-surface)" ? "#64748b" : color}10` : "var(--surface-container-lowest)",
+                border: `1px solid ${active || review ? color : "var(--surface-container-high)"}`,
+                transition: "all 0.15s",
+              }}>
+              <p style={{ margin: "0 0 4px", fontSize: "0.65rem", fontWeight: 600, letterSpacing: "0.06em", textTransform: "uppercase", color: "var(--on-surface-variant)" }}>{label}</p>
+              <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800, color }}>{value}</p>
+              {desc && <p style={{ margin: "2px 0 0", fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>{desc}</p>}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* 키워드 필터 관리 */}
+      {/* ② 행사 정보 가져오기 — 버튼 하나로 AKEI·KEOA·쇼알라 수집 */}
+      <EventCollectBar
+        pendingCount={pendingCount}
+        onReloadEvents={() => router.refresh()}
+        onScrapeDone={() => setChangesRefresh((n) => n + 1)}
+        onLastNew={setLastNew}
+      />
+
+      {/* 수집 변경 내역 — 일정 변경 의심·동일 행사 의심·동시개최·값 변경·사라짐·신규 검토 */}
+      <EventChangesPanel
+        onPatch={(id, fields) => setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...fields } : e)))}
+        onAdd={(row) => setEvents((prev) => [...prev, row as unknown as EventRow])}
+        onCount={setPendingCount}
+        refreshKey={changesRefresh}
+      />
+
+      {/* 자동 비공개 규칙 관리 */}
       <div style={{ marginBottom: 16, border: "1px solid var(--surface-container-high)", borderRadius: 10, overflow: "hidden" }}>
         <button
           onClick={() => { setFiltersOpen(o => !o); if (!filtersOpen && filters.length === 0) loadFilters(); }}
           style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 16px", background: "var(--surface-container)", border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600, color: "var(--on-surface)" }}
         >
-          <span>🚫 노이즈 키워드 관리</span>
+          <span>🚫 자동 비공개 규칙</span>
           <span style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>{filtersOpen ? "▲" : "▼"}</span>
         </button>
         {filtersOpen && (
           <div style={{ padding: "12px 16px" }}>
             <p style={{ margin: "0 0 10px", fontSize: 11, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-              키워드 추가 즉시 <b>수집 차단 + 기존 행사 자동 비공개</b>가 적용됩니다.
-              <b> 행사명</b> 타입은 행사명 포함 매칭, <b>전시분야</b> 타입은 수집 차단 전용(분야 텍스트 매칭)입니다.
+              규칙에 걸린 행사는 <b>수집 단계에서 미리 제외</b>됩니다. 행사명·분야 규칙은 추가 즉시 <b>기존 공개 행사도 비공개</b> 처리합니다
+              (EZPMP픽과, 직접 공개/비공개를 바꾼 행사는 건드리지 않음). 잘못 걸린 행사는 위 수집 변경 내역의 <b>자동 제외 내역</b>에서 <b>제외하지 않기</b>로 살립니다.
             </p>
-            {/* 키워드 추가 */}
-            <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
-              <select value={newFilterType} onChange={(e) => setNewFilterType(e.target.value as "name" | "industry")}
+            {ruleMsg && <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 600, color: "#10b981" }}>{ruleMsg}</p>}
+            {/* 규칙 추가 */}
+            <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
+              <select value={newFilterType} onChange={(e) => setNewFilterType(e.target.value as "name" | "industry" | "category")}
                 style={{ height: 30, padding: "0 6px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", cursor: "pointer" }}>
                 <option value="name">행사명</option>
-                <option value="industry">전시분야</option>
+                <option value="category">분야(AKEI)</option>
+                <option value="industry">품목(KEOA·쇼알라)</option>
               </select>
               <input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} placeholder="키워드" onKeyDown={(e) => e.key === "Enter" && addKeyword()}
                 style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
@@ -1582,51 +1355,43 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
               <button onClick={addKeyword} disabled={addingKeyword || !newKeyword.trim()} style={{ height: 30, padding: "0 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>추가</button>
             </div>
-            {/* 키워드 목록 */}
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-              {filters.length === 0 && <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>키워드 없음</span>}
-              {filters.map((f) => {
-                const isIndustry = f.filter_type === "industry";
-                return (
-                  <span key={f.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, background: "var(--surface-container-high)", fontSize: 12, color: "var(--on-surface)" }}>
-                    <span style={{
-                      fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 4,
-                      background: isIndustry ? "#7c3aed18" : "#2563eb18",
-                      color: isIndustry ? "#7c3aed" : "#2563eb",
-                    }}>{isIndustry ? "분야" : "행사명"}</span>
-                    {f.keyword}
-                    {f.memo && <span style={{ fontSize: 10, color: "var(--on-surface-variant)" }}>({f.memo})</span>}
-                    <button onClick={() => deleteKeyword(f.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
-                  </span>
-                );
-              })}
-            </div>
+            {/* 규칙 목록 — 유형별로 묶고, 최근 수집에서 걸린 건수를 표시 */}
+            {filters.length === 0 && <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>규칙 없음</span>}
+            {([
+              { type: "category", title: "분야 (AKEI 전시분야)", tone: "#059669", prefix: "분야" },
+              { type: "name",     title: "행사명",               tone: "#2563eb", prefix: "행사명" },
+              { type: "industry", title: "품목 (KEOA·쇼알라)",   tone: "#7c3aed", prefix: "품목" },
+            ] as const).map(({ type, title, tone, prefix }) => {
+              const group = filters.filter((f) => (f.filter_type ?? "name") === type);
+              if (!group.length) return null;
+              return (
+                <div key={type} style={{ marginBottom: 12 }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 11, fontWeight: 700, color: tone }}>{title} · {group.length}개</p>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                    {group.map((f) => {
+                      const hits = ruleStats.stats[`${prefix}:${f.keyword}`] ?? 0;
+                      const idle = ruleStats.ready && hits === 0;
+                      return (
+                        <span key={f.id} title={idle ? "최근 수집에서 한 번도 걸리지 않은 규칙 — 정리 후보" : `최근 수집에서 ${hits}건 제외`}
+                          style={{ display: "inline-flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 20, background: "var(--surface-container-high)", fontSize: 12, color: "var(--on-surface)", opacity: idle ? 0.6 : 1 }}>
+                          {f.keyword}
+                          {ruleStats.ready && (
+                            <span style={{ fontSize: 10, fontWeight: 700, padding: "0 5px", borderRadius: 4, background: idle ? "transparent" : `${tone}18`, color: idle ? "var(--on-surface-variant)" : tone }}>
+                              {idle ? "미적용" : `${hits}건`}
+                            </span>
+                          )}
+                          {f.memo && <span style={{ fontSize: 10, color: "var(--on-surface-variant)" }}>({f.memo})</span>}
+                          <button onClick={() => deleteKeyword(f.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            {ruleStats.ready && <p style={{ margin: "4px 0 0", fontSize: 10, color: "var(--on-surface-variant)" }}>건수는 최근 수집 기록 12개 기준입니다.</p>}
           </div>
         )}
-      </div>
-
-      {/* 통계 — 클릭 시 해당 필터 적용 */}
-      <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: 12, marginBottom: 20 }}>
-        {([
-          { key: "all",        label: "전체",        value: stats.total,      color: "var(--on-surface)", desc: "" },
-          { key: "published",  label: "공개",        value: stats.published,  color: "#2563eb", desc: "" },
-          { key: "picks",      label: "EZPMP픽",     value: stats.picks,      color: "#f59e0b", desc: "" },
-          { key: "incomplete", label: "정보 부족",   value: stats.incomplete, color: "#ef4444", desc: "주최·홈페이지 누락" },
-          { key: "recent",     label: "이번 주 신규", value: stats.recent,    color: "#10b981", desc: "최근 7일 수집" },
-        ] as const).map(({ key, label, value, color, desc }) => (
-          <button key={label} onClick={() => setStatusFilter(key)} style={{
-            padding: "14px 16px", borderRadius: 10, textAlign: "left", cursor: "pointer",
-            background: statusFilter === key ? `${color === "var(--on-surface)" ? "#64748b" : color}10` : "var(--surface-container-lowest)",
-            border: `1px solid ${statusFilter === key ? color : "var(--surface-container-high)"}`,
-            transition: "all 0.15s",
-          }}>
-            <p style={{ margin: "0 0 4px", fontSize: "0.65rem", fontWeight: 600,
-              letterSpacing: "0.06em", textTransform: "uppercase",
-              color: "var(--on-surface-variant)" }}>{label}</p>
-            <p style={{ margin: 0, fontSize: "1.6rem", fontWeight: 800, color }}>{value}</p>
-            {desc && <p style={{ margin: "2px 0 0", fontSize: "0.62rem", color: "var(--on-surface-variant)" }}>{desc}</p>}
-          </button>
-        ))}
       </div>
 
       {/* 행사 추가 모달 */}
@@ -1684,6 +1449,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         </div>
       )}
 
+      {/* 행사 점수 — 주최사 가산 목록 (동종 업계·장소 운영사·PEO·수행실적 발주처) */}
+      <EventOrgAffinityPanel />
+
       {/* 필터 */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <button
@@ -1728,6 +1496,31 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
             {label}
           </button>
         ))}
+        {/* 비공개 사유 — 직접 비공개(수동·기존) / 자동 규칙 / 소스에서 사라짐 */}
+        {statusFilter === "hidden" && (
+          <select
+            value={hiddenFilter}
+            onChange={(e) => setHiddenFilter(e.target.value as "all" | "manual" | "rule" | "missing")}
+            style={{ padding: "5px 10px", borderRadius: 8, fontSize: "0.78rem", border: "1px solid var(--surface-container-high)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", cursor: "pointer" }}
+          >
+            <option value="all">사유 전체</option>
+            <option value="manual">수동·기존</option>
+            <option value="rule">자동 규칙</option>
+            <option value="missing">소스에서 사라짐</option>
+          </select>
+        )}
+        <button
+          onClick={() => setFoldConcurrent((v) => !v)}
+          title="같은 주최가 같은 날짜·장소에서 연 동시개최 행사를 대표 행사 밑에 접어 둡니다"
+          style={{
+            padding: "5px 12px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
+            border: "1px solid var(--surface-container-high)",
+            background: foldConcurrent ? "var(--surface-container-high)" : "transparent",
+            color: "var(--on-surface-variant)",
+          }}
+        >
+          동시개최 접기 {foldConcurrent ? "✓" : ""}
+        </button>
         <select
           value={venueFilter}
           onChange={(e) => setVenueFilter(e.target.value)}
@@ -1752,7 +1545,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "40px 1fr 100px 140px 100px 44px 50px 70px",
+          gridTemplateColumns: "40px 1fr 100px 140px 100px 64px 50px 70px",
           padding: "8px 14px", gap: 8,
           background: "var(--surface-container)",
           fontSize: "0.68rem", fontWeight: 700,
@@ -1772,12 +1565,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         {/* 행 */}
         <div style={{ maxHeight: 600, overflowY: "auto" }}>
           {filtered.map((e, idx) => (
-            <div key={e.id} style={{
+            <Fragment key={e.id}>
+            <div style={{
               display: "grid",
-              gridTemplateColumns: "40px 1fr 100px 140px 100px 44px 50px 70px",
+              gridTemplateColumns: "40px 1fr 100px 140px 100px 64px 50px 70px",
               padding: "9px 14px", gap: 8, alignItems: "center",
               borderTop: idx > 0 ? "1px solid var(--surface-container-high)" : "none",
-              background: hasIssue(e) ? "#ef444406" : "var(--surface-container-lowest)",
+              background: hasIssue(e) ? "#ef444406" : e.parent_event_id ? "var(--surface-container-low)" : "var(--surface-container-lowest)",
+              paddingLeft: e.parent_event_id ? 28 : 14,
             }}>
               {/* No. */}
               <span style={{ fontSize: "0.68rem", color: "var(--on-surface-variant)", textAlign: "center", display: "block" }}>
@@ -1795,7 +1590,17 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                     style={{ cursor: "help", flexShrink: 0 }}>⚠️</span>
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
+                  {e.parent_event_id && <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "var(--on-surface-variant)", marginRight: 4 }}>↳ 동시개최</span>}
                   <EditableCell id={e.id} field="event_name" value={e.event_name} />
+                  {(childCount.get(e.id) ?? 0) > 0 && (
+                    <button
+                      onClick={() => setExpandedParents((prev) => { const n = new Set(prev); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })}
+                      title="이 행사와 같은 주최가 같은 날짜·장소에서 함께 연 동시개최 행사"
+                      style={{ marginTop: 3, padding: "1px 8px", borderRadius: 10, border: "1px solid var(--surface-container-high)", background: "var(--surface-container)", color: "var(--on-surface-variant)", fontSize: "0.62rem", fontWeight: 700, cursor: "pointer" }}
+                    >
+                      동시개최 +{childCount.get(e.id)} {expandedParents.has(e.id) ? "▲" : "▼"}
+                    </button>
+                  )}
                   {e.is_ezpmp_pick && (
                     <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "0.66rem", color: "var(--on-surface-variant)" }}>
                       <span title="이 행사를 다룬 기사 (자동 수집, 시작 30일 전 ~ 종료 30일 후)">
@@ -1841,12 +1646,16 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 <EditableCell id={e.id} field="end_date" value={e.end_date} type="date" />
               </div>
 
-              {/* 소스 배지 */}
-              <span style={{
-                fontSize: "0.6rem", fontWeight: 700, textAlign: "center",
-                color: e.source === "showala" ? "#2563eb" : e.source === "keoa" ? "#7c3aed" : "#94a3b8",
-              }}>
-                {e.source === "showala" ? "쇼알라" : e.source === "keoa" ? "KEOA" : "수동"}
+              {/* 출처 배지 — 이 행사를 확인한 소스를 모두 표시 (seen_at + 처음 등록한 소스) */}
+              <span style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                {sourceBadges(e).map((s) => (
+                  <span key={s} style={{
+                    fontSize: "0.58rem", fontWeight: 700, padding: "0 5px", borderRadius: 4,
+                    background: `${SOURCE_TONE[s] ?? "#94a3b8"}18`, color: SOURCE_TONE[s] ?? "#94a3b8",
+                  }}>
+                    {SOURCE_NAME[s] ?? s}
+                  </span>
+                ))}
               </span>
 
               {/* EZPMP픽 토글 */}
@@ -1867,7 +1676,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
               {/* 공개 여부 토글 */}
               <button
-                onClick={() => togglePublish(e.id, e.is_published, e.event_name)}
+                // 공개 → 비공개로 바꾸면 규칙 제안 줄이 열리고, 이미 비공개인 행의 배지를 누르면 같은 제안 줄이 다시 열림(거기서 다시 공개도 가능)
+                onClick={() => {
+                  if (e.is_published) { void togglePublish(e.id, true, e.event_name); return; }
+                  if (hideBar?.id === e.id) { setHideBar(null); return; }
+                  setHideBar({ id: e.id, eventName: e.event_name, category: e.category, keywordOpen: false });
+                  setPromptKeyword("");
+                }}
+                title={e.is_published ? "비공개로 전환" : "눌러서 비슷한 행사 규칙 만들기 / 다시 공개"}
                 disabled={toggling === e.id}
                 style={{
                   padding: "3px 10px", borderRadius: 20, fontSize: "0.68rem",
@@ -1881,6 +1697,41 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 {e.is_published ? "공개" : "비공개"}
               </button>
             </div>
+            {/* 비공개 직후 규칙 제안 — 표 글자는 그대로 두고 행 아래에 한 줄만 — ×나 다른 행동을 할 때까지 유지, 연속 비공개 시 가장 최근 한 건만 */}
+            {hideBar?.id === e.id && (() => {
+              const catIm = hideBar.category ? impactOf("category", hideBar.category) : null;
+              const kwIm = impactOf("name", promptKeyword);
+              const chipStyle = { padding: "3px 10px", borderRadius: 20, fontSize: "0.72rem", fontWeight: 600, cursor: "pointer", border: "1px solid var(--primary)", background: "transparent", color: "var(--primary)" } as const;
+              return (
+                <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", padding: "6px 14px", background: "var(--surface-container)", borderTop: "1px solid var(--surface-container-high)", fontSize: "0.74rem" }}>
+                  <span style={{ color: "var(--primary)", fontWeight: 600 }}>비공개됨 · 비슷한 행사도 자동으로?</span>
+                  {hideBar.category && (
+                    <button onClick={() => addRuleFromPrompt(hideBar.category!, "category")} style={chipStyle}>
+                      분야 「{hideBar.category}」{catIm ? ` · 공개 ${catIm.published}건` : ""}
+                    </button>
+                  )}
+                  {hideBar.keywordOpen ? (
+                    <>
+                      <input
+                        autoFocus value={promptKeyword} onChange={(ev) => setPromptKeyword(ev.target.value)}
+                        onKeyDown={(ev) => { if (ev.key === "Enter") void addRuleFromPrompt(promptKeyword, "name"); if (ev.key === "Escape") setHideBar(null); }}
+                        placeholder="행사명 키워드 (예: 총회, 설명회)"
+                        style={{ height: 26, padding: "0 8px", borderRadius: 6, fontSize: "0.74rem", border: "1px solid var(--primary)", outline: "none", background: "var(--surface-container-lowest)", color: "var(--on-surface)", width: 200 }}
+                      />
+                      <button onClick={() => addRuleFromPrompt(promptKeyword, "name")} disabled={!promptKeyword.trim()} style={{ ...chipStyle, background: "var(--primary)", color: "#fff", opacity: promptKeyword.trim() ? 1 : 0.5 }}>
+                        추가{kwIm ? ` · 공개 ${kwIm.published}건` : ""}
+                      </button>
+                    </>
+                  ) : (
+                    <button onClick={() => setHideBar({ ...hideBar, keywordOpen: true })} style={chipStyle}>키워드 입력…</button>
+                  )}
+                  <button onClick={deleteAsDuplicate} style={{ ...chipStyle, border: "1px solid #fca5a5", color: "#dc2626" }}>중복이라 삭제</button>
+                  <button onClick={undoHide} style={{ ...chipStyle, border: "1px solid var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>다시 공개</button>
+                  <button onClick={() => setHideBar(null)} aria-label="닫기" style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--on-surface-variant)", fontSize: 14 }}>×</button>
+                </div>
+              );
+            })()}
+            </Fragment>
           ))}
         </div>
         </div>

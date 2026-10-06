@@ -8,7 +8,7 @@
 begin;
 
 -- ── rss_sources: 수집 소스 설정 확장 ──────────────────────────────────────
--- source_type 은 CHECK 제약이 없어 새 값을 그대로 쓸 수 있음:
+-- source_type 새 값 (※ 운영 DB 에는 rss_sources_source_type_check 제약이 있어, 02_cutover.sql 0단계에서 아래 값으로 넓힘 — 이 파일에서는 제약을 건드리지 않음):
 --   기존 rss | url | api | gmail | naver_news
 --   신규 keyword_search(검색 키워드, 엔진은 fetch_config.engines) | web_list(웹페이지 목록) | json_list(JSON API)
 -- default_category 는 기존 값 그대로 쓰고, 신규로 'MIXED'(섞여 있음 → AI 판단) 허용
