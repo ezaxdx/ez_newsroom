@@ -5,7 +5,8 @@ import { Loader2, Pencil, X as XIcon } from "lucide-react";
 import type { NewsItem } from "@/lib/types";
 
 const OPTIONS = ["MICE", "TOURISM", "AI", "EZPMP"];
-const LEVEL_LABEL: Record<string, string> = { Beginner: "입문", Intermediate: "실무", Advanced: "전문" };
+// 보드의 레벨 배지(Beginner / Intermediate / Advanced)와 같은 용어를 씀
+const LEVEL_LABEL: Record<string, string> = { Beginner: "Beginner", Intermediate: "Intermediate", Advanced: "Advanced" };
 const LEVEL_CHOICES = ["keep", "Beginner", "Intermediate", "Advanced"] as const;
 type LevelChoice = (typeof LEVEL_CHOICES)[number];
 
