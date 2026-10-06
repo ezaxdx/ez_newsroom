@@ -109,7 +109,18 @@ create table if not exists public.rss_sources (
 alter table public.rss_sources
   add column if not exists source_type    text default 'rss',
   add column if not exists api_config     jsonb,
-  add column if not exists keyword_filter boolean default false;
+  add column if not exists keyword_filter boolean default false,
+  -- 큐레이션 개편(2026-10): source_type 신규 값 keyword_search|web_list|json_list, default_category 신규 값 MIXED(AI 판단)
+  add column if not exists keyword_mode    text    default 'none',   -- none(전체)|default(기본 관심 키워드)|custom(지정 키워드)
+  add column if not exists custom_keywords text[]  default '{}',
+  add column if not exists max_items       integer default 10,
+  add column if not exists fetch_config    jsonb   default '{}',     -- 요청 방식·Referer·렌더링 여부·JSON 필드 매핑·검색 엔진
+  add column if not exists last_run_at     timestamptz,
+  add column if not exists last_status     text,                     -- ok|empty|error|not_run
+  add column if not exists last_fetched    integer,
+  add column if not exists zero_streak     integer default 0,
+  add column if not exists last_error      text,
+  add column if not exists last_alerted_at timestamptz;
 
 -- ── curation_settings ─────────────────────────────────────────────────
 create table if not exists public.curation_settings (
@@ -140,7 +151,9 @@ alter table public.curation_settings
   add column if not exists business_domain_examples jsonb default '[]',
   add column if not exists content_quality_notes jsonb default '[]',
   add column if not exists newsletter_header_images jsonb default '[]',
-  add column if not exists newsletter_footer_banner jsonb default '{}';
+  add column if not exists newsletter_footer_banner jsonb default '{}',
+  add column if not exists category_hints    jsonb default '{}',     -- AI 카테고리 판단 시 참고 키워드 {MICE:{strong:[],weak:[]}, ...}
+  add column if not exists category_examples jsonb default '[]';     -- 관리자가 고친 카테고리 사례 [{title, category}] — few-shot 예시
 
 -- ── convention_events ─────────────────────────────────────────────────
 create table if not exists public.convention_events (
@@ -171,7 +184,39 @@ alter table public.convention_events
   add column if not exists description   text,
   add column if not exists is_ezpmp_pick boolean default false not null,
   add column if not exists is_concurrent boolean default false,
-  add column if not exists source        text default 'manual';
+  add column if not exists source        text default 'manual',
+  add column if not exists news_keywords text[] default '{}';        -- 이즈픽 행사 뉴스 검색 별칭 (행사명 외)
+
+-- ── news 확장 (큐레이션 개편 2026-10) — convention_events FK 때문에 여기서 추가 ──
+alter table public.news
+  add column if not exists original_title   text,                    -- 원문 제목 (중복 판정용. title 은 AI가 다시 쓴 제목)
+  add column if not exists found_via        text[]  default '{}',    -- {naver, google, rss:소스명 ...}
+  add column if not exists coverage_count   integer default 1,       -- 같은 내용을 다룬 매체 수
+  add column if not exists related_event_id uuid references public.convention_events(id) on delete set null,
+  add column if not exists category_reason  text,                    -- AI 카테고리 판단 근거 한 줄
+  add column if not exists category_edited  boolean default false;   -- 관리자가 카테고리를 직접 고친 기사
+
+create index if not exists news_related_event_idx
+  on public.news (related_event_id) where related_event_id is not null;
+
+-- ── news_original_text — 원문 보관 (관리자 전용) ──────────────────────
+-- news 에 넣으면 "발행 기사 공개 읽기" 정책으로 익명 키에 노출되므로 분리
+create table if not exists public.news_original_text (
+  news_id       uuid primary key references public.news(id) on delete cascade,
+  original_text text not null,
+  fetched_at    timestamptz default now()
+);
+
+-- ── curation_seen — 건너뛴·폐기한 URL (재처리 방지) ───────────────────
+create table if not exists public.curation_seen (
+  url_key       text primary key,       -- 정규화한 URL
+  original_url  text,
+  reason        text not null,          -- too_old|too_short|low_score|low_fit|duplicate|off_topic|fetch_failed
+  source_name   text,
+  title         text,
+  seen_at       timestamptz default now()
+);
+create index if not exists curation_seen_seen_at_idx on public.curation_seen (seen_at);
 
 do $$ begin
   alter table public.convention_events
@@ -275,6 +320,10 @@ create table if not exists public.curation_logs (
   source_stats jsonb,   -- [{name,type,fetched,published,staged,skipped,failed}]
   errors       jsonb    -- [{source,url?,error}]
 );
+
+alter table public.curation_logs
+  add column if not exists run_mode text default 'live',   -- live(정기 실행)|dry(시험 실행: 기사 저장 안 함)
+  add column if not exists details  jsonb;                 -- 시험 실행 결과(후보·건너뜀 사유·예상 카테고리)
 
 -- ── newsletter_subscribers ────────────────────────────────────────────
 create table if not exists public.newsletter_subscribers (
@@ -408,6 +457,8 @@ alter table public.user_logs                 enable row level security;
 alter table public.gmail_tokens              enable row level security;
 alter table public.scrape_logs               enable row level security;
 alter table public.curation_logs             enable row level security;
+alter table public.news_original_text        enable row level security;
+alter table public.curation_seen             enable row level security;
 alter table public.newsletter_subscribers    enable row level security;
 alter table public.newsletter_subscriber_snapshots enable row level security;
 alter table public.newsroom_popups           enable row level security;
@@ -430,6 +481,8 @@ drop policy if exists "admin all convention_events"    on public.convention_even
 drop policy if exists "admin all event_keyword_filters" on public.event_keyword_filters;
 drop policy if exists "admin all scrape_logs"          on public.scrape_logs;
 drop policy if exists "admin all curation_logs"        on public.curation_logs;
+drop policy if exists "admin all news_original_text"   on public.news_original_text;
+drop policy if exists "admin all curation_seen"        on public.curation_seen;
 drop policy if exists "admin all newsletter_subscribers" on public.newsletter_subscribers;
 drop policy if exists "admin all newsletter_subscriber_snapshots" on public.newsletter_subscriber_snapshots;
 drop policy if exists "public read newsroom_popups" on public.newsroom_popups;
@@ -486,6 +539,14 @@ create policy "admin all scrape_logs"
 
 create policy "admin all curation_logs"
   on public.curation_logs for all
+  using (auth.role() = 'authenticated');
+
+create policy "admin all news_original_text"
+  on public.news_original_text for all
+  using (auth.role() = 'authenticated');
+
+create policy "admin all curation_seen"
+  on public.curation_seen for all
   using (auth.role() = 'authenticated');
 
 create policy "admin all newsletter_subscribers"

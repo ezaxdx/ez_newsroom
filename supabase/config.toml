@@ -10,6 +10,12 @@ entrypoint = "./functions/curate/index.ts"
 # For example, if you want to serve static HTML pages in your function:
 # static_files = [ "./functions/curate/*.html" ]
 
+[functions.curate-v2]
+enabled = true
+verify_jwt = false
+import_map = "./functions/curate-v2/deno.json"
+entrypoint = "./functions/curate-v2/index.ts"
+
 [functions.audit-content]
 enabled = true
 verify_jwt = false
