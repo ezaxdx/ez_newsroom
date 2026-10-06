@@ -526,6 +526,9 @@ create table if not exists public.newsletter_cron_settings (
 alter table public.newsletter_cron_settings
   add column if not exists send_days integer[] default '{2,4}';
 
+alter table public.newsletter_cron_settings
+  add column if not exists editorial_prompt text;   -- AI 인사말 프롬프트 (비어 있으면 코드의 기본값)
+
 -- ── RLS ───────────────────────────────────────────────────────────────
 alter table public.news                      enable row level security;
 alter table public.rss_sources               enable row level security;

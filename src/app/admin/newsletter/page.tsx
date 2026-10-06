@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download } from "lucide-react";
+import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download, Settings } from "lucide-react";
 import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { useTabParam } from "@/lib/useTabParam";
 import { extractContacts, type ParsedContact } from "@/lib/subscriber-excel";
+import { DEFAULT_EDITORIAL_PROMPT } from "@/lib/editorial-prompt";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
@@ -149,6 +150,21 @@ export default function NewsletterPage() {
   // ── AI 인사말 생성 ──
   const [generatingEditorial, setGeneratingEditorial] = useState(false);
   const [editorialError, setEditorialError] = useState<string | null>(null);
+  // AI 인사말 프롬프트 설정 (비어 있으면 기본값 사용)
+  const [promptOpen, setPromptOpen] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [promptSaving, setPromptSaving] = useState(false);
+  const [promptMsg, setPromptMsg] = useState<string | null>(null);
+  async function savePrompt(value: string) {
+    setPromptSaving(true); setPromptMsg(null);
+    try {
+      const res = await fetch("/api/admin/newsletter/cron-settings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ editorial_prompt: value.trim() || null }) });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json.error) setPromptMsg(`저장 실패: ${json.error ?? res.status} (editorial_prompt 컬럼 SQL을 먼저 실행했는지 확인)`);
+      else { setPromptText(value.trim() ? value : DEFAULT_EDITORIAL_PROMPT); setPromptMsg(value.trim() ? "저장했어요. 다음 AI 작성부터 적용됩니다." : "기본 프롬프트로 되돌렸어요."); }
+    } catch { setPromptMsg("저장 실패"); }
+    setPromptSaving(false);
+  }
   // 이번 호 콘텐츠 context (뉴스 제목 + 행사명) - 마운트 시 백그라운드 프리페치
   const [editorialCtx, setEditorialCtx] = useState<{ news_titles: string[]; event_names: string[] } | null>(null);
 
@@ -364,6 +380,7 @@ export default function NewsletterPage() {
             send_hour: json.data.send_hour ?? 10,
             default_editorial: json.data.default_editorial ?? "",
           });
+          setPromptText(json.data.editorial_prompt || DEFAULT_EDITORIAL_PROMPT);
         }
       }
     } catch {
@@ -1267,7 +1284,34 @@ export default function NewsletterPage() {
                     : <Sparkles size={12} />}
                   {generatingEditorial ? "생성 중..." : "AI로 작성"}
                 </button>
+                <button
+                  onClick={() => { setPromptOpen((o) => !o); setPromptMsg(null); }}
+                  title="AI 인사말 프롬프트 설정"
+                  style={{ marginLeft: 6, display: "flex", alignItems: "center", gap: 4, padding: "5px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container)", color: "var(--on-surface-variant)", fontWeight: 600, fontSize: 12, cursor: "pointer" }}
+                >
+                  <Settings size={12} /> 설정
+                </button>
               </div>
+              {promptOpen && (
+                <div style={{ marginBottom: 10, padding: "12px 14px", borderRadius: 8, background: "var(--surface-container)", border: "1px solid var(--surface-container-highest)" }}>
+                  <p style={{ margin: "0 0 6px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+                    AI가 인사말을 쓸 때 쓰는 지시문입니다. <code>{"{{월}}"}</code> <code>{"{{일}}"}</code> <code>{"{{뉴스}}"}</code>(이번 호 뉴스 제목) <code>{"{{행사}}"}</code>(주목할 행사, 없으면 빈칸)는 발송 시점에 자동으로 채워져요.
+                  </p>
+                  <textarea value={promptText} onChange={(e) => setPromptText(e.target.value)} rows={14}
+                    style={{ width: "100%", boxSizing: "border-box", padding: 10, borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 12, lineHeight: 1.6, fontFamily: "inherit", resize: "vertical", background: "var(--surface)", color: "var(--on-surface)" }} />
+                  <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <button onClick={() => savePrompt(promptText === DEFAULT_EDITORIAL_PROMPT ? "" : promptText)} disabled={promptSaving}
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: promptSaving ? 0.6 : 1 }}>
+                      {promptSaving ? "저장 중..." : "저장"}
+                    </button>
+                    <button onClick={() => { if (confirm("기본 프롬프트로 되돌릴까요?")) savePrompt(""); }} disabled={promptSaving}
+                      style={{ padding: "6px 12px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", background: "transparent", color: "var(--on-surface-variant)", fontSize: 12, cursor: "pointer" }}>
+                      기본값으로 되돌리기
+                    </button>
+                    {promptMsg && <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>{promptMsg}</span>}
+                  </div>
+                </div>
+              )}
               {editorialError && (
                 <p style={{ margin: "0 0 8px", fontSize: 12, color: "#c0392b" }}>{editorialError}</p>
               )}
