@@ -28,9 +28,11 @@ export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const { id, category } = await req.json();
+  const { id, category, level: levelParam } = await req.json();
   if (!id || typeof category !== "string") return NextResponse.json({ error: "id, category 필요" }, { status: 400 });
   const cat = category.toUpperCase();
+  // 글 수준(레벨): 지정하지 않으면 기사의 현재 레벨을 그대로 씀
+  const levelOverride = ["Beginner", "Intermediate", "Advanced"].includes(levelParam) ? (levelParam as string) : null;
 
   const apiKey = process.env.GOOGLE_AI_API_KEY;
   if (!apiKey) return NextResponse.json({ error: "GOOGLE_AI_API_KEY not configured" }, { status: 500 });
@@ -57,7 +59,7 @@ export async function POST(req: NextRequest) {
 
   const { data: settings } = await supabase.from("curation_settings").select("category_settings, level_prompts, company_context").limit(1).single();
   const cs = settings?.category_settings?.[cat] ?? {};
-  const level = news.level ?? "Intermediate";
+  const level = levelOverride ?? news.level ?? "Intermediate";
   const levelGuide = settings?.level_prompts?.[cat]?.[level] ?? settings?.level_prompts?.[level] ?? DEFAULT_LEVEL[level] ?? DEFAULT_LEVEL.Intermediate;
   const persona = cs.persona ?? DEFAULT_PERSONA[cat] ?? DEFAULT_PERSONA.MICE;
 

@@ -8,7 +8,7 @@ import {
   calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, toISO, withTimeout,
 } from "./util.ts";
 import type { CatSetting } from "./ai.ts";
-import { buildHintBlock, generateArticle } from "./ai.ts";
+import { buildHintBlock, generateArticle, judgeFit } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
 
 /* ───────── 타입 ───────── */
@@ -46,8 +46,8 @@ interface Stat {
 }
 
 const ALL_CATS = ["MICE", "TOURISM", "AI"];
-const FIT_DISCARD = 3;
-const FIT_PUBLISH = 6;
+const FIT_DISCARD = 5;   // 적합성 4점 이하는 싣지 않음 (폐기)
+const FIT_PUBLISH = 7;   // 7점 이상이어야 자동 발행 — 5~6점은 대기열에서 사람이 검토 (2026-10-06 관리자 판정 12건 기준)
 const PICK_PUBLISH_SCORE = 5;        // 이즈픽 행사 기사: 품질 5점 이상이면 자동 발행, 적합성 관문 면제
 const PICK_PER_EVENT = 3;            // 행사당 1회 최대 건수
 const GOOGLE_RESOLVE_CAP = 40;       // 구글 링크 복원 상한 (1회 실행)
@@ -135,7 +135,14 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const levelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const thresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
   // 점수 보정 프롬프트 사용 여부 — DB 설정(quality_thresholds.calibrated)으로 켜고 끔. 시험 실행은 옵션으로 덮어쓸 수 있음
-  const calibrated = opts.dry && opts.calibrated != null ? opts.calibrated : thresholds.calibrated === true;
+  // 기본은 켜짐(적합성·레벨 기준표). quality_thresholds.calibrated 를 false 로 두면 v1 프롬프트로 되돌림
+  const calibrated = opts.dry && opts.calibrated != null ? opts.calibrated : thresholds.calibrated !== false;
+  // 관리자가 직접 고친 레벨 사례 — 컬럼이 아직 없어도(전환 SQL 실행 전) 실행이 깨지지 않게 별도 조회
+  let levelExamples: { title: string; level: string }[] = [];
+  try {
+    const { data: lv, error: lvErr } = await supabase.from("curation_settings").select("level_examples").limit(1).single();
+    if (!lvErr && Array.isArray(lv?.level_examples)) levelExamples = lv.level_examples;
+  } catch { /* level_examples 컬럼 없음 — 사례 없이 진행 */ }
   const focusKeywords: string[] = (settings?.focus_keywords?.length ? settings.focus_keywords : DEFAULT_FOCUS).map((k: string) => k.toLowerCase());
   const domainExamples: { title: string; business_domains: string[] }[] = Array.isArray(settings?.business_domain_examples) ? settings.business_domain_examples : [];
   const qualityNotes: string[] = Array.isArray(settings?.content_quality_notes) ? settings.content_quality_notes : [];
@@ -471,24 +478,56 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     if (cats.includes("MIXED")) return [...new Set([...ALL_CATS, ...real])];
     return real.length ? real : ["MICE"];
   };
-  const maxAutoPublish: number = Number.isFinite(Number(thresholds.max_auto_publish)) && Number(thresholds.max_auto_publish) > 0 ? Number(thresholds.max_auto_publish) : 15;
+  const maxAutoPublish: number = Number.isFinite(Number(thresholds.max_auto_publish)) && Number(thresholds.max_auto_publish) > 0 ? Number(thresholds.max_auto_publish) : 20;
   let autoPublished = 0;
   let cappedCount = 0;
   const aiTargets = opts.dry && opts.maxAi != null ? readyList.slice(0, opts.maxAi) : readyList;
   let aiCalls = 0;
-  await mapPool(aiTargets, 4, async (c) => {
+  // 4a. 적합성 판정 — 짧은 호출이라 한꺼번에(동시 8건). 싣지 않을 기사는 여기서 걸러 글 작성(가장 오래 걸리는 호출)을 건너뜀.
+  // 작성 호출은 회사 소개(시스템 지침)가 "사업과 연결해서 분석하라"고 시켜서 어떤 기사든 연결된다고 합리화해 후하게 줌 → 판정을 분리
+  const judgedMap = new Map<Cand, { fit: number; reason: string }>();
+  const writeTargets: Cand[] = [];
+  await mapPool(aiTargets, 8, async (c) => {
+    const p = primaryOf(c); const st = stats.get(p.key)!;
+    if (overBudget()) { st.deferred++; return; }
+    const cats = categoriesFor(c);
+    if (c.event) {
+      judgedMap.set(c, { fit: 10, reason: `이즈픽 행사(${c.event.name}) 관련 기사 — 적합성 관문 면제` });
+      writeTargets.push(c); return;
+    }
+    if (!calibrated) { writeTargets.push(c); return; }   // v1 프롬프트 모드: 작성 호출의 fit 을 그대로 씀
+    const j = await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/") });
+    if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `적합성 판정 실패: ${j.error}` }); return; }
+    judgedMap.set(c, { fit: j.fit, reason: j.reason });
+    if (j.fit < FIT_DISCARD) {
+      decisions.push({ title: c.title, original_title: c.title, link: c.link, category: cats.join("/"), cats, score: null, fit: j.fit, fit_reason: j.reason, level: null, decision: "discard_fit", pre_write: true, capped: false, pick: null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+      results.skipped++; st.skipped++; st.reasons["low_fit"] = (st.reasons["low_fit"] ?? 0) + 1;
+      markSeen(c, "low_fit");
+      return;
+    }
+    writeTargets.push(c);
+  });
+  writeTargets.sort((a, b) => readyList.indexOf(a) - readyList.indexOf(b));   // 이즈픽 먼저 등 처리 우선순위 유지
+  log(`[4a단계] 적합성 판정 완료 — 작성 대상 ${writeTargets.length}건 (${Date.now() - runStart}ms)`);
+
+  // 4b. 글 작성 + 판정·저장 (동시 5건)
+  await mapPool(writeTargets, 5, async (c) => {
     const p = primaryOf(c); const st = stats.get(p.key)!;
     if (overBudget()) { st.deferred++; return; }
     aiCalls++;
     const cats = categoriesFor(c);
+    const jf = judgedMap.get(c);
+    const judgedFit: number | null = jf?.fit ?? null;
+    const judgedReason: string | null = jf?.reason ?? null;
     const gen = await generateArticle({
       apiKey, articleText: c.text!, url: c.link, categories: cats, catSettings, levelPrompts, companyContext,
-      hintBlock: cats.length > 1 ? hintBlock : undefined, eventName: c.event?.name, calibrated,
+      hintBlock: cats.length > 1 ? hintBlock : undefined, eventName: c.event?.name, calibrated, levelExamples,
     });
     if (!gen.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `generateArticle 실패: ${gen.error}` }); return; }
     const g = gen.value;
     const score = g.quality_score ?? 5;
-    const fit = g.quality_criteria?.fit ?? 5;
+    const fit = judgedFit ?? g.quality_criteria?.fit ?? 5;
+    const qualityCriteria = g.quality_criteria ? { ...g.quality_criteria, fit } : null;   // 저장하는 fit 은 판정 호출의 값
     scoreDist[score] = (scoreDist[score] ?? 0) + 1;
     const isPick = !!c.event;
     let decision: "publish" | "stage" | "discard_score" | "discard_fit";
@@ -503,7 +542,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
       else autoPublished++;
     }
-    decisions.push({ title: g.title, original_title: c.title, link: c.link, category: g.category, category_reason: g.category_reason, cats, score, fit, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+    decisions.push({ title: g.title, original_title: c.title, link: c.link, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
@@ -516,12 +555,13 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       title: g.title, summary_short: g.summary_short, content_long: g.content_long, implications: g.implications,
       level: g.level ?? "Intermediate",
       image_url: c.image ?? categoryDefaultImage(g.category),
-      original_url: c.link, category: g.category, quality_score: score, quality_criteria: g.quality_criteria ?? null,
+      original_url: c.link, category: g.category, quality_score: score, quality_criteria: qualityCriteria,
       business_domains: g.business_domains ?? [], is_published: publish,
       priority_score: priority, display_order: 1000 - score * 10,
       published_at: publish ? new Date().toISOString() : (toISO(c.pubMs) ?? new Date().toISOString()),
       original_title: c.title.slice(0, 300), found_via: [...c.vias], coverage_count: c.coverage,
       related_event_id: c.event?.id ?? null, category_reason: g.category_reason, category_edited: false,
+      fit_reason: (judgedReason ?? g.fit_reason ?? null)?.toString().slice(0, 200) ?? null,
     }, { onConflict: "original_url", ignoreDuplicates: true }).select("id");
     if (error) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: error.message }); return; }
     const newId = ins?.[0]?.id;

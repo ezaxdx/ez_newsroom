@@ -876,10 +876,10 @@ function ArticleCard({
           )}
           {tab === "staging" && item.quality_criteria?.fit != null && (
             <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide"
-              title="회사(MICE·관광) 적합성 — 낮을수록 우리 관심사와 거리가 멂"
+              title={item.fit_reason ? `AI 판정 근거: ${item.fit_reason}\n(7점 이상 자동 발행 / 5~6점 대기열 / 4점 이하 폐기)` : "회사(MICE·관광) 적합성 — 낮을수록 우리 관심사와 거리가 멂"}
               style={{
-                background: item.quality_criteria.fit >= 6 ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.12)",
-                color: item.quality_criteria.fit >= 6 ? "#16a34a" : "#dc2626",
+                background: item.quality_criteria.fit >= 7 ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.12)",
+                color: item.quality_criteria.fit >= 7 ? "#16a34a" : "#dc2626",
               }}>
               적합 {item.quality_criteria.fit}
             </span>

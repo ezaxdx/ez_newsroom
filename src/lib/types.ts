@@ -28,6 +28,7 @@ export type NewsItem = {
   category_edited?: boolean;          // 관리자가 카테고리를 직접 고친 기사
   category_reason?: string | null;    // AI가 카테고리를 판단한 경우의 근거 한 줄
   related_event_id?: string | null;   // 이즈픽 행사 관련 기사면 그 행사 id
+  fit_reason?: string | null;         // AI 적합성 판정 근거 한 줄
   created_at?: string;
 };
 

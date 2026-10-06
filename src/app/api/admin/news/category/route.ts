@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const { id, category, title, summary_short, content_long, implications } = await req.json();
+  const { id, category, title, summary_short, content_long, implications, level } = await req.json();
   if (!id || typeof category !== "string") {
     return NextResponse.json({ error: "id, category 필요" }, { status: 400 });
   }
@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
     ...(rewriting && {
       title: title.trim(), summary_short: summary_short.trim(), content_long: content_long.trim(),
       implications: typeof implications === "string" ? implications.trim() : null,
+      ...(["Beginner", "Intermediate", "Advanced"].includes(level) && { level }),   // 다시 쓰면서 글 수준을 바꾼 경우만
       audited_at: null, faithfulness_score: null, faithfulness_issues: null, audit_dismissed_at: null,
     }),
   }).eq("id", id);

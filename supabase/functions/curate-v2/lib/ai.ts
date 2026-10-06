@@ -12,7 +12,8 @@ export interface GenInput {
   companyContext?: string;
   hintBlock?: string;                                    // AI 판단 시 참고할 카테고리 힌트 키워드
   eventName?: string;                                    // 이즈픽 행사 관련 기사면 행사명
-  calibrated?: boolean;                                  // true: 점수 예시값 베끼기 방지 + 분포 가이드 (curation_settings.quality_thresholds.calibrated)
+  calibrated?: boolean;                                  // true(기본): 점수 예시값 베끼기 방지 + 적합성·레벨 기준표. false 로 두면 v1 프롬프트 (quality_thresholds.calibrated)
+  levelExamples?: { title: string; level: string }[];    // 관리자가 직접 고친 레벨 사례 — 비슷한 기사 판정에 참고
 }
 export interface Generated {
   title: string;
@@ -20,6 +21,8 @@ export interface Generated {
   content_long: string;
   implications: string;
   level: string;
+  level_axes?: { concept: number; practical: number; strategic: number };
+  fit_reason?: string;
   quality_score: number;
   quality_criteria: { relevance: number; specificity: number; practicality: number; source_quality: number; fit: number };
   business_domains: string[];
@@ -47,69 +50,118 @@ export function buildHintBlock(hints: Record<string, { strong?: string[]; weak?:
     .join("\n");
 }
 
-function levelBlock(cat: string, lp: Record<string, Record<string, string>>): string {
-  const l = lp[cat] ?? {};
-  return `[Beginner] ${l["Beginner"] ?? "쉽고 명확하게 작성하세요."}
-[Intermediate] ${l["Intermediate"] ?? "실무 담당자 관점에서 작성하세요."}
-[Advanced] ${l["Advanced"] ?? "전략적 심층 분석으로 작성하세요."}`;
-}
+export const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
 
-function defaultSetting(cat: string): CatSetting {
-  return { audience: "MICE·관광 업계 종사자", persona: `당신은 ${cat} 전문 에디터입니다. 업계 종사자 관점에서 핵심 시사점을 분석합니다.`, keywords: [] };
-}
+/** 적합성 판단 예시 — 관리자가 직접 판정한 사례(2026-10-06). 점수는 판정 단계(꼭 실음 9 / 대기열 5 / 싣지 않음 2)를 대표값으로 표시 */
+export const FIT_ANCHORS: { title: string; fit: number }[] = [
+  { title: "기업 AI 활용 격차 심화, 노동 시장 재편 가속화", fit: 9 },
+  { title: "클로드 AI 활용 PPT 디자인 및 스킬 제작 4단계", fit: 9 },
+  { title: "SK AX, 코딩 없는 AI 에이전트 개발 'AI 부트캠프 바이브' 출시", fit: 9 },
+  { title: "네이버지도, 메타 AI 글래스 연동 음성 길안내", fit: 9 },
+  { title: "KT, 금융·공공 AX 인사이트 리포트 발간", fit: 9 },
+  { title: "경복대 소프트웨어융합과, AI 활용 캠퍼스 데이터 연구로 국제학술지 논문 6편 게재", fit: 9 },
+  { title: "킨텍스, 말레이시아 PWCC '플래티넘' 획득… 해외 MICE 경쟁력 입증", fit: 9 },
+  { title: "한화시스템, '우주 AI 솔루션' 해외 첫 공개", fit: 5 },
+  { title: "CJ온스타일, 킨텍스 공동 주최 스포츠 페스티벌 티켓 단독 판매", fit: 5 },
+  { title: "창원대 남해캠퍼스, 제주항공서 실무 체험", fit: 2 },
+  { title: "전북대, THE 세계대학평가 600위권 진입", fit: 2 },
+  { title: "2026 국정감사, 충청 U대회 재원 확보가 주요 쟁점으로", fit: 2 },
+];
 
 /**
- * 응답 JSON 형식 안내.
- * 기본(calibrated=false)은 v1과 동일 — 예시값(품질 8, 적합 9)이 들어 있어 AI가 그 숫자를 거의 그대로 베끼는 문제가 있음
- * (운영 기사 682건 중 품질 8~9점이 99%, 적합성 4점 이하 0건 → 적합성 관문이 작동하지 않음).
- * calibrated=true 는 예시값 대신 형식만 안내하고 점수 분포 가이드를 줌.
+ * 적합성(fit) 기준표 — 판정 전용 호출(judgeFit)에서 사용.
+ * 기사 작성 호출에는 넣지 않음: 작성 호출은 시스템 지침(회사 소개)이 "사업과 연결해서 분석하라"고 시키기 때문에
+ * AI가 어떤 기사든 "이즈피엠피 AXDX 사업과 연결된다"고 합리화해서 적합성을 후하게 주는 문제가 확인됨 (판정 12건 중 4건 오판).
  */
-function jsonSection(multi: boolean, calibrated: boolean): string {
-  const catPart = multi ? ',"category":"후보 중 하나","category_reason":"카테고리 판단 근거 한 줄"' : "";
-  if (!calibrated) {
-    return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
-{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":["AI 관광"]${catPart.replace('"후보 중 하나"', '"MICE"')}}`;
-  }
-  return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이).
-아래는 형식 설명이며, 숫자 자리에는 이 기사를 직접 평가한 값을 넣으세요 (예시값을 따라 쓰지 마세요).
-{"quality_score":(1~10 정수),"quality_criteria":{"relevance":(1~10),"specificity":(1~10),"practicality":(1~10),"source_quality":(1~10),"fit":(1~10)},"level":"Beginner|Intermediate|Advanced 중 하나","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":[]${catPart}}
-
-점수 부여 원칙 (엄격하게):
-- 대부분의 일반 기사는 quality_score 5~7점입니다. 8점 이상은 구체적 수치·사례가 풍부하고 실무에 바로 쓸 수 있는 뚜렷하게 우수한 기사에만 주세요. 9~10점은 매우 드뭅니다.
-- fit(회사 적합성)은 MICE·관광 실무와의 접점을 냉정하게 평가하세요. 접점이 약하면 3~5점, 무관하면 1~2점입니다. 접점이 분명한 경우에만 8점 이상.
-- 점수는 기사마다 달라야 합니다. 모든 기사에 같은 점수를 주지 마세요.`;
+export function fitRubricText(fitAnchors: { title: string; fit: number }[] = FIT_ANCHORS): string {
+  const anchors = fitAnchors.map((a) => `  · "${a.title}" → fit ${a.fit}`).join("\n");
+  return `fit(적합성) 기준 — 이 뉴스룸(MICE·관광·AI 업계 실무자 대상)에 실을 가치가 있는가. 기사 소재가 아니라 "독자 실무와의 접점"으로 판단하세요.
+  판정 방법: 먼저 fit_reason 에 "이 기사가 독자(MICE·관광·AI 실무자)의 어떤 업무와 닿는지"를 한 줄로 쓰고(닿는 업무가 없으면 "없음"), 그에 맞춰 fit 점수를 정하세요. 업무와의 연결이 한 줄로 설명되지 않거나 억지스러우면 5점 이하입니다. 기사에 "AI"나 "관광" 단어가 있다는 것만으로 높은 점수를 주지 마세요. 우리 회사 사업과 연결 지으려 애쓰지 말고, 독자에게 유용한지만 보세요.
+  8~10 (꼭 실음):
+    · MICE: 산업·정책·행사 유치/개최/운영, 전시장·시설, 해외 진출·인증·협력
+    · 관광: 산업·정책·지역관광·스마트관광·인바운드
+    · AI: 업무에 AI/AX를 도입·활용하는 실무 도구·사례·리포트 (기업·기관의 AX 도입 전략·리포트·가이드는 금융·공공 등 특정 산업을 대상으로 해도 포함, 업무 자동화, 생산성 도구, 일상 AI 서비스 포함), AI를 활용한 관광·MICE·지역 연구·사업
+    · 이즈피엠피(EZPMP) 소식
+  5~6 (대기열 — 사람이 검토):
+    · 특정 산업 전용(우주·방산·의료·금융·제조·반도체 등) AI "기술·제품 발표"처럼, 그 산업 종사자가 아니면 업무에 쓸 수 없는 AI 소식 (AX 도입 전략·리포트는 여기에 해당하지 않음)
+    · 소비자 대상 이벤트·티켓 판매·프로모션 등 행사 마케팅성 소식
+  1~4 (싣지 않음):
+    · 대학·교육기관 소식(평가·순위·학과 개편·실습·체험·인증 획득) — AI 활용 연구가 핵심이거나 MICE·관광 산업 인재양성 사업이 아닌 한 해당
+    · 기사의 주제가 국정감사·정치·예산 논쟁·행정 이슈이면, 그 안에 MICE·관광 소재(행사 재원 등)가 섞여 있어도 해당 — 행사·시설 운영 실무 정보가 기사의 핵심이 아닌 한
+    · 특정 지자체의 일반 소식 등 MICE·관광·AI 업무 활용과 접점이 없거나 약한 것
+  관리자가 직접 판정한 사례 (비슷한 기사는 이 판정을 따르세요):
+${anchors}`;
 }
 
-export function buildPrompt(i: GenInput): string {
-  const multi = i.categories.length > 1;
-  const catSection = multi
-    ? `【카테고리 판단 — 먼저 할 일】
-이 기사의 핵심 주제에 가장 맞는 카테고리를 후보 중 정확히 1개 고르고(category), 그 이유를 한 줄로 쓰세요(category_reason).
-그리고 고른 카테고리의 페르소나·타겟 독자·작성 지침으로 기사를 작성하세요.
-후보: ${i.categories.join(", ")}
-${CATEGORY_CRITERIA}
-${i.hintBlock ? `\n참고 키워드(힌트일 뿐 최종 판단은 기사 내용으로):\n${i.hintBlock}\n` : ""}
-${i.categories.map((c) => {
-      const s = i.catSettings[c] ?? defaultSetting(c);
-      return `■ ${c} 관점\n${s.persona}\n타겟 독자: ${s.audience}${s.keywords.length ? `\n강조 키워드: ${s.keywords.join(", ")}` : ""}`;
-    }).join("\n\n")}`
-    : (() => {
-      const c = i.categories[0];
-      const s = i.catSettings[c] ?? defaultSetting(c);
-      return `${s.persona}\n타겟 독자: ${s.audience}${s.keywords.length ? `\n강조 키워드: ${s.keywords.join(", ")}` : ""}`;
-    })();
+export type FitJudgement = { ok: true; fit: number; reason: string } | { ok: false; error: string };
+/** 적합성 판정 전용 짧은 호출 — 회사 소개(시스템 지침) 없이, 편집장 입장에서 "이 뉴스룸에 실을 기사인가"만 판단 */
+export async function judgeFit(i: { apiKey: string; title: string; text: string; category: string; fitAnchors?: { title: string; fit: number }[] }): Promise<FitJudgement> {
+  const prompt = `당신은 MICE·관광·AI 업계 실무자를 위한 뉴스룸의 편집장입니다. 아래 기사를 이 뉴스룸에 실을지 판정하세요.
 
-  const levelSection = multi
-    ? i.categories.map((c) => `(${c} 관점일 때)\n${levelBlock(c, i.levelPrompts)}`).join("\n\n")
-    : levelBlock(i.categories[0], i.levelPrompts);
+${fitRubricText(i.fitAnchors)}
 
-  const eventLine = i.eventName
-    ? `\n※ 이 기사는 이즈피엠피가 주목하는 행사 "${i.eventName}" 관련 보도입니다. 행사 관련 사실을 정확히 전달하세요.\n`
-    : "";
+JSON으로만 응답하세요: {"fit_reason":"독자 업무와의 접점 한 줄(없으면 없음)","fit":(1~10 정수)}
 
-  return `${catSection}
-${eventLine}
-퀄리티 점수 기준 (각 항목 1~10점, quality_score는 종합 판단):
+기사 제목: ${i.title}
+분류: ${i.category}
+기사 내용:
+${i.text.slice(0, 3500)}`;
+  let lastError = "";
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${i.apiKey}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: { temperature: 0, responseMimeType: "application/json" } }),
+        signal: AbortSignal.timeout(25000),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        lastError = `Gemini HTTP ${res.status}`;
+        if ((res.status === 429 || res.status >= 500) && attempt === 0) { await sleep(1200); continue; }
+        return { ok: false, error: lastError };
+      }
+      const parts: Array<{ text?: string; thought?: boolean }> = json.candidates?.[0]?.content?.parts ?? [];
+      const raw = (parts.find((p) => !p.thought && typeof p.text === "string")?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+      const parsed = JSON.parse(raw);
+      const fit = Math.round(Number(parsed.fit));
+      if (!Number.isFinite(fit) || fit < 1 || fit > 10) throw new Error("fit 값이 올바르지 않음");
+      return { ok: true, fit, reason: String(parsed.fit_reason ?? "").slice(0, 200) };
+    } catch (e) {
+      lastError = (e as Error).message;
+      if (attempt === 0) await sleep(800);
+    }
+  }
+  return { ok: false, error: lastError || "적합성 판정 실패" };
+}
+
+/** 점수·레벨 기준표 (calibrated=true, 기본). 예시 숫자를 베끼지 않도록 JSON 은 형식만 안내하고 기준은 여기서 글로 줌 */
+function scoringAndLevelV2(levelExamples: { title: string; level: string }[] | undefined, levelSection: string): string {
+  const lvEx = (levelExamples ?? []).slice(0, 30).map((e) => `  · "${e.title}" → ${e.level}`).join("\n");
+  return `퀄리티 점수 기준 (각 항목 1~10점):
+- relevance(카테고리 관련성): 카테고리·페르소나·키워드와의 일치도
+- specificity(구체성): 수치·사례·데이터의 풍부함
+- practicality(실용성): 즉시 활용 가능한 시사점 여부
+- source_quality(원문품질): 원문 접근 가능성 및 내용 충실도
+- fit: 이 값은 별도 호출에서 판정하므로 1로 두세요 (평가하지 마세요)
+- quality_score(종합): 위 4항목을 종합한 글 완성도 점수
+  대부분의 일반 기사는 5~7점입니다. 8점 이상은 구체적 수치·사례가 풍부하고 실무에 바로 쓸 수 있는 뚜렷하게 우수한 기사에만 주세요. 9~10점은 매우 드뭅니다.
+
+레벨 판정 — 기사의 "성격"으로 정합니다 (글을 쓰는 방식이 아니라 원문이 독자에게 요구하는 사전 지식 수준).
+먼저 원문의 성격을 3가지 비중으로 평가하세요 (각 0~3점, level_axes):
+  · concept: 용어·제도·기술이 무엇인지, 왜 중요한지 풀어서 설명하는 비중
+  · practical: 특정 행사·사업·사례의 일정·규모·운영방식·참가/적용 방법 등 담당자가 바로 활용할 사실의 비중
+  · strategic: 시장 데이터·통계 비교·정책 조항 해석·경쟁/투자 구도·파급효과 분석의 비중
+세 점수를 종합해 판정하세요 (한 가지 신호만으로 단정하지 말 것):
+  · Beginner: concept가 가장 높고 strategic는 낮음. 개념을 소개·해설하는 글. 행사·사업 소식이나 보도자료는 개념 설명이 없으면 Beginner가 아님.
+  · Intermediate: practical이 가장 높음. 행사·사업 소식, 사례, 제도 시행 안내 등 업계 경험자가 사실을 확인하고 업무에 참고하는 글. 뉴스의 대부분이 여기에 해당함.
+  · Advanced: strategic가 높고 수치·근거를 바탕으로 구조 변화나 의사결정 시사점을 논함. 의견·제언이 있어도 수치·근거 없이 선언적이면 Advanced가 아님.${lvEx ? `\n  관리자가 직접 고친 레벨 사례 (비슷한 기사는 이 판단을 따르세요):\n${lvEx}` : ""}
+
+레벨별 작성 지침 (판정한 레벨의 지침으로 작성):
+${levelSection}`;
+}
+
+const V1_SCORING_AND_LEVEL = (levelSection: string) => `퀄리티 점수 기준 (각 항목 1~10점, quality_score는 종합 판단):
 - relevance(카테고리 관련성): 카테고리·페르소나·키워드와의 일치도
 - specificity(구체성): 수치·사례·데이터의 풍부함
 - practicality(실용성): 즉시 활용 가능한 시사점 여부
@@ -147,7 +199,68 @@ Advanced — 다음 중 1개 이상 해당하면 Advanced:
 Intermediate — 위 두 조건 모두 해당 없을 때
 
 레벨별 작성 지침:
-${levelSection}
+${levelSection}`;
+
+function levelBlock(cat: string, lp: Record<string, Record<string, string>>): string {
+  const l = lp[cat] ?? {};
+  return `[Beginner] ${l["Beginner"] ?? "쉽고 명확하게 작성하세요."}
+[Intermediate] ${l["Intermediate"] ?? "실무 담당자 관점에서 작성하세요."}
+[Advanced] ${l["Advanced"] ?? "전략적 심층 분석으로 작성하세요."}`;
+}
+
+function defaultSetting(cat: string): CatSetting {
+  return { audience: "MICE·관광 업계 종사자", persona: `당신은 ${cat} 전문 에디터입니다. 업계 종사자 관점에서 핵심 시사점을 분석합니다.`, keywords: [] };
+}
+
+/**
+ * 응답 JSON 형식 안내.
+ * 기본(calibrated=false)은 v1과 동일 — 예시값(품질 8, 적합 9)이 들어 있어 AI가 그 숫자를 거의 그대로 베끼는 문제가 있음
+ * (운영 기사 682건 중 품질 8~9점이 99%, 적합성 4점 이하 0건 → 적합성 관문이 작동하지 않음).
+ * calibrated=true 는 예시값 대신 형식만 안내하고 점수 분포 가이드를 줌.
+ */
+function jsonSection(multi: boolean, calibrated: boolean): string {
+  const catPart = multi ? ',"category":"후보 중 하나","category_reason":"카테고리 판단 근거 한 줄"' : "";
+  if (!calibrated) {
+    return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이):
+{"quality_score":8,"quality_criteria":{"relevance":9,"specificity":8,"practicality":7,"source_quality":8,"fit":9},"level":"Intermediate","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":["AI 관광"]${catPart.replace('"후보 중 하나"', '"MICE"')}}`;
+  }
+  return `다음 기사를 분석해 JSON으로만 응답하세요 (마크다운 없이).
+아래는 형식 설명이며, 숫자 자리에는 이 기사를 직접 평가한 값을 넣으세요 (예시값을 따라 쓰지 마세요).
+{"quality_score":(1~10 정수),"quality_criteria":{"relevance":(1~10),"specificity":(1~10),"practicality":(1~10),"source_quality":(1~10),"fit":1},"level_axes":{"concept":(0~3),"practical":(0~3),"strategic":(0~3)},"level":"Beginner|Intermediate|Advanced 중 하나","title":"제목(50자이내)","summary_short":"요약(120자이내)","content_long":"상세분석(4~6문장)","implications":"시사점(2~3문장)","business_domains":[]${catPart}}
+
+점수는 위 기준표에 따라 기사마다 직접 평가하세요. 모든 기사에 같은 점수를 주지 마세요.`;
+}
+
+export function buildPrompt(i: GenInput): string {
+  const multi = i.categories.length > 1;
+  const catSection = multi
+    ? `【카테고리 판단 — 먼저 할 일】
+이 기사의 핵심 주제에 가장 맞는 카테고리를 후보 중 정확히 1개 고르고(category), 그 이유를 한 줄로 쓰세요(category_reason).
+그리고 고른 카테고리의 페르소나·타겟 독자·작성 지침으로 기사를 작성하세요.
+후보: ${i.categories.join(", ")}
+${CATEGORY_CRITERIA}
+${i.hintBlock ? `\n참고 키워드(힌트일 뿐 최종 판단은 기사 내용으로):\n${i.hintBlock}\n` : ""}
+${i.categories.map((c) => {
+      const s = i.catSettings[c] ?? defaultSetting(c);
+      return `■ ${c} 관점\n${s.persona}\n타겟 독자: ${s.audience}${s.keywords.length ? `\n강조 키워드: ${s.keywords.join(", ")}` : ""}`;
+    }).join("\n\n")}`
+    : (() => {
+      const c = i.categories[0];
+      const s = i.catSettings[c] ?? defaultSetting(c);
+      return `${s.persona}\n타겟 독자: ${s.audience}${s.keywords.length ? `\n강조 키워드: ${s.keywords.join(", ")}` : ""}`;
+    })();
+
+  const levelSection = multi
+    ? i.categories.map((c) => `(${c} 관점일 때)\n${levelBlock(c, i.levelPrompts)}`).join("\n\n")
+    : levelBlock(i.categories[0], i.levelPrompts);
+
+  const eventLine = i.eventName
+    ? `\n※ 이 기사는 이즈피엠피가 주목하는 행사 "${i.eventName}" 관련 보도입니다. 행사 관련 사실을 정확히 전달하세요.\n`
+    : "";
+
+  return `${catSection}
+${eventLine}
+${i.calibrated === false ? V1_SCORING_AND_LEVEL(levelSection) : scoringAndLevelV2(i.levelExamples, levelSection)}
 
 문체 규칙: '~습니다/~입니다' 경어체로 작성하되, 딱딱하지 않고 읽기 편한 뉴스레터 톤으로 작성하세요. 신문체('~다', '~한다') 사용 금지.
 
@@ -192,6 +305,7 @@ export async function generateArticle(i: GenInput): Promise<{ ok: true; value: G
       const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed.business_domains)) parsed.business_domains = [];
+      if (!(LEVELS as readonly string[]).includes(parsed.level)) parsed.level = "Intermediate";
       // 카테고리: 후보가 1개면 확정, 여러 개면 AI 응답을 검증(후보 밖이면 첫 후보로)
       const cats = i.categories;
       const aiCat = typeof parsed.category === "string" ? parsed.category.toUpperCase().trim() : "";

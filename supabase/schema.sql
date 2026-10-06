@@ -153,7 +153,8 @@ alter table public.curation_settings
   add column if not exists newsletter_header_images jsonb default '[]',
   add column if not exists newsletter_footer_banner jsonb default '{}',
   add column if not exists category_hints    jsonb default '{}',     -- AI 카테고리 판단 시 참고 키워드 {MICE:{strong:[],weak:[]}, ...}
-  add column if not exists category_examples jsonb default '[]';     -- 관리자가 고친 카테고리 사례 [{title, category}] — few-shot 예시
+  add column if not exists category_examples jsonb default '[]',     -- 관리자가 고친 카테고리 사례 [{title, category}] — few-shot 예시
+  add column if not exists level_examples    jsonb default '[]';     -- 관리자가 고친 레벨 사례 [{title, level}] — few-shot 예시
 
 -- ── convention_events ─────────────────────────────────────────────────
 create table if not exists public.convention_events (
@@ -194,7 +195,8 @@ alter table public.news
   add column if not exists coverage_count   integer default 1,       -- 같은 내용을 다룬 매체 수
   add column if not exists related_event_id uuid references public.convention_events(id) on delete set null,
   add column if not exists category_reason  text,                    -- AI 카테고리 판단 근거 한 줄
-  add column if not exists category_edited  boolean default false;   -- 관리자가 카테고리를 직접 고친 기사
+  add column if not exists category_edited  boolean default false,   -- 관리자가 카테고리를 직접 고친 기사
+  add column if not exists fit_reason       text;                    -- AI 적합성 판정 근거 한 줄 (대기열 검토 때 표시)
 
 create index if not exists news_related_event_idx
   on public.news (related_event_id) where related_event_id is not null;

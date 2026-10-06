@@ -29,4 +29,4 @@ for (const s of sources) console.log(`${s.status.padEnd(7)} ${String(s.fetched).
 console.log("\n===== 선정된 기사 =====");
 for (const c of selected) console.log(`${c.pick ? "★" : " "} [${c.cats.join("/")}] ${c.title.slice(0, 60)}  ← ${c.source} (${c.vias.join(",")})${c.coverage > 1 ? ` 매체${c.coverage}` : ""}${c.hasText ? "" : " (원문 없음)"}`);
 console.log("\n===== AI 작성 결과 =====");
-for (const d of decisions) console.log(`${d.decision.padEnd(13)} ${d.category}${d.cats.length > 1 ? "(AI판단: " + d.category_reason + ")" : ""} 품질${d.score} 적합${d.fit}${d.pick ? " ★" + d.pick : ""} | ${d.title}`);
+for (const d of decisions) console.log(`${d.decision.padEnd(13)} ${d.category}${d.cats.length > 1 ? "(AI판단: " + d.category_reason + ")" : ""} 품질${d.score} 적합${d.fit} ${String(d.level).slice(0, 3)}${d.capped ? " [상한초과→대기]" : ""}${d.pick ? " ★" + d.pick : ""} | ${d.title}\n               └ ${d.fit_reason ?? ""}`);

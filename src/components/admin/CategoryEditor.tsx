@@ -5,6 +5,9 @@ import { Loader2, Pencil, X as XIcon } from "lucide-react";
 import type { NewsItem } from "@/lib/types";
 
 const OPTIONS = ["MICE", "TOURISM", "AI", "EZPMP"];
+const LEVEL_LABEL: Record<string, string> = { Beginner: "입문", Intermediate: "실무", Advanced: "전문" };
+const LEVEL_CHOICES = ["keep", "Beginner", "Intermediate", "Advanced"] as const;
+type LevelChoice = (typeof LEVEL_CHOICES)[number];
 
 type Rewrite = { title: string; summary_short: string; content_long: string; implications: string };
 
@@ -15,8 +18,11 @@ export default function CategoryEditor({ item, onPatch }: { item: NewsItem; onPa
   const [busy, setBusy] = useState<"" | "only" | "rewrite" | "replace">("");
   const [draft, setDraft] = useState<Rewrite | null>(null);          // 다시 쓴 안 (비교 창)
   const [err, setErr] = useState("");
+  const [lvChoice, setLvChoice] = useState<LevelChoice>("keep");   // 다시 쓸 때의 글 수준 — 기본은 현재 레벨 유지
+  const curLevel = item.level ?? "Intermediate";
+  const effLevel = lvChoice === "keep" ? curLevel : lvChoice;
 
-  const close = () => { setTarget(null); setDraft(null); setErr(""); setBusy(""); };
+  const close = () => { setTarget(null); setDraft(null); setErr(""); setBusy(""); setLvChoice("keep"); };
 
   const saveOnly = async () => {
     if (!target) return;
@@ -30,7 +36,7 @@ export default function CategoryEditor({ item, onPatch }: { item: NewsItem; onPa
   const makeDraft = async () => {
     if (!target) return;
     setBusy("rewrite"); setErr("");
-    const res = await fetch("/api/admin/news/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target }) });
+    const res = await fetch("/api/admin/news/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target, ...(lvChoice !== "keep" && { level: lvChoice }) }) });
     const json = await res.json();
     setBusy("");
     if (!res.ok) { setErr(json.error ?? "다시 쓰기 실패"); return; }
@@ -39,10 +45,10 @@ export default function CategoryEditor({ item, onPatch }: { item: NewsItem; onPa
   const replace = async () => {
     if (!target || !draft) return;
     setBusy("replace"); setErr("");
-    const res = await fetch("/api/admin/news/category", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target, ...draft }) });
+    const res = await fetch("/api/admin/news/category", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target, ...draft, ...(lvChoice !== "keep" && { level: lvChoice }) }) });
     const json = await res.json();
     if (!res.ok) { setErr(json.error ?? "교체 실패"); setBusy(""); return; }
-    onPatch({ category: json.category, category_edited: true, category_reason: null, ...draft, audited_at: null, faithfulness_score: null, faithfulness_issues: null });
+    onPatch({ category: json.category, category_edited: true, category_reason: null, ...draft, ...(lvChoice !== "keep" && { level: lvChoice }), audited_at: null, faithfulness_score: null, faithfulness_issues: null });
     close();
   };
 
@@ -89,6 +95,21 @@ export default function CategoryEditor({ item, onPatch }: { item: NewsItem; onPa
                 <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
                   카테고리마다 글의 관점과 독자가 달라요. 분류만 잘못됐고 글은 그대로 써도 되면 <b>카테고리만 변경</b>, 글도 {target} 관점으로 새로 쓰려면 <b>다시 쓰기</b>를 누르세요. 다시 쓴 글은 지금 글과 나란히 비교한 뒤 교체할 수 있어요.
                 </p>
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-[0.7rem] font-semibold" style={{ color: "var(--on-surface-variant)" }}>다시 쓸 글의 수준 <span className="font-normal">(카테고리만 변경할 때는 적용되지 않아요)</span></span>
+                  <div className="flex gap-1.5">
+                    {LEVEL_CHOICES.map((c) => {
+                      const on = lvChoice === c;
+                      return (
+                        <button key={c} type="button" onClick={() => setLvChoice(c)} className="flex-1 h-8 rounded-md text-xs font-semibold"
+                          style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "#fff" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
+                          {c === "keep" ? `유지 (${LEVEL_LABEL[curLevel] ?? curLevel})` : LEVEL_LABEL[c]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>카테고리가 바뀌면 독자층도 달라질 수 있어요. 바꾸지 않으면 지금 레벨({LEVEL_LABEL[curLevel] ?? curLevel})로 씁니다.</span>
+                </div>
                 {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
                 <div className="flex justify-end gap-2 flex-wrap">
                   <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
@@ -116,7 +137,7 @@ export default function CategoryEditor({ item, onPatch }: { item: NewsItem; onPa
                     </div>
                   ))}
                 </div>
-                <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>[교체]하면 지금 글이 새 글로 바뀌고, 품질 감사를 다시 받아요. 마음에 안 들면 [취소]하세요 (아무것도 바뀌지 않아요).</p>
+                <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>[교체]하면 지금 글이 새 글로 바뀌고(글 수준: <b>{LEVEL_LABEL[effLevel] ?? effLevel}</b>), 품질 감사를 다시 받아요. 마음에 안 들면 [취소]하세요 (아무것도 바뀌지 않아요).</p>
                 {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
                 <div className="flex justify-end gap-2">
                   <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
