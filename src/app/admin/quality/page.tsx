@@ -18,6 +18,13 @@ type EventRow = {
   is_ezpmp_pick: boolean;
   source: string | null;
   created_at: string;
+  news_keywords?: string[] | null;
+  seen_at?: Record<string, string> | null;
+  is_concurrent?: boolean | null;
+  parent_event_id?: string | null;
+  hidden_reason?: string | null;
+  news_count?: number;
+  news_last?: string | null;
 };
 
 async function fetchNews(): Promise<NewsItem[]> {
@@ -35,12 +42,44 @@ async function fetchNews(): Promise<NewsItem[]> {
 async function fetchEvents(): Promise<EventRow[]> {
   try {
     const supabase = createAdminClient();
-    const { data } = await supabase
+    const base = "id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, is_published, is_ezpmp_pick, source, created_at, news_keywords";
+    // seen_at(출처 배지)·is_concurrent·parent_event_id(동시개최)·hidden_reason(비공개 사유)은 05~07 SQL 적용 후 존재 — 없으면 기본 컬럼만
+    let rows: unknown[] | null = null;
+    const full = await supabase
       .from("convention_events")
-      .select("id, event_name, venue, venue_region, category, organizer, start_date, end_date, website, is_published, is_ezpmp_pick, source, created_at")
+      .select(`${base}, seen_at, is_concurrent, parent_event_id, hidden_reason`)
       .order("start_date", { ascending: true })
       .limit(2000);
-    return (data ?? []) as EventRow[];
+    if (full.error) {
+      rows = (await supabase.from("convention_events").select(base).order("start_date", { ascending: true }).limit(2000)).data;
+    } else {
+      rows = full.data;
+    }
+    const events = (rows ?? []) as EventRow[];
+
+    // 이즈픽 행사별 관련 기사 수·최근 발행일 (큐레이션이 related_event_id 로 연결해 둔 기사)
+    const pickIds = events.filter((e) => e.is_ezpmp_pick).map((e) => e.id);
+    if (pickIds.length) {
+      const { data: rel } = await supabase
+        .from("news")
+        .select("related_event_id, published_at")
+        .in("related_event_id", pickIds)
+        .eq("is_published", true);
+      const agg = new Map<string, { n: number; last: string | null }>();
+      for (const r of rel ?? []) {
+        const a = agg.get(r.related_event_id) ?? { n: 0, last: null };
+        a.n++;
+        if (!a.last || (r.published_at && r.published_at > a.last)) a.last = r.published_at;
+        agg.set(r.related_event_id, a);
+      }
+      for (const e of events) {
+        if (!e.is_ezpmp_pick) continue;
+        const a = agg.get(e.id);
+        e.news_count = a?.n ?? 0;
+        e.news_last = a?.last ?? null;
+      }
+    }
+    return events;
   } catch { return []; }
 }
 

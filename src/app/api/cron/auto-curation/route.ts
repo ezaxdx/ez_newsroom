@@ -76,7 +76,8 @@ export async function GET(req: Request) {
 
   // Edge Function 호출 — await으로 요청 전송을 보장하되 8초 내 응답 없으면 포기
   // (Supabase Edge Function은 클라이언트 연결 끊겨도 계속 실행됨)
-  const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate`;
+  // curate-v2 는 기본이 시험 실행(저장 안 함) — 정기 실행은 live: true 를 명시
+  const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate-v2`;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
   try {
@@ -87,6 +88,7 @@ export async function GET(req: Request) {
         "Authorization": `Bearer ${serviceRoleKey}`,
         "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       },
+      body: JSON.stringify({ live: true }),
       signal: AbortSignal.timeout(8000),
     });
   } catch {

@@ -67,17 +67,26 @@ export async function PATCH(req: NextRequest) {
   if (!id) return NextResponse.json({ error: "id required" }, { status: 400 });
 
   // 허용 필드만 업데이트
-  const ALLOWED = ["is_published", "is_ezpmp_pick", "image_url", "description", "event_name", "organizer", "start_date", "end_date", "venue"];
+  const ALLOWED = ["is_published", "is_ezpmp_pick", "image_url", "description", "event_name", "organizer", "start_date", "end_date", "venue", "news_keywords"];
   const updates: Record<string, unknown> = {};
   for (const key of ALLOWED) {
     if (key in fields) updates[key] = fields[key];
   }
 
   const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("convention_events")
-    .update(updates)
-    .eq("id", id);
+  // 관리자가 공개/비공개를 직접 바꾼 행사는 잠가서, 이후 수집·규칙 소급 적용이 덮어쓰지 않게 함
+  // 비공개 사유도 같이 기록 — 직접 비공개하면 manual, 다시 공개하면 비움 (05/07 SQL 적용 전이면 없는 컬럼은 빼고 재시도)
+  const toggled = "is_published" in updates;
+  const full = toggled
+    ? { ...updates, publish_locked: true, hidden_reason: updates.is_published === false ? "manual" : null }
+    : updates;
+  let { error } = await supabase.from("convention_events").update(full).eq("id", id);
+  if (error && toggled && /hidden_reason/.test(error.message)) {
+    ({ error } = await supabase.from("convention_events").update({ ...updates, publish_locked: true }).eq("id", id));
+  }
+  if (error && toggled && /publish_locked/.test(error.message)) {
+    ({ error } = await supabase.from("convention_events").update(updates).eq("id", id));
+  }
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true });

@@ -122,6 +122,15 @@ Deno.serve(async (req) => {
     .order("published_at", { ascending: false })
     .limit(BATCH_LIMIT);
 
+  // 큐레이션 때 저장해 둔 원문(news_original_text)이 있으면 그걸 쓰고, 없는 예전 기사만 원문을 다시 가져옴
+  // (다시 가져오다 봇 차단으로 "원문 접근 불가 — 재검증 불가"가 되던 문제 방지)
+  const storedText = new Map<string, string>();
+  const targetIds = (targets ?? []).map((t: { id: string }) => t.id);
+  if (targetIds.length) {
+    const { data: stored } = await supabase.from("news_original_text").select("news_id, original_text").in("news_id", targetIds);
+    for (const s of stored ?? []) storedText.set(s.news_id, s.original_text);
+  }
+
   const runStart = Date.now();
   let audited = 0, skipped = 0, failed = 0;
   const lowScoreItems: { id: string; title: string; score: number; issues: string[] }[] = [];
@@ -130,7 +139,7 @@ Deno.serve(async (req) => {
   for (const n of targets ?? []) {
     if (Date.now() - runStart > TIME_BUDGET_MS) { budgetExceeded = true; break; }
 
-    const originalText = await fetchOriginalText(n.original_url);
+    const originalText = storedText.get(n.id) ?? await fetchOriginalText(n.original_url);
     if (originalText.length < 200) {
       // 원문 접근 불가(봇 차단 등) — 재검증 불가 상태로 기록해 매 실행마다 재시도하지 않게 함
       await supabase.from("news").update({

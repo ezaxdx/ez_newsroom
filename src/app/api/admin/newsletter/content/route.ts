@@ -1,24 +1,20 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { NewsCard, EventCard } from "@/lib/newsletter-template";
-import { scoreEvent, WEEKLY_LIST_MIN_SCORE, WEEKLY_EXCLUDE_KEYWORDS } from "@/lib/event-score";
-import { fetchEventImage } from "@/lib/fetch-event-image";
+import { EventCard } from "@/lib/newsletter-template";
 import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
-import { calcLastScheduledRun } from "@/lib/schedule";
+import { loadScoringContext } from "@/lib/event-score-context";
+import { liveRangeStart, selectNews, selectEvents } from "@/lib/newsletter-content";
 
 export const dynamic = "force-dynamic";
 
+// 발송 전 인트로 문구 작성을 돕는 미리보기 — 실제 발송(send/cron)과 같은 선정 로직(@/lib/newsletter-content)을 사용
 export async function GET() {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
   const supabase = createAdminClient();
   const today = new Date();
-  const todayStr = today.toISOString().split("T")[0];
-  const twoWeeksAgo = new Date(today.getTime() - 14 * 24 * 60 * 60 * 1000)
-    .toISOString()
-    .split("T")[0];
 
   // Vol number = 실제 발송 완료(status=sent)된 건수 + 1 (테스트/드래프트는 미포함)
   const { count: issueCount } = await supabase
@@ -27,196 +23,31 @@ export async function GET() {
     .eq("status", "sent");
   const vol_number = (issueCount ?? 0) + 1;
 
-  type RawNews = { id: string; title: string; summary_short: string; image_url: string | null; original_url: string };
-  const toCard = (n: RawNews): NewsCard => ({ id: n.id, title: n.title, summary: n.summary_short, image_url: n.image_url, url: n.original_url });
-
-  // send/route.ts와 동일하게 라이브 범위(최근 큐레이션 실행 이후) 계산 — 안 그러면
-  // 아카이브된 옛 기사가 display_order 낮은 값을 우연히 갖고 있을 때 계속 TOP으로 뽑혀서
-  // "최신 기사를 못 가져온다"는 증상이 발생함 (이 엔드포인트는 실제 발송과 결과가 같아야 함)
-  const { data: curationSettings } = await supabase
-    .from("curation_settings").select("auto_schedule").limit(1).single();
-  const curationSchedule = curationSettings?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
-  const lastRunISO = curationSchedule.enabled && curationSchedule.days?.length > 0
-    ? calcLastScheduledRun(curationSchedule.days, curationSchedule.hour ?? 9).toISOString()
-    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  async function fetchCategoryNews(orFilter: string): Promise<NewsCard[]> {
-    // 라이브 범위 안에서 display_order(품질점수 기반 순위) 상위 2건. 같은 배치 안
-    // 기사들은 발행 시각이 몇 분 차이 날 뿐 편집상 의미가 없어서 "최신순"이 아니라
-    // display_order로 골라야 실제 품질 순위 2건이 나옴(send/route.ts와 동일 원칙)
-    const { data: liveRaw } = await supabase.from("news")
-      .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
-      .order("display_order", { ascending: true }).limit(2);
-    const live = (liveRaw ?? []) as RawNews[];
-    // 라이브가 1건이어도 그대로 반환 — 2주 전 기사로 억지로 채우지 않음
-    if (live.length >= 1) return live.map(toCard);
-
-    // 라이브가 0건일 때만 최근 2주 내에서 실제 발행일 최신순으로 보충
-    const { data: fallbackRaw } = await supabase.from("news")
-      .select("id, title, summary_short, image_url, original_url")
-      .eq("is_published", true).gte("published_at", twoWeeksAgo)
-      .or(orFilter)
-      .order("published_at", { ascending: false }).limit(2);
-    return ((fallbackRaw ?? []) as RawNews[]).map(toCard);
-  }
-
-  const miceNews    = await fetchCategoryNews("category.ilike.%MICE%,category.ilike.%컨벤션%,category.ilike.%전시%");
-  const tourismNews = await fetchCategoryNews("category.ilike.%TOURISM%,category.ilike.%관광%,category.ilike.%여행%");
-  const aiNews      = await fetchCategoryNews("category.ilike.%AI%,category.ilike.%인공지능%,category.ilike.%테크%");
-  const ezpmpNews   = await fetchCategoryNews("category.ilike.%EZPMP%,category.ilike.%EZ PMP%,category.ilike.%ezpmp%");
-
-  // ── 행사 스코어링 ──
-  const nowKST = new Date(today.getTime() + 9 * 60 * 60 * 1000);
-  const dayOfWeek = nowKST.getUTCDay();
-  const daysUntilSunday = dayOfWeek === 0 ? 0 : 7 - dayOfWeek;
-  const endOfWeek = new Date(nowKST);
-  endOfWeek.setUTCDate(endOfWeek.getUTCDate() + daysUntilSunday);
-  const endOfWeekStr = endOfWeek.toISOString().split("T")[0];
-
-  // Pick 후보는 근거리(30일 이내)만 쓰므로 조회 자체를 그 범위로 제한 (더 먼 미래 행사는 애초에 불필요)
-  const NEAR_TERM_DAYS = 30;
-  const nearTermEnd = new Date(today.getTime() + NEAR_TERM_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
-  const { data: eventsPool } = await supabase
-    .from("convention_events")
-    .select("id, event_name, event_name_en, start_date, end_date, venue, website, category, industry, organizer, image_url, description, is_ezpmp_pick")
-    .eq("is_published", true)
-    .neq("is_concurrent", true)   // 동시개최 행사 제외 (메인 행사만)
-    .gte("start_date", todayStr)
-    .lte("start_date", nearTermEnd)
-    .order("start_date", { ascending: true })
-    .limit(200);
-
-  const scoredAll = (eventsPool ?? [])
-    .map((e) => ({ ...e, _score: scoreEvent({
-      event_name: e.event_name ?? "",
-      event_name_en: e.event_name_en ?? null,
-      category: e.category ?? null,
-      industry: e.industry ?? null,
-      organizer: e.organizer ?? null,
-      venue: e.venue ?? "",
-      start_date: e.start_date ?? todayStr,
-    }, today) }))
-    .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
-
-  // 동시개최 중복 제거: 같은 venue + start_date 조합은 점수 1위만 남김
-  // 장소명 정규화: 영문·괄호·공백 제거 후 한글 핵심 이름만 추출
-  function normalizeVenue(venue: string): string {
-    return venue
-      .replace(/\(.*?\)/g, "")   // 괄호 및 내용 제거: "킨텍스 (KINTEX)" → "킨텍스 "
-      .replace(/[A-Za-z]/g, "")  // 영문 제거
-      .replace(/\s+/g, "")       // 공백 제거
-      .trim();
-  }
-  const venueDateMap = new Map<string, typeof scoredAll[number]>();
-  for (const e of scoredAll) {
-    const key = `${normalizeVenue(e.venue ?? "")}:${e.start_date ?? ""}`;
-    if (!venueDateMap.has(key)) venueDateMap.set(key, e);
-  }
-  const scored = Array.from(venueDateMap.values())
-    .sort((a, b) => b._score - a._score || a.start_date.localeCompare(b.start_date));
-
-  // 최근 2개 발송 호에 나온 Pick 행사 제외 (중복 방지)
-  const { data: recentIssues } = await supabase
-    .from("newsletter_issues")
-    .select("featured_event_ids")
-    .eq("status", "sent")
-    .order("sent_at", { ascending: false })
-    .limit(2);
-  const recentlyFeatured = new Set<string>(
-    (recentIssues ?? []).flatMap(i => (i.featured_event_ids as string[] | null) ?? [])
-  );
-
-  // 실제 발송(send/route.ts)과 동일한 원칙: 어드민 ⭐ 픽 최우선 + 남는 자리는 자동 점수로 보충.
-  // 이 엔드포인트는 발송 전 인트로 문구 작성을 돕기 위한 미리보기용이라, 실제 발송 결과와 어긋나면 안 됨.
-  const d14 = new Date(today.getTime() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-  const d30 = new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-
-  // ⭐ 수동 픽도 자동 픽과 동일하게 14일→30일→45일 근접도 순으로 정렬 (최근 발송호 노출분은 제외).
-  // 우선순위 자체(자동 픽보다 항상 먼저 채워짐)는 유지, 픽이 여럿일 때 어떤 걸 4자리에 넣을지만 자동 픽과 동일 기준 적용
-  const manualCandidates = scored.filter(e => e.is_ezpmp_pick && !recentlyFeatured.has(e.id));
-  const manualPicks = [
-    ...manualCandidates.filter(e => e.start_date <= d14),
-    ...manualCandidates.filter(e => e.start_date > d14 && e.start_date <= d30),
-    ...manualCandidates.filter(e => e.start_date > d30),
-  ].slice(0, 4);
-  const pickedIds = new Set(manualPicks.map(e => e.id));
-  const autoSlots = Math.max(0, 4 - manualPicks.length);
-
-  // Pick 선정: 14일 이내 우선 → 부족하면 30일 이내로 보충 → 그래도 부족하면 45일 전체로 보충
-  // ※ 전체 교체가 아닌 보충 방식 — 가까운 날짜 행사가 항상 우선 포함됨
-  const candidatePool = scored.filter(e => !pickedIds.has(e.id));
-  const fresh = candidatePool.filter(e => !recentlyFeatured.has(e.id));
-  const near = fresh.filter(e => e.start_date <= d14);
-  const mid  = fresh.filter(e => e.start_date > d14 && e.start_date <= d30);
-  const far  = fresh.filter(e => e.start_date > d30);
-  const seenIds = new Set<string>(pickedIds);
-  const pickPool: typeof fresh = [];
-  for (const e of [...near, ...mid, ...far, ...candidatePool]) {
-    if (pickPool.length >= autoSlots) break;
-    if (!seenIds.has(e.id)) { seenIds.add(e.id); pickPool.push(e); }
-  }
-  const _debug = { d14, d30, near: near.length, mid: mid.length, far: far.length, manual_picks: manualPicks.map(e => e.event_name), near_top5: near.slice(0,5).map(e => `${e.event_name}(${e.start_date},${e._score})`), pick: pickPool.map(e => `${e.event_name}(${e.start_date})`) };
-  const featuredRaw = [...manualPicks, ...pickPool.slice(0, autoSlots)].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const news = await selectNews(supabase, await liveRangeStart(supabase));
+  const scoring = await loadScoringContext(supabase);
+  const { featuredRaw, upcoming, debug } = await selectEvents(supabase, { today, scoring });
 
   // description 없는 Pick 행사 → Gemini로 일괄 생성 + DB 캐시
   const descMap = await fillEventDescriptions(
     featuredRaw.map((e) => ({
-      id: e.id,
-      event_name: e.event_name,
-      description: (e as { description?: string | null }).description ?? null,
-      website: e.website ?? null,
-      industry: e.industry ?? null,
-      category: e.category ?? null,
-      organizer: e.organizer ?? null,
+      id: e.id, event_name: e.event_name, description: e.description, website: e.website,
+      industry: e.industry ?? null, category: e.category ?? null, organizer: e.organizer ?? null,
     })),
     supabase,
     process.env.GOOGLE_AI_API_KEY
   );
+  const featuredEvents: EventCard[] = featuredRaw.map((e) => ({
+    name: e.event_name, start_date: e.start_date, end_date: e.end_date, venue: e.venue,
+    image_url: e.image_url, website: e.website, description: descMap[e.id] ?? null,
+  }));
 
-  const featuredEvents: EventCard[] = await Promise.all(
-    featuredRaw.map(async (e) => {
-      const imageUrl = await fetchEventImage(e.event_name, e.website ?? null, e.image_url ?? null);
-      return {
-        name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-        venue: e.venue ?? null, image_url: imageUrl, website: e.website ?? null,
-        description: descMap[e.id] ?? null,
-      };
-    })
-  );
-
-  const featuredIds = new Set(featuredRaw.map((e) => e.id));
-  const upcomingEvents: EventCard[] = scored
-    .filter((e) => {
-      if (featuredIds.has(e.id)) return false;
-      if (e.start_date > endOfWeekStr) return false;
-      if (e._score < WEEKLY_LIST_MIN_SCORE) return false;
-      const nameLower = (e.event_name ?? "").toLowerCase();
-      if (WEEKLY_EXCLUDE_KEYWORDS.some((kw) => nameLower.includes(kw.toLowerCase()))) return false;
-      return true;
-    })
-    .slice(0, 7)
-    .map((e) => ({
-      name: e.event_name, start_date: e.start_date, end_date: e.end_date ?? null,
-      venue: e.venue ?? null, website: e.website ?? null,
-    }));
-
-  // Format send_date
-  const y = today.getFullYear();
-  const m = String(today.getMonth() + 1).padStart(2, "0");
-  const d = String(today.getDate()).padStart(2, "0");
-  const send_date = `${y}.${m}.${d}`;
+  const kst = new Date(today.getTime() + 9 * 60 * 60 * 1000);
+  const send_date = `${kst.getUTCFullYear()}.${String(kst.getUTCMonth() + 1).padStart(2, "0")}.${String(kst.getUTCDate()).padStart(2, "0")}`;
 
   return NextResponse.json({
-    vol_number,
-    send_date,
-    mice_news: miceNews,
-    tourism_news: tourismNews,
-    ai_news: aiNews,
-    ezpmp_news: ezpmpNews,
-    featured_events: featuredEvents,
-    upcoming_events: upcomingEvents,
-    _debug,
+    vol_number, send_date,
+    mice_news: news.mice, tourism_news: news.tourism, ai_news: news.ai, ezpmp_news: news.ezpmp,
+    featured_events: featuredEvents, upcoming_events: upcoming,
+    _debug: debug,
   });
 }

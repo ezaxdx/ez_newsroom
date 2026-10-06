@@ -1,0 +1,20 @@
+[
+  { "source_name": "스마트관광", "url": "스마트관광", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
+  { "source_name": "MICE", "url": "MICE", "source_type": "keyword_search", "default_category": "MICE", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
+  { "source_name": "AI관광", "url": "AI관광", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
+  { "source_name": "글로컬 관광", "url": "\"글로컬 관광\"", "source_type": "keyword_search", "default_category": "TOURISM", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["naver", "google"] }, "is_active": true },
+  { "source_name": "MICE Tech", "url": "MICE Tech", "source_type": "keyword_search", "default_category": "MICE", "weight": 6, "keyword_mode": "none", "max_items": 10, "fetch_config": { "engines": ["google"] }, "is_active": true },
+
+  { "source_name": "더벨트", "url": "https://thebelt.edaily.co.kr/List/Data/T50", "source_type": "web_list", "default_category": "MIXED", "weight": 8, "keyword_mode": "none", "max_items": 5,
+    "fetch_config": { "request": { "method": "POST", "form": { "p": "1" }, "headers": { "Referer": "https://thebelt.edaily.co.kr/List", "Origin": "https://thebelt.edaily.co.kr" } },
+      "urls": ["https://thebelt.edaily.co.kr/List/Data/T10", "https://thebelt.edaily.co.kr/List/Data/T20", "https://thebelt.edaily.co.kr/List/Data/T30", "https://thebelt.edaily.co.kr/List/Data/T40", "https://thebelt.edaily.co.kr/List/Data/T60"], "render": false }, "is_active": true },
+
+  { "source_name": "이데일리_관광,여행", "url": "https://www.edaily.co.kr/articles/culture/travel", "source_type": "web_list", "default_category": "TOURISM", "weight": 5, "keyword_mode": "custom", "custom_keywords": ["관광", "여행"], "max_items": 3,
+    "fetch_config": { "region": { "start": "class=\"aside_left\"", "end": "</section>" }, "render": false }, "is_active": true },
+
+  { "source_name": "오투미트", "url": "https://api-d1.o2meet-g.kr/v4/board/post?boardNo=102136&size=10&page=0&projectCd=PORTAL&siteId=999999", "source_type": "json_list", "default_category": "EZPMP", "weight": 8, "keyword_mode": "none", "max_items": 3,
+    "fetch_config": { "list_path": "list", "fields": { "title": "title", "body": "content", "date": "createDt", "id": "postNo" }, "link_template": "https://o2meet.io/PORTAL/999999/board/news-detail.do?postNo={id}&boardKR=102136", "headers": { "Origin": "https://o2meet.io", "Referer": "https://o2meet.io/" } }, "is_active": true },
+
+  { "source_name": "스마트관광신문", "url": "https://www.st-news.co.kr/rss/allArticle.xml", "source_type": "rss", "default_category": "TOURISM", "weight": 4, "keyword_mode": "none", "max_items": 5, "fetch_config": {}, "is_active": true },
+  { "source_name": "마이스iN 블로그", "url": "https://rss.blog.naver.com/mice-in.xml", "source_type": "rss", "default_category": "MICE", "weight": 8, "keyword_mode": "none", "max_items": 10, "fetch_config": {}, "is_active": true }
+]

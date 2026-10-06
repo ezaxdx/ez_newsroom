@@ -37,9 +37,30 @@ export async function POST(req: NextRequest) {
 
   const { data: currentStates } = await supabase
     .from("news")
-    .select("id, is_published")
+    .select("id, is_published, level, title, original_title")
     .in("id", items.map((i) => i.id));
   const wasPublished = new Map((currentStates ?? []).map((s) => [s.id, s.is_published]));
+
+  // 관리자가 레벨을 직접 고친 기사는 사례로 누적 — 다음 큐레이션부터 비슷한 기사의 레벨 판정에 참고됨
+  // (카테고리·사업영역 보정과 같은 방식). level_examples 컬럼이 아직 없어도 저장 자체는 막지 않음.
+  try {
+    const before = new Map((currentStates ?? []).map((s) => [s.id, s]));
+    const changed = items
+      .map((i) => ({ i, cur: before.get(i.id) }))
+      .filter(({ i, cur }) => cur && i.level && cur.level && i.level !== cur.level)
+      .map(({ i, cur }) => ({ title: (cur!.original_title || cur!.title) as string, level: i.level as string }));
+    if (changed.length) {
+      const { data: settings } = await supabase.from("curation_settings").select("id, level_examples").limit(1).single();
+      if (settings?.id) {
+        const existing: { title: string; level: string }[] = Array.isArray(settings.level_examples) ? settings.level_examples : [];
+        const titles = new Set(changed.map((c) => c.title));
+        const next = [...changed, ...existing.filter((e) => !titles.has(e.title))].slice(0, 40);
+        await supabase.from("curation_settings").update({ level_examples: next }).eq("id", settings.id);
+      }
+    }
+  } catch (e) {
+    console.warn("[save-curation] 레벨 사례 누적 실패(무시):", e);
+  }
 
   // 한 건씩 순차 대기(await in for-loop)하면 항목 수만큼 왕복이 쌓여 느려짐 — 병렬로 전송
   await Promise.all(items.map((item) => {

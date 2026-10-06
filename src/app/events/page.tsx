@@ -5,6 +5,7 @@ import EventsClient, { ConventionEvent } from "@/components/events/EventsClient"
 import { DEFAULT_NAV_CATEGORIES } from "@/lib/config";
 import PopupLayer from "@/components/newsroom/PopupLayer";
 import { fetchActivePopups, fetchEventSettings } from "@/lib/popup";
+import { loadScoringContext } from "@/lib/event-score-context";
 
 export const dynamic = "force-dynamic";
 
@@ -42,18 +43,19 @@ async function fetchEvents(): Promise<ConventionEvent[]> {
 }
 
 export default async function EventsPage() {
-  const [navCategories, events, popups, eventSettings] = await Promise.all([
+  const [navCategories, events, popups, eventSettings, scoring] = await Promise.all([
     fetchNavCategories(),
     fetchEvents(),
     fetchActivePopups(),
     fetchEventSettings(),
+    loadScoringContext(createAdminClient()),
   ]);
 
   return (
     <div className="flex flex-col min-h-screen" style={{ background: "var(--surface)" }}>
       <TopBar navCategories={navCategories} />
       <main className="flex-1">
-        <EventsClient events={events} />
+        <EventsClient events={events} scoring={scoring} />
       </main>
       <Footer />
       <PopupLayer popups={popups} event={eventSettings} pageKey="events" />
