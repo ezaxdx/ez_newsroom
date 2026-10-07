@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Loader2, Pencil, X as XIcon } from "lucide-react";
 import type { NewsItem } from "@/lib/types";
 
@@ -32,6 +32,19 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
   const [busy, setBusy] = useState<"" | "only" | "rewrite" | "replace">("");
   const [draft, setDraft] = useState<Rewrite | null>(null);          // 다시 쓴 안 (비교 창)
   const [err, setErr] = useState("");
+  // 목록에는 본문·시사점을 싣지 않으므로 비교 창의 "지금 글"은 창이 열릴 때 이 기사 한 건에서 읽어 옴
+  const [cur, setCur] = useState<{ content_long: string; implications: string } | null>(null);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/news/detail?id=${encodeURIComponent(item.id)}`);
+        const json = await res.json();
+        if (res.ok && alive) setCur({ content_long: json.content_long ?? "", implications: json.implications ?? "" });
+      } catch { /* 지금 글 일부만 비어 보일 뿐 교체 동작에는 영향 없음 */ }
+    })();
+    return () => { alive = false; };
+  }, [item.id]);
   const [blocked, setBlocked] = useState(false);   // 원문을 읽을 수 없어 다시 쓰기가 막힌 경우(422) — 카테고리만 변경 안내
   const [lvChoice, setLvChoice] = useState<LevelChoice>("keep");   // 다시 쓸 때의 글 수준 — 기본은 현재 레벨 유지
   const curLevel = item.level ?? "Intermediate";
@@ -110,7 +123,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
         ) : (
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {([["지금 글 · " + item.category, { title: item.title, summary_short: item.summary_short, content_long: item.content_long, implications: item.implications }], ["새 글 · " + target, draft]] as [string, Rewrite][]).map(([label, v], i) => (
+              {([["지금 글 · " + item.category, { title: item.title, summary_short: item.summary_short, content_long: cur?.content_long ?? item.content_long, implications: cur?.implications ?? item.implications }], ["새 글 · " + target, draft]] as [string, Rewrite][]).map(([label, v], i) => (
                 <div key={label} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: i ? "var(--bg-accent, #eef4ff)" : "var(--surface-container-low)" }}>
                   <span className="text-[0.7rem] font-bold" style={{ color: "var(--on-surface-variant)" }}>{label}</span>
                   {([["제목", v.title], ["요약", v.summary_short], ["상세", v.content_long], ["시사점", v.implications]] as [string, string][]).map(([k, t]) => (

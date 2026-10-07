@@ -44,7 +44,12 @@ type Props = {
   scheduleHour?: number;
   scheduleEnabled?: boolean;
   navCategories?: string[];
+  lastRunISO?: string;      // "메인 표시 중"과 "아카이브"를 가르는 기준 시각 (서버가 정해서 내려줌)
+  archiveTotal?: number;    // 아카이브 전체 건수 — 목록은 "더 보기"로 나눠 읽으므로 건수는 따로 받음
 };
+
+const ARCHIVE_PAGE = 30;
+type ArchiveList = { ids: string[]; fetched: number; total: number; loading: boolean; error: string | null; loaded: boolean };
 
 
 function isLive(item: NewsItem, lastRunMs: number) {
@@ -62,6 +67,8 @@ export default function CurationBoard({
   scheduleHour = 9,
   scheduleEnabled = false,
   navCategories,
+  lastRunISO,
+  archiveTotal,
 }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<NewsItem[]>(initialNews);
@@ -74,8 +81,15 @@ export default function CurationBoard({
   // 대기열 일괄 처리용 선택 상태
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
+  // 저장할 때 "바뀐 것만" 보내려고 처음 읽은 값을 기억 — 아카이브에서 나중에 읽어 온 기사도 여기에 추가됨
+  const baselineRef = useRef<Map<string, NewsItem>>(new Map(initialNews.map((n) => [n.id, n])));
+  // 아카이브 탭은 카테고리별로 "더 보기"를 따로 이어 읽음 (키: 카테고리, 전체는 ALL)
+  const [archiveLists, setArchiveLists] = useState<Record<string, ArchiveList>>({});
+
   useEffect(() => {
     setItems(initialNews);
+    baselineRef.current = new Map(initialNews.map((n) => [n.id, n]));
+    setArchiveLists({});
     setDeletedIds([]);
     setRepublishIds([]);
     setSelectedIds(new Set());
@@ -87,9 +101,11 @@ export default function CurationBoard({
   // 탭별 기사 분류
   // 스케줄이 활성화된 경우: 마지막 예약 실행 이후 발행분 = LIVE
   // 스케줄 없는 경우: 최근 displayWindowDays일 이내 발행분 = LIVE
-  const lastRunMs = scheduleEnabled && scheduleDays.length > 0
-    ? calcLastScheduledRun(scheduleDays, scheduleHour).getTime()
-    : Date.now() - displayWindowDays * 24 * 60 * 60 * 1000;
+  const lastRunMs = lastRunISO
+    ? Date.parse(lastRunISO)
+    : scheduleEnabled && scheduleDays.length > 0
+      ? calcLastScheduledRun(scheduleDays, scheduleHour).getTime()
+      : Date.now() - displayWindowDays * 24 * 60 * 60 * 1000;
   const live = items.filter((i) => isLive(i, lastRunMs));
   // 대기열은 품질점수 높은 순(동점이면 적합성 fit 높은 순)으로 정렬 — 발행할 만한 것부터 검토
   const staging = items
@@ -98,7 +114,8 @@ export default function CurationBoard({
       (b.quality_score ?? 0) - (a.quality_score ?? 0) ||
       (b.quality_criteria?.fit ?? 0) - (a.quality_criteria?.fit ?? 0)
     );
-  const archive = items.filter((i) => isArchive(i, lastRunMs));
+  // 아카이브는 지금까지 "더 보기"로 읽어 온 것만 (선택한 카테고리 기준). 재발행·삭제한 기사는 자동으로 빠짐
+  const itemsById = new Map(items.map((i) => [i.id, i]));
 
   // Top News 계산 (카테고리별 display_order 가장 낮은 live 기사)
   const categories = navCategories ?? [...new Set(live.map((i) => i.category))];
@@ -118,10 +135,14 @@ export default function CurationBoard({
     return a.display_order - b.display_order;
   });
 
+  // 아카이브 건수: 서버가 센 전체 건수에서, 이 화면에서 재발행·삭제해 아카이브를 벗어난 기사를 뺌
+  const archiveLeft = [...baselineRef.current.values()].filter((b) => isArchive(b, lastRunMs) && (() => { const cur = itemsById.get(b.id); return !cur || !isArchive(cur, lastRunMs); })()).length;
+  const archiveCount = Math.max(0, (archiveTotal ?? 0) - archiveLeft);
+
   const tabMeta: { key: Tab; label: string; count: number }[] = [
     { key: "live",    label: "메인 표시 중", count: live.length },
     { key: "staging", label: "대기열",       count: staging.length },
-    { key: "archive", label: "아카이브",     count: archive.length },
+    { key: "archive", label: "아카이브",     count: archiveCount },
   ];
 
   // ── 드래그 (메인 표시 중만) ──
@@ -280,7 +301,7 @@ export default function CurationBoard({
     setSaving(true);
     try {
       // 실제로 바뀐 항목만 전송 — 매번 화면에 있는 뉴스 전체를 다시 쓰면 항목 수만큼 느려짐
-      const initialById = new Map(initialNews.map((n) => [n.id, n]));
+      const initialById = baselineRef.current;
       const changedItems = items.filter((item) => {
         const before = initialById.get(item.id);
         if (!before) return true; // 원본에 없던 항목(방금 재발행 등)은 안전하게 포함
@@ -331,9 +352,42 @@ export default function CurationBoard({
   };
 
   // ── 카테고리 필터 ──
-  const activeList = tab === "live" ? liveSortedByCat : tab === "staging" ? staging : archive;
-  const CATEGORIES = [...new Set(items.map((i) => i.category))];
   const [filterCat, setFilterCat] = useTabParam<string>("cat", "ALL");
+  const archiveState = archiveLists[filterCat];
+  const archive = (archiveState?.ids ?? []).map((id) => itemsById.get(id)).filter((i): i is NewsItem => !!i && isArchive(i, lastRunMs));
+  const activeList = tab === "live" ? liveSortedByCat : tab === "staging" ? staging : archive;
+  const CATEGORIES = [...new Set([...(navCategories ?? []), ...items.map((i) => i.category)])];
+
+  // 아카이브 "더 보기" — 서버에서 30건씩 읽어 기사 목록(items)에 합치고, 이 카테고리의 읽은 순서를 이어 붙임
+  const loadArchive = async (cat: string) => {
+    const cur = archiveLists[cat];
+    if (cur?.loading) return;
+    const offset = cur?.fetched ?? 0;
+    setArchiveLists((p) => ({ ...p, [cat]: { ids: cur?.ids ?? [], fetched: offset, total: cur?.total ?? 0, loaded: !!cur?.loaded, loading: true, error: null } }));
+    try {
+      const qs = new URLSearchParams({ before: new Date(lastRunMs).toISOString(), cat, offset: String(offset), limit: String(ARCHIVE_PAGE) });
+      const res = await fetch(`/api/admin/news/archive?${qs}`);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? "아카이브를 불러오지 못했습니다");
+      const got = json.items as NewsItem[];
+      for (const g of got) if (!baselineRef.current.has(g.id)) baselineRef.current.set(g.id, g);
+      setItems((prev) => { const have = new Set(prev.map((i) => i.id)); return [...prev, ...got.filter((g) => !have.has(g.id))]; });
+      setArchiveLists((p) => {
+        const base = p[cat];
+        const ids = [...(base?.ids ?? [])]; for (const g of got) if (!ids.includes(g.id)) ids.push(g.id);
+        return { ...p, [cat]: { ids, fetched: offset + got.length, total: json.total ?? 0, loaded: true, loading: false, error: null } };
+      });
+    } catch (e) {
+      setArchiveLists((p) => ({ ...p, [cat]: { ...(p[cat] ?? { ids: [], fetched: 0, total: 0, loaded: false }), loading: false, error: e instanceof Error ? e.message : "불러오기 실패" } }));
+    }
+  };
+  // 아카이브 탭을 열거나 카테고리를 바꾸면, 아직 안 읽은 목록의 첫 30건을 읽음
+  useEffect(() => {
+    if (tab !== "archive") return;
+    const cur = archiveLists[filterCat];
+    if (!cur || (!cur.loaded && !cur.loading && !cur.error)) void loadArchive(filterCat);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, filterCat, archiveLists]);
   const filtered = activeList.filter((i) => filterCat === "ALL" || i.category === filterCat);
 
   // 아카이브 날짜별 그룹핑 (KST 기준, 최신순)
@@ -617,7 +671,10 @@ export default function CurationBoard({
       {/* ── 아카이브: 날짜별 그룹 ── */}
       {tab === "archive" && (
         <div className="flex flex-col gap-6">
-          {archiveGroups.length === 0 && <EmptyState tab="archive" />}
+          {archiveGroups.length === 0 && !archiveState?.loading && !archiveState?.error && <EmptyState tab="archive" />}
+          {archiveState?.loading && archiveGroups.length === 0 && (
+            <p className="text-xs m-0 flex items-center gap-2" style={{ color: "var(--on-surface-variant)" }}><Loader2 size={13} className="animate-spin" /> 아카이브를 불러오는 중…</p>
+          )}
           {archiveGroups.map(({ dateLabel, items: groupItems }) => (
             <div key={dateLabel}>
               <div className="flex items-center gap-3 mb-2">
@@ -651,6 +708,25 @@ export default function CurationBoard({
               </div>
             </div>
           ))}
+          {archiveState?.error && (
+            <p className="text-xs m-0" style={{ color: "#b91c1c" }}>
+              {archiveState.error} <button onClick={() => void loadArchive(filterCat)} style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", textDecoration: "underline", fontSize: "inherit" }}>다시 시도</button>
+            </p>
+          )}
+          {archiveState?.loaded && (
+            <div className="flex items-center justify-center gap-3 pb-2">
+              <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>
+                {archiveState.total}건 중 {archive.length}건 표시
+              </span>
+              {archiveState.ids.length < archiveState.total && (
+                <button onClick={() => void loadArchive(filterCat)} disabled={archiveState.loading}
+                  className="h-8 px-4 rounded-md text-xs font-semibold disabled:opacity-50 flex items-center gap-2"
+                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>
+                  {archiveState.loading && <Loader2 size={12} className="animate-spin" />}더 보기 ({ARCHIVE_PAGE}건)
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -689,6 +765,20 @@ function EditArticleModal({
   const [title, setTitle] = useState(item.title);
   const [summary, setSummary] = useState(item.summary_short);
   const [implications, setImplications] = useState(item.implications ?? "");
+  // 목록에는 시사점·본문을 싣지 않으므로(가볍게 읽기 위해) 창이 열릴 때 이 기사 한 건만 따로 읽음 — 다 읽기 전에 저장하면 시사점이 비워지므로 저장 버튼을 막음
+  const [detailState, setDetailState] = useState<"loading" | "ready" | "error">("loading");
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/admin/news/detail?id=${encodeURIComponent(item.id)}`);
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error ?? "불러오기 실패");
+        if (alive) { setImplications(json.implications ?? ""); setDetailState("ready"); }
+      } catch { if (alive) setDetailState("error"); }
+    })();
+    return () => { alive = false; };
+  }, [item.id]);
   const [imageUrl, setImageUrl] = useState(item.image_url ?? "");
   const [category, setCategory] = useState(item.category);
   const [level, setLevel] = useState<string>(item.level ?? "Intermediate");
@@ -753,7 +843,7 @@ function EditArticleModal({
 
         <label className="flex flex-col gap-1">
           <span style={labelStyle}>시사점 (Implications)</span>
-          <textarea rows={3} value={implications} onChange={(e) => setImplications(e.target.value)} style={{ ...inputStyle, resize: "vertical" }} />
+          <textarea rows={3} value={implications} disabled={detailState !== "ready"} placeholder={detailState === "loading" ? "시사점을 불러오는 중…" : detailState === "error" ? "시사점을 불러오지 못했습니다. 창을 닫고 다시 열어 주세요." : ""} onChange={(e) => setImplications(e.target.value)} style={{ ...inputStyle, resize: "vertical" }} />
         </label>
 
         <label className="flex flex-col gap-1">
@@ -819,7 +909,7 @@ function EditArticleModal({
           </button>
           <button
             onClick={() => onSave({ title, summary_short: summary, implications, image_url: imageUrl, level, category, categoryMode })}
-            disabled={saving || !title.trim() || !summary.trim()}
+            disabled={saving || detailState !== "ready" || !title.trim() || !summary.trim()}
             className="h-9 px-4 rounded-md text-sm font-semibold"
             style={{ background: "var(--primary)", color: "var(--on-primary)", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
             {saving ? "저장 중..." : categoryChanged && categoryMode === "rewrite" ? "저장 후 다시 쓰기" : "저장"}

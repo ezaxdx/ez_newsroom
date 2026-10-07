@@ -1,33 +1,52 @@
 import { createAdminClient } from "@/lib/supabase/admin";
 import { NewsItem } from "@/lib/types";
+import { NEWS_CARD_COLUMNS, toCardItem } from "@/lib/admin-news";
+import { calcLastScheduledRun } from "@/lib/schedule";
 import CurationBoard from "@/components/admin/CurationBoard";
 import { HelpProvider, HelpPanelConnected, Section, Item, Def } from "@/components/admin/HelpPanel";
 
 export const dynamic = "force-dynamic";
 
 
-async function fetchAllNews(): Promise<NewsItem[]> {
+// 보드가 처음 읽는 기사: 메인 표시 중(직전 큐레이션 이후 발행분) + 대기열 전량. 아카이브는 탭을 열 때 "더 보기"로 나눠 읽는다.
+// 카드에 보이는 컬럼만 읽고(본문·시사점은 편집 창을 열 때 한 건씩), PostgREST 의 1000행 제한은 페이지를 나눠 넘는다.
+async function fetchBoardNews(lastRunISO: string): Promise<{ news: NewsItem[]; counts: { total: number; published: number; staging: number; archive: number } }> {
+  const empty = { news: [] as NewsItem[], counts: { total: 0, published: 0, staging: 0, archive: 0 } };
   try {
     const supabase = createAdminClient();
-    // PostgREST 는 한 번에 최대 1000행까지만 돌려주므로 페이지를 나눠 전부 읽음 (기사가 1000건을 넘어도 보드에서 안 잘리게)
-    // 같은 표시 순서 값이 많아 순서가 흔들리지 않도록 id 를 보조 정렬로 둠
     const PAGE = 1000;
-    const all: NewsItem[] = [];
-    for (let from = 0; ; from += PAGE) {
-      const { data, error } = await supabase
-        .from("news")
-        .select("*")
-        .order("display_order", { ascending: true })
-        .order("id", { ascending: true })
-        .range(from, from + PAGE - 1);
-      if (error) throw error;
-      all.push(...((data ?? []) as NewsItem[]));
-      if (!data || data.length < PAGE) break;
-    }
-    return all;
-  } catch { return []; }
+    const readAll = async (build: (from: number, to: number) => PromiseLike<{ data: unknown[] | null; error: unknown }>) => {
+      const rows: Record<string, unknown>[] = [];
+      for (let from = 0; ; from += PAGE) {
+        const { data, error } = await build(from, from + PAGE - 1);
+        if (error) throw error;
+        rows.push(...((data ?? []) as Record<string, unknown>[]));
+        if (!data || data.length < PAGE) break;
+      }
+      return rows;
+    };
+    const count = async (f: (q: ReturnType<ReturnType<typeof supabase.from>["select"]>) => unknown) => {
+      const q = supabase.from("news").select("id", { count: "exact", head: true });
+      const { count: c } = (await (f(q as never) as PromiseLike<{ count: number | null }>));
+      return c ?? 0;
+    };
+    const [liveRows, stagingRows, total, published, archive] = await Promise.all([
+      readAll((from, to) => supabase.from("news").select(NEWS_CARD_COLUMNS)
+        .eq("is_published", true).gte("published_at", lastRunISO)
+        .order("display_order", { ascending: true }).order("id", { ascending: true }).range(from, to)),
+      readAll((from, to) => supabase.from("news").select(NEWS_CARD_COLUMNS)
+        .eq("is_published", false)
+        .order("display_order", { ascending: true }).order("id", { ascending: true }).range(from, to)),
+      count((q) => q),
+      count((q) => (q as unknown as { eq: (c: string, v: boolean) => unknown }).eq("is_published", true)),
+      count((q) => (q as unknown as { eq: (c: string, v: boolean) => { lt: (c: string, v: string) => unknown } }).eq("is_published", true).lt("published_at", lastRunISO)),
+    ]);
+    return {
+      news: [...liveRows, ...stagingRows].map(toCardItem),
+      counts: { total, published, staging: total - published, archive },
+    };
+  } catch { return empty; }
 }
-
 async function fetchSettings(): Promise<{
   qualityThresholds: { auto_publish: number; staging: number };
   displayWindowDays: number;
@@ -84,11 +103,13 @@ async function fetchCurationLogs(): Promise<CurationLog[]> {
 }
 
 export default async function AdminPage() {
-  const [news, { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories }, curationLogs] = await Promise.all([
-    fetchAllNews(),
-    fetchSettings(),
-    fetchCurationLogs(),
-  ]);
+  // "메인 표시 중" 기준 시각은 설정(예약 요일·시각)에서 정해지므로 설정을 먼저 읽고, 그 시각으로 기사를 읽는다
+  const settings = await fetchSettings();
+  const { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories } = settings;
+  const lastRunISO = (scheduleEnabled && scheduleDays.length > 0
+    ? calcLastScheduledRun(scheduleDays, scheduleHour)
+    : new Date(Date.now() - displayWindowDays * 24 * 60 * 60 * 1000)).toISOString();
+  const [{ news, counts }, curationLogs] = await Promise.all([fetchBoardNews(lastRunISO), fetchCurationLogs()]);
 
   return (
     <HelpProvider>
@@ -96,9 +117,9 @@ export default async function AdminPage() {
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
-          { label: "전체 기사", value: news.length },
-          { label: "발행됨", value: news.filter((n) => n.is_published).length },
-          { label: "대기 중", value: news.filter((n) => !n.is_published).length },
+          { label: "전체 기사", value: counts.total },
+          { label: "발행됨", value: counts.published },
+          { label: "대기 중", value: counts.staging },
         ].map(({ label, value }) => (
           <div
             key={label}
@@ -114,7 +135,7 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} scheduleHour={scheduleHour} scheduleEnabled={scheduleEnabled} navCategories={navCategories} />
+      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} scheduleHour={scheduleHour} scheduleEnabled={scheduleEnabled} navCategories={navCategories} lastRunISO={lastRunISO} archiveTotal={counts.archive} />
 
       {/* 큐레이션 실행 로그 */}
       <div className="mt-8 mb-8">
