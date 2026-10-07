@@ -96,11 +96,6 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
               <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>카테고리가 바뀌면 독자층도 달라질 수 있어요. 바꾸지 않으면 지금 레벨({LEVEL_LABEL[curLevel] ?? curLevel})로 씁니다.</span>
             </div>
             {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
-            {blocked && (
-              <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-                저장해 둔 원문도 없고 원문 주소에서도 본문을 읽지 못해(200자 미만) 새로 쓸 수 없는 기사입니다. 원문 주소가 사라졌거나 접근이 막힌 경우예요. <b>카테고리만 변경</b>은 그대로 할 수 있어요.
-              </p>
-            )}
             <div className="flex justify-end gap-2 flex-wrap">
               <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
               <button onClick={saveOnly} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>

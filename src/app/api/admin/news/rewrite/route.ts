@@ -43,7 +43,8 @@ export async function POST(req: NextRequest) {
 
   let text = "";
   const { data: stored } = await supabase.from("news_original_text").select("original_text").eq("news_id", id).maybeSingle();
-  if (stored?.original_text) text = stored.original_text;
+  const hasStored = !!stored?.original_text;
+  if (hasStored) text = stored!.original_text;
   else {
     try {
       const res = await fetch(news.original_url, {
@@ -54,7 +55,11 @@ export async function POST(req: NextRequest) {
     } catch { /* 아래에서 처리 */ }
   }
   if (text.length < 200) {
-    return NextResponse.json({ error: "원문을 읽을 수 없어 다시 쓸 수 없습니다. 카테고리만 변경할 수 있어요." }, { status: 422 });
+    // 저장해 둔 원문이 있으면(큐레이션 v2 이후 기사) 여기까지 올 일이 거의 없음 — 저장 원문이 없는 예전 기사가 원문 주소에서도 안 읽힌 경우를 구분해서 알림
+    const error = hasStored
+      ? "저장해 둔 원문이 너무 짧아(200자 미만) 다시 쓸 수 없습니다. 카테고리만 변경할 수 있어요."
+      : "이 기사는 원문을 저장해 두기 전에 만들어진 예전 기사라 원문 주소에서 다시 읽어야 하는데, 지금 읽지 못했습니다(주소 만료·접근 차단·본문 짧음 등). 카테고리만 변경할 수 있어요.";
+    return NextResponse.json({ error, reason: hasStored ? "stored_too_short" : "no_stored_text_fetch_failed" }, { status: 422 });
   }
 
   const { data: settings } = await supabase.from("curation_settings").select("category_settings, level_prompts, company_context").limit(1).single();
