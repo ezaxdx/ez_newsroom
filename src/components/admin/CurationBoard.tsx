@@ -843,7 +843,7 @@ function ArticleCard({
           )}
           <CategoryEditor item={item} onPatch={(p) => onPatch(item.id, p)} />
           <button
-            title="클릭해서 레벨 변경"
+            title="클릭해서 레벨 변경 — 배지 값만 바뀌고 글은 다시 쓰이지 않습니다. 저장하면 AI 레벨 판정의 참고 사례로 쌓입니다."
             onClick={() => onCycleLevel(item.id)}
             className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase transition-all"
             style={{
