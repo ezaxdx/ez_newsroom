@@ -9,12 +9,22 @@ export const dynamic = "force-dynamic";
 async function fetchAllNews(): Promise<NewsItem[]> {
   try {
     const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("news")
-      .select("*")
-      .order("display_order", { ascending: true });
-    if (error) throw error;
-    return (data ?? []) as NewsItem[];
+    // PostgREST 는 한 번에 최대 1000행까지만 돌려주므로 페이지를 나눠 전부 읽음 (기사가 1000건을 넘어도 보드에서 안 잘리게)
+    // 같은 표시 순서 값이 많아 순서가 흔들리지 않도록 id 를 보조 정렬로 둠
+    const PAGE = 1000;
+    const all: NewsItem[] = [];
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await supabase
+        .from("news")
+        .select("*")
+        .order("display_order", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      all.push(...((data ?? []) as NewsItem[]));
+      if (!data || data.length < PAGE) break;
+    }
+    return all;
   } catch { return []; }
 }
 

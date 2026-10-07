@@ -32,6 +32,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
   const [busy, setBusy] = useState<"" | "only" | "rewrite" | "replace">("");
   const [draft, setDraft] = useState<Rewrite | null>(null);          // 다시 쓴 안 (비교 창)
   const [err, setErr] = useState("");
+  const [blocked, setBlocked] = useState(false);   // 원문을 읽을 수 없어 다시 쓰기가 막힌 경우(422) — 카테고리만 변경 안내
   const [lvChoice, setLvChoice] = useState<LevelChoice>("keep");   // 다시 쓸 때의 글 수준 — 기본은 현재 레벨 유지
   const curLevel = item.level ?? "Intermediate";
   const effLevel = lvChoice === "keep" ? curLevel : lvChoice;
@@ -51,6 +52,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
     const res = await fetch("/api/admin/news/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target, ...(lvChoice !== "keep" && { level: lvChoice }) }) });
     const json = await res.json();
     setBusy("");
+    if (res.status === 422) { setBlocked(true); setErr(json.error ?? "원문을 읽을 수 없어 다시 쓸 수 없습니다."); return; }
     if (!res.ok) { setErr(json.error ?? "다시 쓰기 실패"); return; }
     setDraft(json as Rewrite);
   };
@@ -94,12 +96,17 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
               <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>카테고리가 바뀌면 독자층도 달라질 수 있어요. 바꾸지 않으면 지금 레벨({LEVEL_LABEL[curLevel] ?? curLevel})로 씁니다.</span>
             </div>
             {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
+            {blocked && (
+              <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+                저장해 둔 원문도 없고 원문 주소에서도 본문을 읽지 못해(200자 미만) 새로 쓸 수 없는 기사입니다. 원문 주소가 사라졌거나 접근이 막힌 경우예요. <b>카테고리만 변경</b>은 그대로 할 수 있어요.
+              </p>
+            )}
             <div className="flex justify-end gap-2 flex-wrap">
               <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
               <button onClick={saveOnly} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>
                 {busy === "only" && <Loader2 size={13} className="animate-spin" />}카테고리만 변경
               </button>
-              <button onClick={makeDraft} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
+              <button onClick={makeDraft} disabled={!!busy || blocked} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
                 {busy === "rewrite" && <Loader2 size={13} className="animate-spin" />}{target} 관점으로 다시 쓰기
               </button>
             </div>

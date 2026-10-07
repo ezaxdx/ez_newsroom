@@ -663,6 +663,7 @@ export default function CurationBoard({
         <EditArticleModal
           item={editingItem}
           focus={editFocus}
+          categoryOptions={[...new Set([...(navCategories && navCategories.length ? navCategories : CATEGORY_OPTIONS), "EZPMP"])]}
           saving={editSaving}
           error={editError}
           onCancel={() => { setEditingItem(null); setEditError(""); }}
@@ -675,10 +676,11 @@ export default function CurationBoard({
 
 /* ── 기사 편집 모달 ── */
 function EditArticleModal({
-  item, focus, saving, error, onCancel, onSave,
+  item, focus, categoryOptions, saving, error, onCancel, onSave,
 }: {
   item: NewsItem;
   focus?: "category" | "level";
+  categoryOptions: string[];
   saving: boolean;
   error: string;
   onCancel: () => void;
@@ -768,7 +770,7 @@ function EditArticleModal({
           <div className="flex flex-col gap-1.5">
             <span className="text-xs font-semibold">카테고리</span>
             <div className="flex gap-1.5 flex-wrap">
-              {CATEGORY_OPTIONS.map((c) => {
+              {categoryOptions.map((c) => {
                 const on = category === c;
                 return (
                   <button key={c} type="button" onClick={() => setCategory(c)} className="h-8 px-3 rounded-md text-xs font-semibold"
