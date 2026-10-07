@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
       if (settings?.id) {
         const existing: { title: string; level: string }[] = Array.isArray(settings.level_examples) ? settings.level_examples : [];
         const titles = new Set(changed.map((c) => c.title));
-        const next = [...changed, ...existing.filter((e) => !titles.has(e.title))].slice(0, 40);
+        const next = [...changed, ...existing.filter((e) => !titles.has(e.title))].slice(0, 30);
         await supabase.from("curation_settings").update({ level_examples: next }).eq("id", settings.id);
       }
     }
