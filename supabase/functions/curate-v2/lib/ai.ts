@@ -21,6 +21,7 @@ export interface Generated {
   content_long: string;
   implications: string;
   level: string;
+  level_defaulted?: string;   // AI 가 레벨을 못 돌려줘(없음·목록 밖 값) 기본값 Intermediate 로 채운 경우, AI 가 준 원래 값 — 사유 기록·알림용
   level_axes?: { concept: number; practical: number; strategic: number };
   fit_reason?: string;
   quality_score: number;
@@ -441,7 +442,7 @@ export async function generateArticle(i: GenInput): Promise<{ ok: true; value: G
       const raw = (json.candidates?.[0]?.content?.parts?.[0]?.text ?? "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
       const parsed = JSON.parse(raw);
       if (!Array.isArray(parsed.business_domains)) parsed.business_domains = [];
-      if (!(LEVELS as readonly string[]).includes(parsed.level)) parsed.level = "Intermediate";
+      if (!(LEVELS as readonly string[]).includes(parsed.level)) { parsed.level_defaulted = String(parsed.level ?? "(없음)").slice(0, 40); parsed.level = "Intermediate"; }
       // 카테고리: 후보가 1개면 확정, 여러 개면 AI 응답을 검증(후보 밖이면 첫 후보로)
       const cats = i.categories;
       const aiCat = typeof parsed.category === "string" ? parsed.category.toUpperCase().trim() : "";

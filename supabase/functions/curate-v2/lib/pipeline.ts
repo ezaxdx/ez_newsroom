@@ -506,6 +506,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const results = { published: 0, staged: 0, skipped: 0, failed: 0 };
   const scoreDist: Record<string, number> = {};
   const runErrors: { source: string; url?: string; error: string }[] = [];
+  const levelDefaulted: { source: string; title: string; raw: string }[] = [];   // AI 가 레벨을 못 줘서 기본값(Intermediate)으로 저장한 기사
   const categoriesFor = (c: Cand): string[] => {
     if (c.event) return ["MICE"];
     const cats = [...new Set(c.srcs.map((s) => s.category))];
@@ -574,7 +575,10 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     const g = gen.value;
     const score = g.quality_score ?? 5;
     const fit = judgedFit ?? g.quality_criteria?.fit ?? 5;
-    const qualityCriteria = g.quality_criteria ? { ...g.quality_criteria, fit } : null;   // 저장하는 fit 은 판정 호출의 값
+    // 저장하는 fit 은 판정 호출의 값. AI 가 레벨을 못 줘서 기본값으로 채웠다면 사유를 level_note 로 남겨 나중에 구분할 수 있게 함
+    if (g.level_defaulted !== undefined) levelDefaulted.push({ source: p.name, title: g.title || c.title, raw: g.level_defaulted });
+    const levelNote = g.level_defaulted !== undefined ? { level_note: `AI 레벨 판정 실패(응답: ${g.level_defaulted}) → 기본값 Intermediate로 저장` } : {};
+    const qualityCriteria = g.quality_criteria ? { ...g.quality_criteria, fit, ...levelNote } : (g.level_defaulted !== undefined ? levelNote : null);
     scoreDist[score] = (scoreDist[score] ?? 0) + 1;
     const isPick = !!c.event;
     let decision: "publish" | "stage" | "discard_score" | "discard_fit";
@@ -595,7 +599,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
       if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
       else autoPublished++;
     }
-    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, dupSuspect, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, dupSuspect, levelDefaulted: g.level_defaulted !== undefined, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
@@ -666,6 +670,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     }
     await supabase.from("curation_seen").delete().lt("seen_at", seenCutoff);
 
+    if (levelDefaulted.length > 0) alerts.push({ title: "레벨 판정 실패 — 기본값(Intermediate)으로 저장", description: `이번 실행에서 AI가 레벨을 돌려주지 못한 ${levelDefaulted.length}건을 Intermediate로 저장했습니다. 해당 기사는 큐레이션 보드에서 레벨을 직접 확인하세요. (news.quality_criteria.level_note 에 사유가 남아 있습니다)`, level: "warning", fields: levelDefaulted.slice(0, 5).map((e) => ({ name: e.source, value: `${e.title.slice(0, 60)} (응답: ${e.raw})` })) });
     if (cappedCount > 0) alerts.push({ title: "자동 발행 상한 초과분을 대기열로 보냄", description: `이번 실행에서 자동 발행 상한(${maxAutoPublish}건)을 넘은 ${cappedCount}건은 대기열에 있습니다. 큐레이션 보드의 대기열에서 검토 후 발행하세요.`, level: "warning" });
     if (deferredTotal > 0) alerts.push({ title: "시간 초과로 처리 못 한 후보가 남음", description: `시간 예산을 다 써서 ${deferredTotal}건이 다음 실행으로 넘어갔습니다. (다음 실행에서 다시 후보가 됩니다)`, level: "warning" });
     if (results.failed >= 3) alerts.push({ title: "큐레이션 개별 기사 생성 실패 다수", description: `이번 실행에서 ${results.failed}건 실패(발행 ${results.published}, 대기 ${results.staged}).`, level: "warning", fields: runErrors.slice(0, 5).map((e) => ({ name: e.source, value: e.error.slice(0, 200) })) });
@@ -685,7 +690,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
 
   const durationMs = Date.now() - runStart;
   const sourceStats = [...stats.values()].map((s) => ({ name: s.name, type: s.type, fetched: s.fetched, published: s.published, staged: s.staged, skipped: s.skipped, failed: s.failed, status: s.status, error: s.error ?? null, mode: s.mode ?? null, kept: s.kept, deferred: s.deferred, reasons: s.reasons }));
-  const logErrors = [...runErrors, ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
+  const logErrors = [...runErrors, ...levelDefaulted.map((e) => ({ source: e.source, error: `레벨 판정 실패(응답: ${e.raw}) → Intermediate 저장: ${e.title.slice(0, 60)}` })), ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
   const fetched = [...stats.values()].reduce((s, x) => s + x.fetched, 0);
   const details = {
     window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() },
