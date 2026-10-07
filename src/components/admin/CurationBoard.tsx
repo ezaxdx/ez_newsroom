@@ -10,7 +10,7 @@ import {
 import { NewsItem } from "@/lib/types";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { HelpTriggerConnected } from "@/components/admin/HelpPanel";
-import CategoryEditor from "@/components/admin/CategoryEditor";
+import CategoryEditor, { CategoryChangeDialog, CATEGORY_OPTIONS } from "@/components/admin/CategoryEditor";
 import { useTabParam } from "@/lib/useTabParam";
 
 type Tab = "live" | "staging" | "archive";
@@ -154,20 +154,10 @@ export default function CurationBoard({
   };
 
   // ── actions ──
-  const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
   const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
     Beginner:     { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
     Intermediate: { bg: "rgba(26,28,29,0.75)",             color: "#fff" },
     Advanced:     { bg: "var(--primary)",                  color: "#fff" },
-  };
-
-  const cycleLevel = (id: string) => {
-    setItems((prev) => prev.map((item) => {
-      if (item.id !== id) return item;
-      const cur = item.level ?? "Intermediate";
-      const next = LEVELS[(LEVELS.indexOf(cur as typeof LEVELS[number]) + 1) % LEVELS.length];
-      return { ...item, level: next };
-    }));
   };
 
   const togglePublish = (id: string) => {
@@ -205,12 +195,17 @@ export default function CurationBoard({
     setDeletedIds((prev) => [...prev, id]);
   };
 
-  // ── 기사 내용 직접 편집 (제목/요약/시사점/이미지) ──
+  // ── 기사 편집 (제목/요약/시사점/이미지 + 카테고리·레벨) — 편집 진입점을 이 창 하나로 모음 ──
   const [editingItem, setEditingItem] = useState<NewsItem | null>(null);
+  const [editFocus, setEditFocus] = useState<"category" | "level" | undefined>(undefined);   // 카드의 배지에서 열었을 때 해당 항목으로 이동
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState("");
+  const [rewriteFor, setRewriteFor] = useState<{ id: string; target: string } | null>(null);   // "다시 쓰기"를 고른 카테고리 변경
 
-  const saveEdit = async (fields: { title: string; summary_short: string; implications: string; image_url: string }) => {
+  const openEdit = (item: NewsItem, focus?: "category" | "level") => { setEditFocus(focus); setEditingItem(item); };
+
+  type EditFields = { title: string; summary_short: string; implications: string; image_url: string; level: string; category: string; categoryMode: "only" | "rewrite" };
+  const saveEdit = async (fields: EditFields) => {
     if (!editingItem) return;
     setEditSaving(true);
     setEditError("");
@@ -218,13 +213,21 @@ export default function CurationBoard({
       const res = await fetch("/api/admin/news/edit", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: editingItem.id, ...fields }),
+        body: JSON.stringify({ id: editingItem.id, title: fields.title, summary_short: fields.summary_short, implications: fields.implications, image_url: fields.image_url, level: fields.level }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "저장 실패");
-      setItems((prev) => prev.map((it) => it.id === editingItem.id
-        ? { ...it, title: fields.title, summary_short: fields.summary_short, implications: fields.implications, image_url: fields.image_url || null }
-        : it));
+      const patch: Partial<NewsItem> = { title: fields.title, summary_short: fields.summary_short, implications: fields.implications, image_url: fields.image_url || null, level: fields.level as NewsItem["level"] };
+      // 카테고리를 바꿨고 "카테고리만 변경"이면 이어서 저장, "다시 쓰기"면 저장 후 비교 창을 띄움
+      if (fields.category !== editingItem.category && fields.categoryMode === "only") {
+        const r2 = await fetch("/api/admin/news/category", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: editingItem.id, category: fields.category }) });
+        const j2 = await r2.json();
+        if (!r2.ok) throw new Error(j2.error ?? "카테고리 저장 실패 (제목·요약·레벨은 저장됨)");
+        Object.assign(patch, { category: j2.category, category_edited: true, category_reason: null });
+      }
+      const id = editingItem.id;
+      setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
+      if (fields.category !== editingItem.category && fields.categoryMode === "rewrite") setRewriteFor({ id, target: fields.category });
       setEditingItem(null);
     } catch (e) {
       setEditError(e instanceof Error ? e.message : "저장 실패");
@@ -232,7 +235,6 @@ export default function CurationBoard({
       setEditSaving(false);
     }
   };
-
   // ── 대기열 일괄 처리 ──
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => {
@@ -573,12 +575,11 @@ export default function CurationBoard({
                         onDragStart={handleDragStart}
                         onDragEnter={handleDragEnter}
                         onDragEnd={handleDragEnd}
-                        onCycleLevel={cycleLevel}
                         onTogglePublish={togglePublish}
                         onMove={moveItem}
                         onRemove={remove}
                         onRepublish={republish}
-                        onEdit={setEditingItem}
+                        onEdit={openEdit}
                   onPatch={patchItem}
                         LEVEL_STYLE={LEVEL_STYLE}
                       />
@@ -597,12 +598,11 @@ export default function CurationBoard({
                   onDragStart={handleDragStart}
                   onDragEnter={handleDragEnter}
                   onDragEnd={handleDragEnd}
-                  onCycleLevel={cycleLevel}
                   onTogglePublish={togglePublish}
                   onMove={moveItem}
                   onRemove={remove}
                   onRepublish={republish}
-                  onEdit={setEditingItem}
+                  onEdit={openEdit}
                   onPatch={patchItem}
                   LEVEL_STYLE={LEVEL_STYLE}
                   selected={tab === "staging" ? selectedIds.has(item.id) : undefined}
@@ -639,12 +639,11 @@ export default function CurationBoard({
                     onDragStart={() => {}}
                     onDragEnter={() => {}}
                     onDragEnd={() => {}}
-                    onCycleLevel={cycleLevel}
-                    onTogglePublish={togglePublish}
+                      onTogglePublish={togglePublish}
                     onMove={moveItem}
                     onRemove={remove}
                     onRepublish={republish}
-                    onEdit={setEditingItem}
+                    onEdit={openEdit}
                   onPatch={patchItem}
                     LEVEL_STYLE={LEVEL_STYLE}
                   />
@@ -655,9 +654,15 @@ export default function CurationBoard({
         </div>
       )}
 
+      {rewriteFor && (() => {
+        const it = items.find((x) => x.id === rewriteFor.id);
+        return it ? <CategoryChangeDialog item={it} target={rewriteFor.target} onPatch={(p) => patchItem(it.id, p)} onClose={() => setRewriteFor(null)} /> : null;
+      })()}
+
       {editingItem && (
         <EditArticleModal
           item={editingItem}
+          focus={editFocus}
           saving={editSaving}
           error={editError}
           onCancel={() => { setEditingItem(null); setEditError(""); }}
@@ -670,18 +675,27 @@ export default function CurationBoard({
 
 /* ── 기사 편집 모달 ── */
 function EditArticleModal({
-  item, saving, error, onCancel, onSave,
+  item, focus, saving, error, onCancel, onSave,
 }: {
   item: NewsItem;
+  focus?: "category" | "level";
   saving: boolean;
   error: string;
   onCancel: () => void;
-  onSave: (fields: { title: string; summary_short: string; implications: string; image_url: string }) => void;
+  onSave: (fields: { title: string; summary_short: string; implications: string; image_url: string; level: string; category: string; categoryMode: "only" | "rewrite" }) => void;
 }) {
   const [title, setTitle] = useState(item.title);
   const [summary, setSummary] = useState(item.summary_short);
   const [implications, setImplications] = useState(item.implications ?? "");
   const [imageUrl, setImageUrl] = useState(item.image_url ?? "");
+  const [category, setCategory] = useState(item.category);
+  const [level, setLevel] = useState<string>(item.level ?? "Intermediate");
+  const [categoryMode, setCategoryMode] = useState<"only" | "rewrite">("only");
+  const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
+  const classRef = useRef<HTMLDivElement>(null);
+  const categoryChanged = category !== item.category;
+  // 카드의 카테고리·레벨 배지로 열었으면 분류 영역이 바로 보이게 이동
+  useEffect(() => { if (focus) classRef.current?.scrollIntoView({ block: "center" }); }, [focus]);
 
   const inputStyle: React.CSSProperties = {
     background: "var(--surface-container-lowest)",
@@ -749,6 +763,50 @@ function EditArticleModal({
           )}
         </label>
 
+        <div ref={classRef} className="flex flex-col gap-3 rounded-lg p-3" style={{ background: "var(--surface-container-low)", outline: focus ? "2px solid var(--primary)" : "none" }}>
+          <span style={labelStyle}>분류</span>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold">카테고리</span>
+            <div className="flex gap-1.5 flex-wrap">
+              {CATEGORY_OPTIONS.map((c) => {
+                const on = category === c;
+                return (
+                  <button key={c} type="button" onClick={() => setCategory(c)} className="h-8 px-3 rounded-md text-xs font-semibold"
+                    style={{ background: on ? "var(--primary)" : "var(--surface-container-lowest)", color: on ? "#fff" : "var(--on-surface-variant)", border: "1px solid var(--surface-container-high)", cursor: "pointer" }}>
+                    {c}{c === item.category ? " (현재)" : ""}
+                  </button>
+                );
+              })}
+            </div>
+            {categoryChanged && (
+              <div className="flex flex-col gap-1 mt-1">
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="radio" checked={categoryMode === "only"} onChange={() => setCategoryMode("only")} /> 카테고리만 변경 (글은 그대로)
+                </label>
+                <label className="flex items-center gap-2 text-xs cursor-pointer">
+                  <input type="radio" checked={categoryMode === "rewrite"} onChange={() => setCategoryMode("rewrite")} /> {category} 관점으로 글 다시 쓰기 (저장하면 비교 화면이 열립니다)
+                </label>
+                {categoryMode === "rewrite" && <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>다시 쓰기를 고르면 위 제목·요약·시사점은 새 글로 교체될 수 있습니다. 지금 입력한 내용은 먼저 저장됩니다.</span>}
+              </div>
+            )}
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs font-semibold">레벨</span>
+            <div className="flex gap-1.5">
+              {LEVELS.map((lv) => {
+                const on = level === lv;
+                return (
+                  <button key={lv} type="button" onClick={() => setLevel(lv)} className="flex-1 h-8 rounded-md text-xs font-semibold"
+                    style={{ background: on ? "var(--primary)" : "var(--surface-container-lowest)", color: on ? "#fff" : "var(--on-surface-variant)", border: "1px solid var(--surface-container-high)", cursor: "pointer" }}>
+                    {lv}
+                  </button>
+                );
+              })}
+            </div>
+            <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>레벨은 기사의 성격에 따른 독자 수준입니다. 값만 바뀌고 글은 다시 쓰이지 않으며, 저장하면 AI 레벨 판정의 참고 사례로 쌓입니다.</span>
+          </div>
+        </div>
+
         {error && <p className="m-0 text-xs" style={{ color: "#dc2626" }}>{error}</p>}
 
         <div className="flex items-center justify-end gap-2 mt-1">
@@ -758,11 +816,11 @@ function EditArticleModal({
             취소
           </button>
           <button
-            onClick={() => onSave({ title, summary_short: summary, implications, image_url: imageUrl })}
+            onClick={() => onSave({ title, summary_short: summary, implications, image_url: imageUrl, level, category, categoryMode })}
             disabled={saving || !title.trim() || !summary.trim()}
             className="h-9 px-4 rounded-md text-sm font-semibold"
             style={{ background: "var(--primary)", color: "var(--on-primary)", border: "none", cursor: saving ? "not-allowed" : "pointer", opacity: saving ? 0.6 : 1 }}>
-            {saving ? "저장 중..." : "저장"}
+            {saving ? "저장 중..." : categoryChanged && categoryMode === "rewrite" ? "저장 후 다시 쓰기" : "저장"}
           </button>
         </div>
       </div>
@@ -774,7 +832,7 @@ function EditArticleModal({
 function ArticleCard({
   item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
-  onCycleLevel, onTogglePublish, onMove, onRemove, onRepublish, onEdit, onPatch,
+  onTogglePublish, onMove, onRemove, onRepublish, onEdit, onPatch,
   LEVEL_STYLE, selected, onToggleSelect,
 }: {
   item: NewsItem;
@@ -785,12 +843,11 @@ function ArticleCard({
   onDragStart: (i: number) => void;
   onDragEnter: (i: number) => void;
   onDragEnd: () => void;
-  onCycleLevel: (id: string) => void;
   onTogglePublish: (id: string) => void;
   onMove: (id: string, dir: -1 | 1) => void;
   onRemove: (id: string) => void;
   onRepublish: (id: string) => void;
-  onEdit: (item: NewsItem) => void;
+  onEdit: (item: NewsItem, focus?: "category" | "level") => void;
   onPatch: (id: string, patch: Partial<NewsItem>) => void;
   LEVEL_STYLE: Record<string, { bg: string; color: string }>;
   selected?: boolean;
@@ -841,10 +898,10 @@ function ArticleCard({
               <TrendingUp size={9} /> TOP
             </span>
           )}
-          <CategoryEditor item={item} onPatch={(p) => onPatch(item.id, p)} />
+          <CategoryEditor item={item} onOpen={() => onEdit(item, "category")} />
           <button
-            title="클릭해서 레벨 변경 — 배지 값만 바뀌고 글은 다시 쓰이지 않습니다. 저장하면 AI 레벨 판정의 참고 사례로 쌓입니다."
-            onClick={() => onCycleLevel(item.id)}
+            title="클릭하면 기사 편집 창이 열립니다 (레벨은 값만 바뀌고 글은 다시 쓰이지 않습니다. 저장하면 AI 레벨 판정의 참고 사례로 쌓입니다.)"
+            onClick={() => onEdit(item, "level")}
             className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase transition-all"
             style={{
               background: LEVEL_STYLE[item.level ?? "Intermediate"]?.bg ?? "var(--surface-container-highest)",
@@ -961,7 +1018,7 @@ function ArticleCard({
           </button>
         )}
 
-        <button title="편집 (제목·요약·시사점·이미지)" onClick={() => onEdit(item)}
+        <button title="편집 (제목·요약·시사점·이미지·카테고리·레벨)" onClick={() => onEdit(item)}
           className="p-1.5 rounded hover:bg-[--surface-container-high] transition-colors"
           style={{ background: "transparent", border: "none", cursor: "pointer" }}>
           <Pencil size={14} style={{ color: "var(--on-surface-variant)" }} />
