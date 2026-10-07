@@ -1846,12 +1846,12 @@ export default function QualityDashboard({ news, events }: Props) {
               AKEI 엑셀 가져오기 (UI)
             </p>
             <p style={{ margin: "0 0 6px", fontSize: 13, color: "var(--on-surface-variant)", lineHeight: 1.65 }}>
-              한국전시산업진흥회(AKEI) 엑셀 파일을 업로드해 행사를 추가합니다.
+              한국전시산업진흥회(AKEI) 엑셀 파일을 업로드해 행사를 추가합니다. 자동 수집이 막혔을 때 쓰는 보조 기능입니다.
             </p>
             <Step n={1} text="AKEI 사이트에서 전시행사 일정 엑셀을 다운로드합니다." />
-            <Step n={2} text="수동 관리 패널 > AKEI 엑셀 가져오기 영역에 파일을 업로드합니다." />
+            <Step n={2} text="[행사 정보 가져오기] 버튼 옆 ⋯ 메뉴 > AKEI 엑셀로 가져오기에서 파일을 업로드합니다." />
             <Step n={3} text="미리보기로 신규·보강·중복 건수를 확인합니다." />
-            <Step n={4} text="DB에 저장 버튼을 눌러 확정합니다." />
+            <Step n={4} text="[가져오기 실행] 버튼을 눌러 확정합니다." />
             <Indent>중복 처리 기준: (행사명 + 시작일)이 같으면 빈 필드만 보강하고 이미 채워진 데이터는 건드리지 않습니다.</Indent>
           </div>
 
