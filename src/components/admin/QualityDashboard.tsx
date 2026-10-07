@@ -1340,7 +1340,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 style={{ height: 30, padding: "0 6px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", cursor: "pointer" }}>
                 <option value="name">행사명</option>
                 <option value="category">분야(AKEI)</option>
-                <option value="industry">품목(KEOA·쇼알라)</option>
+                <option value="industry">품목(KEOA·쇼알라, AKEI는 분야명)</option>
               </select>
               <input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} placeholder="키워드" onKeyDown={(e) => e.key === "Enter" && addKeyword()}
                 style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
@@ -1353,7 +1353,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
             {([
               { type: "category", title: "분야 (AKEI 전시분야)", tone: "#059669", prefix: "분야" },
               { type: "name",     title: "행사명",               tone: "#2563eb", prefix: "행사명" },
-              { type: "industry", title: "품목 (KEOA·쇼알라)",   tone: "#7c3aed", prefix: "품목" },
+              { type: "industry", title: "품목 (KEOA·쇼알라·AKEI 분야)",   tone: "#7c3aed", prefix: "품목" },
             ] as const).map(({ type, title, tone, prefix }) => {
               const group = filters.filter((f) => (f.filter_type ?? "name") === type);
               if (!group.length) return null;
@@ -1836,15 +1836,10 @@ export default function QualityDashboard({ news, events }: Props) {
         </Section>
 
         <Section n={5} title="🛠 수동 관리">
-          <Def term="행사 데이터 수집">
-            쇼알라·한국전시주최자협회에서 최신 행사를 크롤링합니다. 백그라운드 실행이라 버튼 클릭 후 1~2분 뒤
-            새로고침하면 결과를 확인할 수 있습니다.
+          <Def term="행사 정보 가져오기">
+            버튼 하나로 AKEI·KEOA·쇼알라 세 곳에서 최신 행사를 수집합니다. 백그라운드 실행이라 결과는 잠시 뒤 수집 변경 내역과 행사 목록에 반영되며, 분기마다(1·4·7·10월 1일) 자동으로도 수집됩니다.
+            이미 등록된 비공개 규칙에 걸리는 행사는 등록되지 않고 "자동 제외 내역"에 남습니다.
           </Def>
-          <Def term="중복/불량 정리">
-            미리보기로 삭제 예상 건수를 확인한 뒤 실행하세요. 노이즈 행사명(총회·웨딩·설명회 등) 삭제, 완전 중복 그룹에서
-            정보량이 낮은 행 삭제를 한번에 수행합니다.
-          </Def>
-          <Note>실행 후 복원 불가.</Note>
 
           <div style={{ marginTop: 10 }}>
             <p style={{ margin: "0 0 3px", fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>

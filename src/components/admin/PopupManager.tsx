@@ -395,7 +395,7 @@ export default function PopupManager() {
                 },
                 {
                   n: 5, title: "위치·크기",
-                  body: "별도 입력란 없이 “미리보기에서 위치·크기 조정” 버튼을 눌러 실제 화면에서 직접 끌어다 놓고, 모서리를 드래그해 크기를 조절하세요. 랜덤 위치를 켜면 조정한 위치는 무시되고 접속할 때마다 다른 자리에 나타납니다(숨은 그림 찾기 이벤트용).",
+                  body: "별도 입력란 없이 “미리보기에서 위치·크기 조정” 버튼을 눌러 실제 화면에서 직접 끌어다 놓고, 모서리를 드래그해 크기를 조절하세요. 랜덤 위치를 켜면 조정한 위치는 무시되고 접속할 때마다 다른 자리에 나타납니다.",
                 },
                 {
                   n: 6, title: "링크 URL",
@@ -580,7 +580,7 @@ export default function PopupManager() {
               <label style={labelStyle}>표시 방식 *</label>
               <div style={{ display: "flex", gap: 6 }}>
                 {([
-                  { key: "floating", label: "고정", desc: "구석에 상시 노출 · 닫기 없음" },
+                  { key: "floating", label: "고정", desc: "구석에 상시 노출 · × 버튼은 지금 화면에서만 치움(새로고침하면 다시 노출)" },
                   { key: "modal", label: "팝업", desc: "닫기 가능" },
                 ] as const).map(({ key, label, desc }) => {
                   const on = form.display_type === key;
@@ -660,7 +660,7 @@ export default function PopupManager() {
                 <input type="checkbox" checked={form.position === "random"}
                   onChange={(e) => setForm((f) => ({ ...f, position: e.target.checked ? "random" : "bottom-right" }))}
                   style={{ width: 14, height: 14, cursor: "pointer" }} />
-                랜덤 위치 (숨은 그림 찾기용)
+                랜덤 위치 (접속할 때마다 다른 자리)
               </label>
             </div>
 

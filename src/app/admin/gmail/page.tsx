@@ -92,9 +92,9 @@ export default function GmailPage() {
         <div style={{ fontWeight: 600, marginBottom: 12, color: "var(--on-surface, #111)" }}>설정 방법</div>
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           <li>아래 전제조건을 먼저 완료하세요.</li>
-          <li>위 "Google 계정으로 인증" 클릭 → Gmail 읽기 권한 허용</li>
-          <li>연동 완료 후 <strong>/admin/rss</strong> 에서 Gmail 소스 추가</li>
-          <li>큐레이션 실행 시 자동으로 뉴스레터 수집</li>
+          <li>위 "Google 계정으로 인증" 클릭 → Gmail 권한 허용 (읽기·발송 권한을 요청하며, 현재는 뉴스레터 발송에만 사용됩니다)</li>
+          <li>연동이 끝나면 뉴스레터 관리의 발송 탭에서 이 계정으로 뉴스레터가 발송됩니다</li>
+          <li>토큰이 만료되면 이 페이지(또는 뉴스레터 관리 &gt; Gmail 연동 탭)에서 다시 인증하세요</li>
         </ol>
 
         <div style={{ marginTop: 20, fontWeight: 600, color: "var(--on-surface, #111)" }}>전제조건 (1회)</div>
@@ -109,24 +109,22 @@ export default function GmailPage() {
 
       <HelpPanel title="Gmail 연동 가이드" open={helpOpen} onOpenChange={setHelpOpen}>
         <p style={{ margin: "0 0 16px", fontSize: 13, color: "var(--on-surface-variant)" }}>
-          Gmail로 수신된 뉴스레터를 자동으로 읽어 큐레이션 소스로 활용합니다.
-          OAuth2 인증은 1회 설정으로 지속 유지됩니다.
+          뉴스레터를 발송하는 Gmail 계정을 연동합니다. 평소에는 뉴스레터 관리의 "Gmail 연동" 탭에서 상태를 확인하고,
+          인증이 끊겼을 때 이 페이지로 돌아와 다시 인증합니다. (Gmail 뉴스레터를 큐레이션 소스로 수집하는 기능은 종료되었습니다.)
         </p>
 
         <Section n={1} title="현재 상태">
-          <Item text="✅ Gmail 연동 완료 (2026년 5월 22일 인증)" />
-          <Item text="등록된 뉴스레터: 요즘IT, MICE人" />
+          <Item text="연동 여부와 마지막 인증 시각은 위 상태 카드에서 확인합니다." />
         </Section>
 
-        <Section n={2} title="토큰 만료 시">
-          <Item text="큐레이션 실행 시 Gmail 소스 수집이 실패합니다." />
-          <Item text="이 페이지에서 [다시 인증] 버튼으로 재연동하세요." />
+        <Section n={2} title="토큰 만료·인증 끊김 시">
+          <Item text="뉴스레터 발송이 모두 실패합니다 (Google 인증 오류 invalid_grant)." />
+          <Item text="이 페이지의 [다시 인증 (재연동)] 버튼으로 재연동하세요." />
         </Section>
 
-        <Section n={3} title="뉴스레터 추가 방법">
-          <Item text="뉴스레터 수신 확인 후 Gmail 발신자 이메일 주소를 확인합니다." />
-          <Item text="/admin/rss → 소스 추가 → 타입: Gmail 뉴스레터" />
-          <Item text="발신자 이메일 입력 후 저장합니다." />
+        <Section n={3} title="알아둘 점">
+          <Item text="이 페이지는 사이드바 메뉴에 없습니다. 인증이 끝나면 항상 이 페이지로 돌아옵니다." />
+          <Item text="Gmail 소스(RSS 수집용)는 더 이상 지원하지 않습니다." />
         </Section>
       </HelpPanel>
     </div>
