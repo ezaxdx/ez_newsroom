@@ -54,6 +54,8 @@ const FIT_DISCARD = 5;   // 적합성 4점 이하는 싣지 않음 (폐기)
 const FIT_PUBLISH = 7;   // 7점 이상이어야 자동 발행 — 5~6점은 대기열에서 사람이 검토 (2026-10-06 관리자 판정 12건 기준)
 const PICK_PUBLISH_SCORE = 5;        // 이즈픽 행사 기사: 품질 5점 이상이면 자동 발행, 적합성 관문 면제
 const PICK_PER_EVENT = 3;            // 행사당 1회 최대 건수
+const SEARCH_KEEP_MIN = 40;          // 검색형 소스: 소스·엔진별로 최신 이만큼은 항상 남김
+const SEARCH_KEEP_PER_ITEM = 6;      // 그리고 소스 최대 건수(max_items)의 이 배수까지 남김 (기본 max_items 10 → 60건)
 const GOOGLE_RESOLVE_CAP = 40;       // 구글 링크 복원 상한 (1회 실행)
 const DEFAULT_FOCUS = ["MICE", "마이스", "전시회", "박람회", "엑스포", "국제회의", "컨벤션", "관광", "스마트관광", "글로컬관광", "관광공사", "여행", "AI", "인공지능", "AX", "디지털전환", "스마트"];
 const RETRY_AFTER_MS: Record<string, number> = { too_short: 3 * 86400000, fetch_failed: 3 * 86400000 }; // 일시적일 수 있는 사유는 3일 뒤 재시도
@@ -300,6 +302,24 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     if (v === "too_old") { bump(st, "too_old"); continue; }
     if (v === "too_new") { bump(st, "too_new"); continue; }
     inWindow.push({ ...rc, pubMs });
+  }
+  // a-2) 검색형 소스(키워드 검색)는 한 번에 수백 건이 걸려오므로 소스·검색엔진별로 최신 N건만 남김.
+  //      선정 단계가 어차피 "소스 중요도 → 최신순"으로 소스당 maxItems 건만 뽑으므로, 훨씬 오래된 후보는 쓰이지 않는데 구글 링크 복원·중복 비교·메모리만 잡아먹음
+  {
+    const groups = new Map<string, number[]>();
+    inWindow.forEach((c, i) => {
+      if (c.src.eventId || (c.src.type !== "keyword_search" && c.src.type !== "naver_news")) return;
+      const k = `${c.src.key}|${c.src.via}`;
+      (groups.get(k) ?? groups.set(k, []).get(k)!).push(i);
+    });
+    const drop = new Set<number>();
+    for (const idxs of groups.values()) {
+      const cap = Math.max(SEARCH_KEEP_MIN, inWindow[idxs[0]].src.maxItems * SEARCH_KEEP_PER_ITEM);
+      if (idxs.length <= cap) continue;
+      idxs.sort((a, b) => (inWindow[b].pubMs ?? 0) - (inWindow[a].pubMs ?? 0));
+      for (const i of idxs.slice(cap)) { drop.add(i); bump(stats.get(inWindow[i].src.key)!, "over_search_cap"); }
+    }
+    if (drop.size) { const keep = inWindow.filter((_, i) => !drop.has(i)); inWindow.length = 0; inWindow.push(...keep); }
   }
   funnel.afterWindow = inWindow.length;
 
