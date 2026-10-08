@@ -86,6 +86,8 @@ type CurationLog = {
   staged: number;
   skipped: number;
   failed: number;
+  run_mode?: string;
+  details?: { trigger?: string; status?: string } | null;
   errors: Array<{ source: string; url?: string; error: string }> | null;
   source_stats: Array<{ source_name: string; fetched: number; published: number; staged: number; failed: number }> | null;
 };
@@ -95,7 +97,7 @@ async function fetchCurationLogs(): Promise<CurationLog[]> {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_logs")
-      .select("id, run_at, duration_ms, fetched, published, staged, skipped, failed, errors, source_stats")
+      .select("id, run_at, run_mode, details, duration_ms, fetched, published, staged, skipped, failed, errors, source_stats")
       .order("run_at", { ascending: false })
       .limit(10);
     return (data ?? []) as CurationLog[];
@@ -146,10 +148,10 @@ export default async function AdminPage() {
           <p className="text-sm" style={{ color: "var(--on-surface-variant)" }}>아직 실행 기록이 없습니다.</p>
         ) : (
           <div className="rounded-lg overflow-x-auto" style={{ border: "1px solid var(--outline-variant)" }}>
-            <table className="w-full text-sm" style={{ minWidth: 560 }}>
+            <table className="w-full text-sm" style={{ minWidth: 620 }}>
               <thead>
                 <tr style={{ background: "var(--surface-container-lowest)" }}>
-                  {["실행 시각", "가져옴", "발행", "대기", "스킵", "실패", "소요"].map((h) => (
+                  {["실행 시각", "구분", "가져옴", "발행", "대기", "스킵", "실패", "소요"].map((h) => (
                     <th key={h} className="px-3 py-2 text-left text-[0.68rem] font-semibold tracking-[0.05em] uppercase" style={{ color: "var(--on-surface-variant)" }}>{h}</th>
                   ))}
                 </tr>
@@ -164,6 +166,20 @@ export default async function AdminPage() {
                   return (
                     <tr key={log.id} style={{ borderTop: i > 0 ? "1px solid var(--outline-variant)" : undefined }}>
                       <td className="px-3 py-2 font-mono" style={{ color: "var(--on-surface-variant)" }}>{dateStr}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-xs">
+                        {(() => {
+                          const trig = log.run_mode === "dry" ? "시험" : log.details?.trigger === "manual" ? "수동" : log.details?.trigger === "cron" ? "자동" : "기록 없음";
+                          const status = log.details?.status;
+                          const stale = status === "running" && Date.now() - new Date(log.run_at).getTime() > 10 * 60 * 1000;
+                          return (
+                            <>
+                              <span className="font-semibold">{trig}</span>
+                              {status === "running" && !stale && <span style={{ color: "var(--primary)" }}> · 실행 중</span>}
+                              {(status === "failed" || stale) && <span style={{ color: "var(--error)" }}> · 중단됨</span>}
+                            </>
+                          );
+                        })()}
+                      </td>
                       <td className="px-3 py-2">{log.fetched ?? "-"}</td>
                       <td className="px-3 py-2 font-semibold" style={{ color: log.published > 0 ? "var(--primary)" : undefined }}>{log.published ?? "-"}</td>
                       <td className="px-3 py-2">{log.staged ?? "-"}</td>

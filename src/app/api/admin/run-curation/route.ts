@@ -25,7 +25,7 @@ export async function POST() {
         "Content-Type": "application/json",
         "Authorization": `Bearer ${cronSecret}`,
       },
-      body: JSON.stringify({ live: true }),
+      body: JSON.stringify({ live: true, trigger: "manual" }),
       signal: controller.signal,
     });
 

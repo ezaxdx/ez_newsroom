@@ -48,9 +48,15 @@ export function normTitle(s: string): string {
   normCache.set(s, out);
   return out;
 }
+// 같은 제목을 수천 번 비교하므로 2글자 조각 집합은 한 번만 만들어 재사용 (후보가 수천 건일 때 Edge 함수 CPU 한도 초과 방지)
+const bigramCache = new Map<string, Set<string>>();
 function bigrams(s: string): Set<string> {
+  const hit = bigramCache.get(s);
+  if (hit) return hit;
   const set = new Set<string>();
   for (let i = 0; i < s.length - 1; i++) set.add(s.slice(i, i + 2));
+  if (bigramCache.size > 30000) bigramCache.clear();
+  bigramCache.set(s, set);
   return set;
 }
 export function dice(a: string, b: string): number {
@@ -65,6 +71,19 @@ export function storySim(a: { title: string; text?: string | null }, b: { title:
   const f = (x: { title: string; text?: string | null }) => normTitle(x.title) + normTitle((x.text ?? "").slice(0, 150));
   return dice(f(a), f(b));
 }
+/** 제목+요약의 2글자 조각 집합 — 기사마다 한 번만 만들어 두고 쌍 비교에 재사용(쌍마다 새로 만들면 CPU 한도를 넘음) */
+export function storyProfile(a: { title: string; text?: string | null }): Set<string> {
+  return bigrams(normTitle(a.title) + normTitle((a.text ?? "").slice(0, 150)));
+}
+/** 미리 만든 집합끼리 Dice 계수 — 크기 차이가 너무 커서 기준(ASK)에 못 미치는 쌍은 계산 없이 0 */
+export function storyDice(A: Set<string>, B: Set<string>): number {
+  const total = A.size + B.size;
+  if (total === 0 || (2 * Math.min(A.size, B.size)) / total < 0.3) return 0;
+  const [small, large] = A.size <= B.size ? [A, B] : [B, A];
+  let inter = 0;
+  for (const g of small) if (large.has(g)) inter++;
+  return (2 * inter) / total;
+}
 export const STORY_SIM_SAME = 0.5;   // 이 이상이면 같은 사건으로 바로 묶음
 export const STORY_SIM_ASK = 0.3;    // 이 이상 ~ SAME 미만이면 AI 에게 짧게 물어봄
 
@@ -72,6 +91,33 @@ export const STORY_SIM_ASK = 0.3;    // 이 이상 ~ SAME 미만이면 AI 에게
 export function titleTokens(s: string): string[] {
   const cleaned = decodeEntities(s || "").replace(/\[[^\]]*\]|\([^)]*\)/g, " ").replace(/[^0-9A-Za-z가-힣 ]+/g, " ");
   return [...new Set(cleaned.split(/\s+/).map((w) => w.toLowerCase()).filter((w) => w.length >= 3))];
+}
+/**
+ * 제목 색인 — "같은 이야기인가" 비교를 모든 쌍(수천 × 수천)이 아니라, 희귀한 단어 조각(단어 앞 3글자)을 공유하는 제목끼리만 하도록 줄임.
+ * 후보가 수천 건일 때 모든 쌍 비교가 Edge 함수 CPU 한도를 넘기 때문. 정확한 판정은 여전히 isSameStory 가 함.
+ */
+export class StoryIndex {
+  private map = new Map<string, number[]>();
+  private titles: string[] = [];
+  constructor(titles: string[] = []) { for (const t of titles) this.add(t); }
+  private stems(title: string): string[] { return [...new Set(titleTokens(title).map((w) => w.slice(0, 3)))]; }
+  add(title: string): number {
+    const id = this.titles.length;
+    this.titles.push(title);
+    for (const s of this.stems(title)) { const l = this.map.get(s); if (l) l.push(id); else this.map.set(s, [id]); }
+    return id;
+  }
+  /** 이 제목과 같은 이야기일 수 있는 후보(너무 흔한 조각은 무시하고 나머지 조각을 공유하는 것) */
+  candidates(title: string, maxDf = 40): number[] {
+    const out = new Set<number>();
+    for (const s of this.stems(title)) { const l = this.map.get(s); if (l && l.length <= maxDf) for (const id of l) out.add(id); }
+    return [...out];
+  }
+  /** 같은 이야기로 판정되는 첫 제목의 번호, 없으면 -1 */
+  find(title: string): number {
+    for (const id of this.candidates(title)) if (isSameStory(title, this.titles[id])) return id;
+    return -1;
+  }
 }
 /** 같은 기사로 볼지 판정: 0.6 이상 / 0.4~0.6은 고유명사가 3개 이상 겹칠 때 */
 export function isSameStory(titleA: string, titleB: string): boolean {

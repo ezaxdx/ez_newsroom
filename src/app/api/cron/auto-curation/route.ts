@@ -66,14 +66,20 @@ export async function GET(req: Request) {
   const todayStartKST = new Date(nowKST);
   todayStartKST.setUTCHours(0, 0, 0, 0);
   const todayStartUTC = new Date(todayStartKST.getTime() - 9 * 60 * 60 * 1000).toISOString();
-  const { count: alreadyRanToday } = await supabase
+  // 정기·수동 실행(live)이 오늘 끝났거나, 10분 안에 시작해 아직 도는 중이면 건너뜀. 시험 실행(dry)과 도중에 죽은 실행(10분 넘게 "실행 중"·"실패")은 세지 않음 — 그래야 죽은 실행 때문에 정기 실행이 영영 막히지 않음
+  const { data: todayLogs } = await supabase
     .from("curation_logs")
-    .select("id", { count: "exact", head: true })
+    .select("run_at, run_mode, details")
     .gte("run_at", todayStartUTC);
-  if (alreadyRanToday && alreadyRanToday > 0) {
+  const alreadyRan = (todayLogs ?? []).some((l) => {
+    if (l.run_mode !== "live") return false;
+    const status = (l.details as { status?: string } | null)?.status ?? "done";   // 상태 기록이 생기기 전의 옛 기록은 완료로 봄
+    if (status === "done") return true;
+    return status === "running" && Date.now() - new Date(l.run_at).getTime() < 10 * 60 * 1000;
+  });
+  if (alreadyRan) {
     return NextResponse.json({ skipped: `already ran today (day=${dayKST})` });
   }
-
   // Edge Function 호출 — await으로 요청 전송을 보장하되 8초 내 응답 없으면 포기
   // (Supabase Edge Function은 클라이언트 연결 끊겨도 계속 실행됨)
   // curate-v2 는 기본이 시험 실행(저장 안 함) — 정기 실행은 live: true 를 명시
@@ -88,7 +94,7 @@ export async function GET(req: Request) {
         "Authorization": `Bearer ${serviceRoleKey}`,
         "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       },
-      body: JSON.stringify({ live: true }),
+      body: JSON.stringify({ live: true, trigger: "cron" }),
       signal: AbortSignal.timeout(8000),
     });
   } catch {

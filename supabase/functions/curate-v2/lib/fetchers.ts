@@ -432,13 +432,32 @@ export function resolveNaverBlogUrl(u: string): string {
   return `https://blog.naver.com/PostView.naver?blogId=${m[1]}&logNo=${m[2]}&isRedirectFromMobile=true`;
 }
 /* ── 기사 원문 1회 fetch → 본문·이미지·발행일 ── */
+/** 응답 본문을 최대 maxBytes 까지만 읽음 — 페이지 하나가 수 MB(스크립트 번들 등)여도 메모리를 아끼려고. 본문·메타(og:image, 발행일)는 앞부분에 있음 */
+async function readTextLimited(res: Response, maxBytes = 1_500_000): Promise<string> {
+  if (!res.body) return await res.text();
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    total += value.length;
+    if (total >= maxBytes) { try { await reader.cancel(); } catch { /* 무시 */ } break; }
+  }
+  const buf = new Uint8Array(total);
+  let off = 0;
+  for (const c of chunks) { buf.set(c, off); off += c.length; }
+  return new TextDecoder("utf-8").decode(buf);
+}
+
 export async function fetchArticleData(url: string): Promise<{ text: string; image_url: string | null; published_at: string | null; ok: boolean }> {
   try {
     const target = resolveNaverBlogUrl(url);
     const headers: Record<string, string> = { "User-Agent": CHROME_UA, "Accept-Language": "ko-KR,ko;q=0.9" };
     if (target !== url) headers["Referer"] = "https://blog.naver.com/";
     const res = await fetch(target, { headers, signal: AbortSignal.timeout(8000), redirect: "follow" });
-    const html = await res.text();
+    const html = await readTextLimited(res);
     if (!res.ok) return { text: "", image_url: null, published_at: null, ok: false };
     return { text: extractText(html), image_url: extractOgImage(html), published_at: extractPublishedDate(html), ok: true };
   } catch {

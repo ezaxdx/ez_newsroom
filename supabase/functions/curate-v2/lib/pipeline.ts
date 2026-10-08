@@ -5,7 +5,7 @@ import {
   fetchArticleData, fetchGoogleSearch, fetchJsonList, fetchNaverSearch, fetchRss, fetchWebList, resolveGoogleNewsUrl,
 } from "./fetchers.ts";
 import {
-  calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, STORY_SIM_ASK, STORY_SIM_SAME, storySim, toISO, withTimeout,
+  calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, StoryIndex, STORY_SIM_ASK, STORY_SIM_SAME, storyDice, storyProfile, toISO, withTimeout,
 } from "./util.ts";
 import type { CatSetting } from "./ai.ts";
 import { buildHintBlock, canonicalDomain, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
@@ -21,6 +21,8 @@ export interface RunOptions {
   calibrated?: boolean;      // 시험 실행에서 점수 보정 프롬프트를 강제로 켜기/끄기
   budgetMs?: number;         // 처리 시간 예산
   writeLog?: boolean;        // curation_logs 기록 여부 (기본 true)
+  trigger?: string;          // 실행을 일으킨 곳: "cron"(정기) / "manual"(보드의 수동 실행) — curation_logs.details.trigger 로 남김
+  stopAfter?: number;        // 시험 실행 전용: 1·2·3 단계까지만 하고 멈춤 (어느 단계에서 자원 한도에 걸리는지 찾는 용도)
 }
 export interface Deps {
   supabase: any;
@@ -101,7 +103,29 @@ function eventMatches(ev: PickEvent, title: string, description: string): boolea
 }
 
 /* ───────── 메인 ───────── */
+/**
+ * 정기·수동 실행(live)은 시작할 때 curation_logs 에 "실행 중" 행을 먼저 남기고 끝나면 결과로 갱신한다.
+ * 그래서 실행 도중 함수가 죽어도(자원 한도 등) "누가 언제 실행했고 중단됐다"는 기록이 남는다.
+ */
 export async function runCuration(deps: Deps, opts: RunOptions) {
+  const live = !opts.dry;
+  const trigger = opts.trigger ?? (live ? "unknown" : "test");
+  let logId: string | null = null;
+  if (live && opts.writeLog !== false) {
+    const { data, error } = await deps.supabase.from("curation_logs")
+      .insert({ duration_ms: 0, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0, score_dist: {}, source_stats: [], errors: [], run_mode: "live", details: { trigger, status: "running" } })
+      .select("id").single();
+    if (error) console.error("[curation_logs 시작 기록 실패]", error.message); else logId = (data as { id: string } | null)?.id ?? null;
+  }
+  try {
+    return await runCurationInner(deps, opts, logId, trigger);
+  } catch (e) {
+    if (logId) await deps.supabase.from("curation_logs").update({ errors: [{ source: "(시스템)", error: (e as Error).message }], details: { trigger, status: "failed" } }).eq("id", logId);
+    throw e;
+  }
+}
+
+async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | null, trigger: string) {
   const { supabase, env } = deps;
   const log = deps.log ?? ((m: string) => console.log(m));
   const runStart = Date.now();
@@ -172,6 +196,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   }
   const recentRows = await fetchAll((f, t) => supabase.from("news").select("title, original_title").gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString()).range(f, t));
   const recentTitles: string[] = recentRows.flatMap((r: any) => [r.title, r.original_title].filter(Boolean));
+  const recentIdx = new StoryIndex(recentTitles);   // 후보 수천 건 × 최근 제목 비교를 줄이려는 색인
 
   // 이즈픽(수동 ⭐) 행사 — 시작 D-30 ~ 종료 D+30 구간만
   const { data: pickRows } = await supabase.from("convention_events")
@@ -262,6 +287,8 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   }
   const funnel: Record<string, number> = { raw: rawCands.length };
   log(`[1단계] 후보 ${rawCands.length}건 수집 (${Date.now() - runStart}ms)`);
+  const earlyStop = (n: number) => (opts.dry && opts.stopAfter === n ? { ok: true, mode: "dry", stopped_after: n, fetched: rawCands.length, duration_ms: Date.now() - runStart, funnel } : null);
+  { const s1 = earlyStop(1); if (s1) return s1 as any; }
 
   /* ── 2. 후보 정리 (구글 URL 복원 말고는 네트워크 안 씀) ── */
   // a) 발행 창 — 날짜를 아는 후보는 원문을 열기 전에 거름
@@ -285,15 +312,17 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const nonGoogle = inWindow.map((c, i) => ({ c, i })).filter(({ c }) => !isGoogle(c.item.link));
   const googleOrdered = inWindow.map((c, i) => ({ c, i })).filter(({ c }) => isGoogle(c.item.link))
     .sort((a, b) => (Number(!!b.c.src.eventId) - Number(!!a.c.src.eventId)) || (b.c.src.weight - a.c.src.weight) || ((b.c.pubMs ?? 0) - (a.c.pubMs ?? 0)));
-  const keptGoogleTitles: string[] = [];
+  const nonGoogleIdx = new StoryIndex(nonGoogle.map((x) => x.c.item.title));
+  const keptGoogleIdx = new StoryIndex();
   for (const { c, i } of googleOrdered) {
     const st = stats.get(c.src.key)!;
     const t = c.item.title;
-    const hit = nonGoogle.find((x) => isSameStory(t, x.c.item.title));
+    const hitK = nonGoogleIdx.find(t);
+    const hit = hitK >= 0 ? nonGoogle[hitK] : undefined;
     if (hit) { (extraVias.get(hit.i) ?? extraVias.set(hit.i, new Set()).get(hit.i)!).add("google"); dropped.add(i); bump(st, "dup_pre_resolve"); continue; }
-    if (recentTitles.some((rt) => isSameStory(t, rt))) { dropped.add(i); bump(st, "dup_published"); continue; }
-    if (keptGoogleTitles.some((kt) => isSameStory(t, kt))) { dropped.add(i); bump(st, "dup_pre_resolve"); continue; }
-    keptGoogleTitles.push(t);
+    if (recentIdx.find(t) >= 0) { dropped.add(i); bump(st, "dup_published"); continue; }
+    if (keptGoogleIdx.find(t) >= 0) { dropped.add(i); bump(st, "dup_pre_resolve"); continue; }
+    keptGoogleIdx.add(t);
   }
 
   // 같은 구글 링크는 한 번만 복원 (행사 검색어끼리 결과가 많이 겹침). 이즈픽 후보 → 중요도 → 최신순으로 우선 복원
@@ -387,29 +416,19 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   // g) 제목 유사도 — 최근 7일 등록 기사와 비교, 같은 실행 안에서는 묶어서 대표 1건만
   const afterDb: Cand[] = [];
   for (const c of cands) {
-    const dup = recentTitles.some((t) => isSameStory(c.title, t));
+    const dup = recentIdx.find(c.title) >= 0;
     if (dup) { for (const s of c.srcs) bump(stats.get(s.key)!, "dup_published"); continue; }
     afterDb.push(c);
   }
   const parent = afterDb.map((_, i) => i);
   const find = (x: number): number => (parent[x] === x ? x : (parent[x] = find(parent[x])));
-  for (let i = 0; i < afterDb.length; i++) for (let j = i + 1; j < afterDb.length; j++) {
-    if (isSameStory(afterDb[i].title, afterDb[j].title)) parent[find(j)] = find(i);
+  // 같은 이야기 묶기 — 모든 쌍(수천 × 수천)이 아니라 희귀한 단어 조각을 공유하는 제목끼리만 비교 (CPU 한도)
+  const titleIdx = new StoryIndex(afterDb.map((c) => c.title));
+  for (let i = 0; i < afterDb.length; i++) {
+    for (const j of titleIdx.candidates(afterDb[i].title)) {
+      if (j > i && isSameStory(afterDb[i].title, afterDb[j].title)) parent[find(j)] = find(i);
+    }
   }
-  // g-2) 보강 — 제목이 달라도 제목+요약이 닮았거나, 애매하면 AI 가 "같은 사건인지" 판정해서 묶음
-  const AI_PAIR_CAP = 12;
-  const askPairs: { i: number; j: number; sim: number }[] = [];
-  for (let i = 0; i < afterDb.length; i++) for (let j = i + 1; j < afterDb.length; j++) {
-    if (find(i) === find(j)) continue;
-    const sim = storySim({ title: afterDb[i].title, text: afterDb[i].description }, { title: afterDb[j].title, text: afterDb[j].description });
-    if (sim >= STORY_SIM_SAME) parent[find(j)] = find(i);
-    else if (sim >= STORY_SIM_ASK) askPairs.push({ i, j, sim });
-  }
-  askPairs.sort((a, b) => b.sim - a.sim);
-  await Promise.all(askPairs.slice(0, AI_PAIR_CAP).map(async (p) => {
-    const same = await judgeSameStory({ apiKey, a: { title: afterDb[p.i].title, text: afterDb[p.i].description }, b: { title: afterDb[p.j].title, text: afterDb[p.j].description } });
-    if (same) parent[find(p.j)] = find(p.i);
-  }));
   const clusters = new Map<number, Cand[]>();
   afterDb.forEach((c, i) => (clusters.get(find(i)) ?? clusters.set(find(i), []).get(find(i))!).push(c));
   const reps: Cand[] = [];
@@ -428,22 +447,6 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     reps.push(rep);
   }
   funnel.afterDedup = reps.length;
-
-  // g-3) 최근 14일 안에 발행·대기 중인 기사와 같은 사건이면 폐기하지 않고 "중복 의심"으로 표시 — 자동 발행만 막고 대기열에서 사람이 판단
-  const recent14 = await fetchAll((f, t) => supabase.from("news").select("title, summary_short").gte("created_at", new Date(Date.now() - 14 * 86400000).toISOString()).range(f, t));
-  const suspects: { c: Cand; title: string; sim: number }[] = [];
-  for (const c of reps) {
-    let best = { title: "", sim: 0 };
-    for (const r of recent14 as any[]) { const sim = storySim({ title: c.title, text: c.description }, { title: r.title, text: r.summary_short }); if (sim > best.sim) best = { title: r.title, sim }; }
-    if (best.sim >= STORY_SIM_SAME) c.dupOf = best.title;
-    else if (best.sim >= STORY_SIM_ASK) suspects.push({ c, ...best });
-  }
-  suspects.sort((a, b) => b.sim - a.sim);
-  await Promise.all(suspects.slice(0, AI_PAIR_CAP).map(async (s) => {
-    const old = (recent14 as any[]).find((r) => r.title === s.title);
-    if (await judgeSameStory({ apiKey, a: { title: s.c.title, text: s.c.description }, b: { title: s.title, text: old?.summary_short } })) s.c.dupOf = s.title;
-  }));
-  funnel.dupSuspect = reps.filter((c) => c.dupOf).length;
 
   // h) 우선순위 정렬 + 소스별·행사별 상한
   const primaryOf = (c: Cand) => [...c.srcs].sort((a, b) => b.weight - a.weight)[0];
@@ -465,7 +468,60 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
     stats.get(p.key)!.kept++;
     selected.push(c);
   }
+  // g-2) 보강 — 선정된 기사끼리, 제목이 달라도 제목+요약이 닮았거나(0.5 이상) 애매하면(0.3~0.5) AI 가 "같은 사건인지" 판정해 하나로 묶음.
+  //      후보 전체(수천 건)가 아니라 선정된 기사(수십~100건)만 비교해야 Edge 함수 CPU 한도를 넘지 않음
+  const tG2 = Date.now();
+  const AI_PAIR_CAP = 12;
+  {
+    const parent2 = selected.map((_, i) => i);
+    const find2 = (x: number): number => (parent2[x] === x ? x : (parent2[x] = find2(parent2[x])));
+    const profiles = selected.map((c) => storyProfile({ title: c.title, text: c.description }));
+    const askPairs: { i: number; j: number; sim: number }[] = [];
+    for (let i = 0; i < selected.length; i++) for (let j = i + 1; j < selected.length; j++) {
+      const sim = storyDice(profiles[i], profiles[j]);
+      if (sim >= STORY_SIM_SAME) parent2[find2(j)] = find2(i);
+      else if (sim >= STORY_SIM_ASK) askPairs.push({ i, j, sim });
+    }
+    askPairs.sort((a, b) => b.sim - a.sim);
+    await Promise.all(askPairs.filter((p) => find2(p.i) !== find2(p.j)).slice(0, AI_PAIR_CAP).map(async (p) => {
+      const same = await judgeSameStory({ apiKey, a: { title: selected[p.i].title, text: selected[p.i].description }, b: { title: selected[p.j].title, text: selected[p.j].description } });
+      if (same) parent2[find2(p.j)] = find2(p.i);
+    }));
+    // 묶인 기사 중 우선순위가 앞선(selected 는 이미 우선순위 순) 1건만 남기고 나머지의 소스·매체 수를 대표에 합침
+    const keepIdx: number[] = [];
+    const repOf = new Map<number, Cand>();
+    selected.forEach((c, i) => {
+      const root = find2(i);
+      const rep = repOf.get(root);
+      if (!rep) { repOf.set(root, c); keepIdx.push(i); return; }
+      for (const s of c.srcs) bump(stats.get(s.key)!, "dup_cluster");
+      stats.get(primaryOf(c).key)!.kept--;
+      for (const v of c.vias) rep.vias.add(v);
+      for (const s of c.srcs) if (!rep.srcs.some((x) => x.key === s.key)) rep.srcs.push(s);
+      rep.coverage = Math.max(rep.coverage, 1) + 1;
+    });
+    if (keepIdx.length < selected.length) { const kept = keepIdx.map((i) => selected[i]); selected.length = 0; selected.push(...kept); }
+  }
+  // g-3) 최근 14일 안에 발행·대기 중인 기사와 같은 사건이면 폐기하지 않고 "중복 의심"으로 표시 — 자동 발행만 막고 대기열에서 사람이 판단
+  const recent14 = await fetchAll((f, t) => supabase.from("news").select("title, summary_short").gte("created_at", new Date(Date.now() - 14 * 86400000).toISOString()).order("created_at", { ascending: false }).range(f, t));
+  const recent14Profiles = (recent14 as any[]).map((r) => storyProfile({ title: r.title, text: r.summary_short }));
+  const suspects: { c: Cand; title: string; sim: number }[] = [];
+  for (const c of selected) {
+    let best = { title: "", sim: 0 };
+    const prof = storyProfile({ title: c.title, text: c.description });
+    (recent14 as any[]).forEach((r, k) => { const sim = storyDice(prof, recent14Profiles[k]); if (sim > best.sim) best = { title: r.title, sim }; });
+    if (best.sim >= STORY_SIM_SAME) c.dupOf = best.title;
+    else if (best.sim >= STORY_SIM_ASK) suspects.push({ c, ...best });
+  }
+  suspects.sort((a, b) => b.sim - a.sim);
+  await Promise.all(suspects.slice(0, AI_PAIR_CAP).map(async (s) => {
+    const old = (recent14 as any[]).find((r) => r.title === s.title);
+    if (await judgeSameStory({ apiKey, a: { title: s.c.title, text: s.c.description }, b: { title: s.title, text: old?.summary_short } })) s.c.dupOf = s.title;
+  }));
+  funnel.dupSuspect = selected.filter((c) => c.dupOf).length;
   funnel.selected = selected.length;
+  log(`[중복 보강] 선정 ${selected.length}건 기준 묶기·최근 14일 ${recent14.length}건 비교 ${Date.now() - tG2}ms, 중복 의심 ${funnel.dupSuspect}건`);
+  { const s2 = earlyStop(2); if (s2) return s2 as any; }
   log(`[2단계] 후보 정리 완료 — 선정 ${selected.length}건 (${Date.now() - runStart}ms)`);
 
   /* ── 3. 원문 확보 (선정된 기사만) ── */
@@ -501,6 +557,7 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   readyList.sort((a, b) => selected.indexOf(a) - selected.indexOf(b));
   funnel.withText = readyList.length;
   log(`[3단계] 원문 확보 ${readyList.length}건 (${Date.now() - runStart}ms)`);
+  { const s3 = earlyStop(3); if (s3) return s3 as any; }
 
   /* ── 4~5. AI 작성 + 판정·저장 (이즈픽 먼저 — 정렬 이미 반영) ── */
   const results = { published: 0, staged: 0, skipped: 0, failed: 0 };
@@ -693,15 +750,17 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const logErrors = [...runErrors, ...levelDefaulted.map((e) => ({ source: e.source, error: `레벨 판정 실패(응답: ${e.raw}) → Intermediate 저장: ${e.title.slice(0, 60)}` })), ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
   const fetched = [...stats.values()].reduce((s, x) => s + x.fetched, 0);
   const details = {
+    trigger, status: "done",
     window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() },
     funnel, picks: picks.map((p) => ({ name: p.name, terms: p.queryTerms })), decisions,
     selected: selected.map((c) => ({ title: c.title, source: primaryOf(c).name, vias: [...c.vias], pick: c.event?.name ?? null, cats: categoriesFor(c), coverage: c.coverage, hasText: !!c.text })),
   };
   if (opts.writeLog !== false) {
-    const { error: logError } = await supabase.from("curation_logs").insert({
+    const row = {
       duration_ms: durationMs, fetched, published: results.published, staged: results.staged, skipped: [...stats.values()].reduce((s, x) => s + x.skipped, 0),
       failed: results.failed, score_dist: scoreDist, source_stats: sourceStats, errors: logErrors, run_mode: live ? "live" : "dry", details,
-    });
+    };
+    const { error: logError } = logId ? await supabase.from("curation_logs").update(row).eq("id", logId) : await supabase.from("curation_logs").insert(row);
     if (logError) console.error("[curation_logs insert 실패]", logError.message);
   }
   if (live) for (const a of alerts) await sendAlert(webhook, a);

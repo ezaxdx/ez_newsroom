@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
   try {
     result = await runCuration(
       { supabase, env: (k) => Deno.env.get(k) },
-      { dry: !live, maxAi: Number.isFinite(maxAi) ? maxAi : undefined, onlySource, budgetMs: 120_000 },
+      { dry: !live, maxAi: Number.isFinite(maxAi) ? maxAi : undefined, onlySource, budgetMs: 120_000, trigger: typeof body.trigger === "string" ? body.trigger : undefined, stopAfter: !live && Number(body.stop_after) > 0 ? Number(body.stop_after) : undefined },
     );
   } catch (e) {
     const msg = (e as Error).message;
