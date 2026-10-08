@@ -4,7 +4,7 @@ import { verifyCronAuth } from "@/lib/verify-cron";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { sendDiscordAlert } from "@/lib/discord-alert";
 
-export const maxDuration = 10;
+export const maxDuration = 60;   // Edge 함수가 자원 한도 등으로 바로 죽으면(보통 30초 안) 그 응답을 받아 알리려고 기다림. 정상 실행은 2분 넘게 걸리므로 50초 안에 응답이 없으면 "실행 중"으로 보고 끝냄
 
 // 이 크론이 스케줄대로(화·목) 실제로 실행됐는지, 매일 도는 이 호출 자체로 감시함 —
 // 별도 워치독 크론을 안 만드는 이유: Vercel Hobby 플랜 크론 슬롯이 제한적이라
@@ -19,15 +19,20 @@ async function checkMissedRun(
   const lastRun = calcLastScheduledRun(schedule.days, schedule.hour ?? 9);
   if (Date.now() - lastRun.getTime() < GRACE_MS) return; // 아직 여유시간 이내 — 판단 보류
 
-  const { count } = await supabase
+  // 예정 시각 이후에 "끝난 정기·수동 실행(live, 완료)"이 없으면 누락 — 시험 실행(dry)과 도중에 죽은 실행("실행 중"·"실패")은 실행으로 치지 않음
+  const { data: sinceLogs } = await supabase
     .from("curation_logs")
-    .select("id", { count: "exact", head: true })
+    .select("run_at, run_mode, details")
     .gte("run_at", lastRun.toISOString());
-  if (count && count > 0) return; // 정상 실행됨
-
+  const liveLogs = (sinceLogs ?? []).filter((l) => l.run_mode === "live");
+  const done = liveLogs.some((l) => ((l.details as { status?: string } | null)?.status ?? "done") === "done");
+  if (done) return; // 정상 실행됨
+  const broken = liveLogs.filter((l) => ["running", "failed"].includes((l.details as { status?: string } | null)?.status ?? "")).length;
   await sendDiscordAlert({
     title: "큐레이션 자동 실행 누락 감지",
-    description: `예정된 실행 시각(${lastRun.toISOString()}) 이후로 curation_logs에 기록이 없습니다. 크론이 실행되지 않았거나 실패했을 수 있습니다.`,
+    description: broken > 0
+      ? `예정된 실행 시각(${lastRun.toISOString()}) 이후로 끝난 실행이 없습니다. 시작은 했지만 끝나지 못한 실행 기록이 ${broken}건 있어 함수가 도중에 중단된 것으로 보입니다(자원 한도 등). 큐레이션 보드 하단 로그에서 "중단됨"을 확인하세요.`
+      : `예정된 실행 시각(${lastRun.toISOString()}) 이후로 curation_logs에 실행 기록이 없습니다. 크론이 실행되지 않았거나 시작 전에 실패했을 수 있습니다.`,
     level: "error",
   });
 }
@@ -87,7 +92,7 @@ export async function GET(req: Request) {
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
 
   try {
-    await fetch(edgeFnUrl, {
+    const res = await fetch(edgeFnUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -95,10 +100,16 @@ export async function GET(req: Request) {
         "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       },
       body: JSON.stringify({ live: true, trigger: "cron" }),
-      signal: AbortSignal.timeout(8000),
+      signal: AbortSignal.timeout(50000),
     });
+    // 보통 실행은 2분 넘게 걸려 여기까지 응답이 오지 않음(아래 catch 의 타임아웃). 50초 안에 응답이 왔다면 거의 실패 — 알림
+    if (!res.ok) {
+      const body = (await res.text().catch(() => "")).slice(0, 300);
+      await sendDiscordAlert({ title: "정기 큐레이션 실행 실패", description: `curate-v2 가 HTTP ${res.status} 로 응답했습니다. ${body}`, level: "error" });
+      return NextResponse.json({ ok: false, status: res.status, message: "큐레이션 시작 실패" }, { status: 502 });
+    }
   } catch {
-    // 타임아웃 또는 연결 오류여도 Edge Function은 이미 실행 중 — 무시
+    // 50초 안에 응답이 없으면 Edge Function 이 정상적으로 계속 실행 중(클라이언트 연결이 끊겨도 계속 실행됨) — 무시
   }
 
   return NextResponse.json({ ok: true, message: "큐레이션 시작됨" });
