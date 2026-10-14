@@ -21,6 +21,8 @@ export interface RunOptions {
   calibrated?: boolean;      // 시험 실행에서 점수 보정 프롬프트를 강제로 켜기/끄기
   budgetMs?: number;         // 처리 시간 예산
   writeLog?: boolean;        // curation_logs 기록 여부 (기본 true)
+  chain?: number;            // 시간 초과로 남은 후보를 이어서 처리하는 연속 실행의 회차 (0 = 처음 실행)
+  finalPass?: boolean;       // false 가 아니면 이 회차가 마지막(더 이어 돌지 않음) — 남은 후보 경고를 이때만 보냄
   trigger?: string;          // 실행을 일으킨 곳: "cron"(정기) / "manual"(보드의 수동 실행) — curation_logs.details.trigger 로 남김
   stopAfter?: number;        // 시험 실행 전용: 1·2·3 단계까지만 하고 멈춤 (어느 단계에서 자원 한도에 걸리는지 찾는 용도)
 }
@@ -113,6 +115,15 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const live = !opts.dry;
   const trigger = opts.trigger ?? (live ? "unknown" : "test");
   let logId: string | null = null;
+  // 이미 도는 실행이 있으면(10분 안에 시작해 "실행 중"인 기록) 겹쳐 돌지 않음 — 보드의 수동 실행 중복 클릭, 정기·수동 실행이 겹치는 경우를 막음.
+  // 도중에 죽은 실행은 10분이 지나면 더 이상 막지 않음
+  if (live && opts.writeLog !== false) {
+    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+    const { data: running } = await deps.supabase.from("curation_logs").select("id, run_at").eq("run_mode", "live").eq("details->>status", "running").gte("run_at", since).limit(1);
+    if (running && running.length > 0) {
+      return { ok: true, skipped: true, message: "이미 큐레이션이 실행 중입니다 (10분 안에 시작한 실행이 아직 끝나지 않았어요). 끝난 뒤 다시 시도하세요.", progress: 0, deferred: 0 } as any;
+    }
+  }
   if (live && opts.writeLog !== false) {
     const { data, error } = await deps.supabase.from("curation_logs")
       .insert({ duration_ms: 0, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0, score_dist: {}, source_stats: [], errors: [], run_mode: "live", details: { trigger, status: "running" } })
@@ -288,6 +299,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     if (errs && st.status === "ok") st.error = errs.join(" / "); // 일부 엔진만 실패 — 기록은 남김
   }
   const funnel: Record<string, number> = { raw: rawCands.length };
+  const timings: Record<string, number> = { collect: Date.now() - runStart };   // 단계별 누적 소요(ms) — 어디서 시간이 갔는지 로그에서 보려고
   log(`[1단계] 후보 ${rawCands.length}건 수집 (${Date.now() - runStart}ms)`);
   const earlyStop = (n: number) => (opts.dry && opts.stopAfter === n ? { ok: true, mode: "dry", stopped_after: n, fetched: rawCands.length, duration_ms: Date.now() - runStart, funnel } : null);
   { const s1 = earlyStop(1); if (s1) return s1 as any; }
@@ -542,6 +554,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   funnel.selected = selected.length;
   log(`[중복 보강] 선정 ${selected.length}건 기준 묶기·최근 14일 ${recent14.length}건 비교 ${Date.now() - tG2}ms, 중복 의심 ${funnel.dupSuspect}건`);
   { const s2 = earlyStop(2); if (s2) return s2 as any; }
+  timings.organize = Date.now() - runStart;
   log(`[2단계] 후보 정리 완료 — 선정 ${selected.length}건 (${Date.now() - runStart}ms)`);
 
   /* ── 3. 원문 확보 (선정된 기사만) ── */
@@ -576,6 +589,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   // 병렬 처리라 순서가 흐트러지므로 다시 우선순위 순으로
   readyList.sort((a, b) => selected.indexOf(a) - selected.indexOf(b));
   funnel.withText = readyList.length;
+  timings.scrape = Date.now() - runStart;
   log(`[3단계] 원문 확보 ${readyList.length}건 (${Date.now() - runStart}ms)`);
   { const s3 = earlyStop(3); if (s3) return s3 as any; }
 
@@ -600,20 +614,20 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   // 작성 호출은 회사 소개(시스템 지침)가 "사업과 연결해서 분석하라"고 시켜서 어떤 기사든 연결된다고 합리화해 후하게 줌 → 판정을 분리
   const judgedMap = new Map<Cand, { fit: number; reason: string }>();
   const writeTargets: Cand[] = [];
-  await mapPool(aiTargets, 8, async (c) => {
+  const judgeOne = async (c: Cand, out: Cand[]) => {
     const p = primaryOf(c); const st = stats.get(p.key)!;
     if (overBudget()) { st.deferred++; return; }
     const cats = categoriesFor(c);
     if (c.event) {
       judgedMap.set(c, { fit: 10, reason: `이즈픽 행사(${c.event.name}) 관련 기사 — 적합성 관문 면제` });
-      writeTargets.push(c); return;
+      out.push(c); return;
     }
     // 자사 콘텐츠(EZPMP 카테고리: 우리 블로그·오투미트 등) — 발행 주기가 길어서 적합성 관문과 자동 발행 상한을 적용하지 않고, 발행 창에 맞으면 모두 발행
     if (cats.length === 1 && cats[0] === "EZPMP") {
       judgedMap.set(c, { fit: 10, reason: "자사 콘텐츠(EZPMP) — 적합성 관문 면제" });
-      writeTargets.push(c); return;
+      out.push(c); return;
     }
-    if (!calibrated) { writeTargets.push(c); return; }   // v1 프롬프트 모드: 작성 호출의 fit 을 그대로 씀
+    if (!calibrated) { out.push(c); return; }   // v1 프롬프트 모드: 작성 호출의 fit 을 그대로 씀
     const j = await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/") });
     if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `적합성 판정 실패: ${j.error}` }); return; }
     judgedMap.set(c, { fit: j.fit, reason: j.reason });
@@ -623,20 +637,19 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       markSeen(c, "low_fit");
       return;
     }
-    writeTargets.push(c);
-  });
+    out.push(c);
+  };
   // 처리 순서: 이즈픽 먼저 → 적합성 높은 순(AI 1순위·MICE·관광 > AI 2순위 > …) → 기존 우선순위.
   // 자동 발행 상한(20건)에 걸릴 때 적합성 높은 기사가 먼저 발행되고 낮은 기사가 대기열로 가게 됨
   const isOwnContent = (c: Cand) => !c.event && (() => { const k = categoriesFor(c); return k.length === 1 && k[0] === "EZPMP"; })();
-  writeTargets.sort((a, b) =>
+  const sortTargets = (arr: Cand[]) => arr.sort((a, b) =>
     (Number(!!b.event) - Number(!!a.event)) ||
     (Number(isOwnContent(b)) - Number(isOwnContent(a))) ||
     ((judgedMap.get(b)?.fit ?? 0) - (judgedMap.get(a)?.fit ?? 0)) ||
     (readyList.indexOf(a) - readyList.indexOf(b)));
-  log(`[4a단계] 적합성 판정 완료 — 작성 대상 ${writeTargets.length}건 (${Date.now() - runStart}ms)`);
 
   // 4b. 글 작성 + 판정·저장 (동시 5건)
-  await mapPool(writeTargets, 5, async (c) => {
+  const writeOne = async (c: Cand) => {
     const p = primaryOf(c); const st = stats.get(p.key)!;
     if (overBudget()) { st.deferred++; return; }
     aiCalls++;
@@ -706,7 +719,26 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     const newId = ins?.[0]?.id;
     if (newId) await supabase.from("news_original_text").upsert({ news_id: newId, original_text: c.text });
     if (publish) { results.published++; st.published++; } else { results.staged++; st.staged++; }
-  });
+  };
+
+  // 판정과 작성을 묶음(16건)으로 번갈아 처리 — 후보 전체를 먼저 판정한 뒤 작성하면 판정에서 시간이 다 가서 한 건도 발행되지 못하는 일이 생김.
+  // 묶음마다 판정(동시 8건) → 통과한 기사 바로 작성·저장(동시 5건) → 다음 묶음. 시간 예산이 끝나면 남은 후보는 이월(다음 회차)
+  const CHUNK = 16;
+  let judgeMs = 0, writeMs = 0;
+  for (let k = 0; k < aiTargets.length; k += CHUNK) {
+    const chunk = aiTargets.slice(k, k + CHUNK);
+    const out: Cand[] = [];
+    const tj = Date.now();
+    await mapPool(chunk, 8, (c) => judgeOne(c, out));
+    judgeMs += Date.now() - tj;
+    sortTargets(out);
+    writeTargets.push(...out);
+    const tw = Date.now();
+    await mapPool(out, 5, writeOne);
+    writeMs += Date.now() - tw;
+  }
+  timings.write = Date.now() - runStart; timings.judge_total = judgeMs; timings.write_total = writeMs;
+  log(`[4a단계] 적합성 판정 ${aiTargets.length}건 중 작성 대상 ${writeTargets.length}건 (판정 ${judgeMs}ms / 작성 ${writeMs}ms)`);
   log(`[4~5단계] AI ${aiCalls}건 처리 — 발행 ${results.published} 대기 ${results.staged} 폐기 ${results.skipped} 실패 ${results.failed} (${Date.now() - runStart}ms)`);
 
   /* ── 6. 마무리: 소스 상태·건너뜀 기록·정리·로그·알림 ── */
@@ -749,7 +781,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
 
     if (levelDefaulted.length > 0) alerts.push({ title: "레벨 판정 실패 — 기본값(Intermediate)으로 저장", description: `이번 실행에서 AI가 레벨을 돌려주지 못한 ${levelDefaulted.length}건을 Intermediate로 저장했습니다. 해당 기사는 큐레이션 보드에서 레벨을 직접 확인하세요. (news.quality_criteria.level_note 에 사유가 남아 있습니다)`, level: "warning", fields: levelDefaulted.slice(0, 5).map((e) => ({ name: e.source, value: `${e.title.slice(0, 60)} (응답: ${e.raw})` })) });
     if (cappedCount > 0) alerts.push({ title: "자동 발행 상한 초과분을 대기열로 보냄", description: `이번 실행에서 자동 발행 상한(${maxAutoPublish}건)을 넘은 ${cappedCount}건은 대기열에 있습니다. 큐레이션 보드의 대기열에서 검토 후 발행하세요.`, level: "warning" });
-    if (deferredTotal > 0) alerts.push({ title: "시간 초과로 처리 못 한 후보가 남음", description: `시간 예산을 다 써서 ${deferredTotal}건이 다음 실행으로 넘어갔습니다. (다음 실행에서 다시 후보가 됩니다)`, level: "warning" });
+    if (deferredTotal > 0 && opts.finalPass !== false) alerts.push({ title: "시간 초과로 처리 못 한 후보가 남음", description: `시간 예산을 다 써서 ${deferredTotal}건이 다음 실행으로 넘어갔습니다. (다음 실행에서 다시 후보가 됩니다)`, level: "warning" });
     if (results.failed >= 3) alerts.push({ title: "큐레이션 개별 기사 생성 실패 다수", description: `이번 실행에서 ${results.failed}건 실패(발행 ${results.published}, 대기 ${results.staged}).`, level: "warning", fields: runErrors.slice(0, 5).map((e) => ({ name: e.source, value: e.error.slice(0, 200) })) });
 
     // 이즈픽 행사: 시작 7일 이내인데 관련 기사가 한 건도 없으면 경고
@@ -770,7 +802,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const logErrors = [...runErrors, ...levelDefaulted.map((e) => ({ source: e.source, error: `레벨 판정 실패(응답: ${e.raw}) → Intermediate 저장: ${e.title.slice(0, 60)}` })), ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
   const fetched = [...stats.values()].reduce((s, x) => s + x.fetched, 0);
   const details = {
-    trigger, status: "done",
+    trigger, status: "done", chain: opts.chain ?? 0, timings,
     window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() },
     funnel, picks: picks.map((p) => ({ name: p.name, terms: p.queryTerms })), decisions,
     selected: selected.map((c) => ({ title: c.title, source: primaryOf(c).name, vias: [...c.vias], pick: c.event?.name ?? null, cats: categoriesFor(c), coverage: c.coverage, hasText: !!c.text })),
@@ -785,7 +817,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   }
   if (live) for (const a of alerts) await sendAlert(webhook, a);
 
-  return { ok: true, mode: live ? "live" : "dry", ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
+  return { ok: true, mode: live ? "live" : "dry", progress: results.published + results.staged + results.skipped, window_end: windowEnd, timings, ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
 }
 
 function categoryDefaultImage(category: string): string {

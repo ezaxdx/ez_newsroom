@@ -87,7 +87,7 @@ type CurationLog = {
   skipped: number;
   failed: number;
   run_mode?: string;
-  details?: { trigger?: string; status?: string } | null;
+  details?: { trigger?: string; status?: string; chain?: number } | null;
   errors: Array<{ source: string; url?: string; error: string }> | null;
   source_stats: Array<{ source_name: string; fetched: number; published: number; staged: number; failed: number }> | null;
 };
@@ -174,6 +174,7 @@ export default async function AdminPage() {
                           return (
                             <>
                               <span className="font-semibold">{trig}</span>
+                              {(log.details?.chain ?? 0) > 0 && <span style={{ color: "var(--on-surface-variant)" }}> · 이어서 {log.details?.chain}회</span>}
                               {status === "running" && !stale && <span style={{ color: "var(--primary)" }}> · 실행 중</span>}
                               {(status === "failed" || stale) && <span style={{ color: "var(--error)" }}> · 중단됨</span>}
                             </>
