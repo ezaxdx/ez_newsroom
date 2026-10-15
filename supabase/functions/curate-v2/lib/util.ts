@@ -174,11 +174,14 @@ export function checkWindow(t: number | null, start: number, end: number): Windo
 export function calcScheduledRun(days: number[], hourKST: number, beforeOrAt: number): number {
   if (!days || days.length === 0) return beforeOrAt - 7 * 86400000;
   const KST = 9 * 3600000;
+  // KST 달력 기준으로 계산 — hourKST < 9 여도 날짜가 하루 밀리지 않게(UTC 시각으로 setUTCHours 하면 hour<9 에서 전날로 밀림)
+  const kstNow = new Date(beforeOrAt + KST);
+  const kstMidnight = Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate());
   for (let i = 0; i <= 7; i++) {
-    const check = new Date(beforeOrAt - i * 86400000);
-    check.setUTCHours(hourKST - 9, 0, 0, 0);
-    const kstDay = new Date(check.getTime() + KST).getUTCDay();
-    if (days.includes(kstDay) && check.getTime() <= beforeOrAt) return check.getTime();
+    const dayStart = kstMidnight - i * 86400000;                       // 그 날 KST 00:00 (UTC 달력으로 표현)
+    const kstDay = new Date(dayStart).getUTCDay();
+    const runMs = dayStart + hourKST * 3600000 - KST;                  // 그 날 hourKST:00 KST 의 실제 UTC 시각
+    if (days.includes(kstDay) && runMs <= beforeOrAt) return runMs;
   }
   return beforeOrAt - 7 * 86400000;
 }
