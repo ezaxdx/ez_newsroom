@@ -135,8 +135,13 @@ function linkifyEditorial(text: string): string {
   const anchor = (label: string, url: string) =>
     `<a href="${url}" target="_blank" style="color:${C.green};text-decoration:underline;font-family:${FONT_NOTO};">${label}</a>`;
 
+  // 0) 에디터 '링크' 버튼으로 이미 만든 <a>는 그대로 보존 (href 안의 주소가 2)에서 다시 변환되지 않도록)
+  let out = text.replace(/<a\s[^>]*href="(https?:\/\/[^"]+)"[^>]*>([\s\S]*?)<\/a>/gi, (_m, url, label) => {
+    anchors.push(anchor(label, url));
+    return `\u0000${anchors.length - 1}\u0000`;
+  });
   // 1) [문구](url) 먼저 처리하고 자리표시자로 빼둠 — 2)에서 중복 변환되지 않도록
-  let out = text.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, url) => {
+  out = out.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_m, label, url) => {
     anchors.push(anchor(label, url));
     return `\u0000${anchors.length - 1}\u0000`;
   });
@@ -373,22 +378,22 @@ export async function generateNewsletterHTML(data: NewsletterData): Promise<stri
                       <tr>
                         <td style="background:#FFFFFF;border-radius:10px;padding:24px 28px;">
                           ${editorialFlapSrc ? `
-                          <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                          <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                           <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
                           ` : `
                           <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-                          <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                          <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.6;text-align:center;font-family:${FONT_NOTO};">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                           `}
                         </td>
                       </tr>
                     </table>
                     ` : `
                     ${editorialFlapSrc ? `
-                    <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                    <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                     <p style="margin:10px 0 0;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
                     ` : `
                     <p style="margin:0 0 10px;font-size:13px;font-weight:600;color:#888888;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:24px 28px 0;">* EZ LETTER는 AXDX팀에서 발송되었습니다.</p>
-                    <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.85;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
+                    <div style="margin:0;font-size:14px;font-weight:500;color:#000000;line-height:1.6;text-align:center;font-family:${FONT_NOTO};padding:0 28px 24px;">${linkifyEditorial(editorial_text || "이번 호 인사말이 없습니다.").replace(/\n/g, "<br>")}</div>
                     `}
                     `}
                   </td>

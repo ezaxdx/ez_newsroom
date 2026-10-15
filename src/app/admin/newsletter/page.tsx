@@ -516,6 +516,29 @@ export default function NewsletterPage() {
     handleEditorialInput();
   }
 
+  // 선택한 문구(예: 참여하기)에 링크 삽입 — 주소는 화면에 노출되지 않고 문구 클릭 시 해당 주소로 이동
+  function applyEditorialLink() {
+    const sel = restoreEditorialSelection();
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) {
+      alert("링크를 걸 문구를 먼저 드래그로 선택해주세요.");
+      return;
+    }
+    const url = window.prompt("이동할 주소(URL)를 입력하세요", "https://");
+    if (!url || !/^https?:\/\/\S+$/.test(url.trim())) return;
+    const range = sel.getRangeAt(0);
+    const a = document.createElement("a");
+    a.href = url.trim();
+    a.target = "_blank";
+    a.appendChild(range.extractContents());
+    range.insertNode(a);
+    sel.removeAllRanges();
+    const after = document.createRange();
+    after.setStartAfter(a);
+    after.collapse(true);
+    sel.addRange(after);
+    handleEditorialInput();
+  }
+
   // 선택 구간 안에 이미 하이라이트(배경색)가 있는지 — 시작 지점 기준으로 상위 요소를 훑어 판단
   function isEditorialHighlighted(sel: Selection): boolean {
     const root = editorialRef.current;
@@ -1351,6 +1374,12 @@ export default function NewsletterPage() {
                   title="한 번 누르면 칠하고, 이미 칠한 곳을 선택해 다시 누르면 지워집니다"
                   style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: EDITORIAL_HIGHLIGHT_DEFAULT, fontSize: 11, cursor: "pointer", color: "#3a3a3a" }}
                 >형광펜</button>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={applyEditorialLink}
+                  title="문구를 선택한 뒤 누르면 주소를 입력해 링크를 걸 수 있습니다"
+                  style={{ padding: "4px 10px", borderRadius: 4, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-lowest)", fontSize: 11, textDecoration: "underline", cursor: "pointer", color: "var(--on-surface)" }}
+                >🔗 링크</button>
                 <input
                   type="color"
                   defaultValue={EDITORIAL_HIGHLIGHT_DEFAULT}
