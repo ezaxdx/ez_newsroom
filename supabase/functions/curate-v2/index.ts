@@ -6,6 +6,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { runCuration } from "./lib/pipeline.ts";
 import { sendAlert } from "./lib/alert.ts";
+import { sendCompletionSummary } from "./lib/summary.ts";
 import { previewSource } from "./lib/preview.ts";
 import { classifyPending } from "./lib/classify.ts";
 import type { PreviewInput } from "./lib/preview.ts";
@@ -107,6 +108,16 @@ Deno.serve(async (req) => {
       // 마지막 회차의 "시간 초과로 남은 후보" 경고는 pipeline 이 보냄. 그 전에 조건 때문에 멈추면 여기서 알림
       await sendAlert(webhook, { title: "큐레이션 이어서 실행 중단", description: `시간 초과로 ${r.deferred}건이 남았지만 이어서 처리하지 않았습니다: ${stop.join(", ")}`, level: "warning" });
     }
+  }
+
+  // 모든 회차가 끝났을 때(이어서 실행이 더 없을 때) 카테고리별 발행·대기 건수를 한 번 안내
+  if (live && !willContinue && r?.ok && !r.skipped) {
+    const summary = sendCompletionSummary(supabase, webhook, {
+      chainStartedMs: Number(body.chain_started) || reqStart, trigger: typeof body.trigger === "string" ? body.trigger : undefined, chain, deferred: r.deferred ?? 0,
+      window: (result as { window?: { start: string; end: string } } | undefined)?.window,
+    });
+    // @ts-ignore Supabase Edge Runtime 전역
+    if (typeof EdgeRuntime !== "undefined" && EdgeRuntime.waitUntil) EdgeRuntime.waitUntil(summary); else await summary;
   }
 
   // 정기 실행이 끝나면 새로 발행된 콘텐츠를 백그라운드로 품질 감사 — 호출 자체가 실패하면 알림 (이어서 실행이 남았으면 마지막 회차에서)

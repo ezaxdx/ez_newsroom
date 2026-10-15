@@ -817,7 +817,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   }
   if (live) for (const a of alerts) await sendAlert(webhook, a);
 
-  return { ok: true, mode: live ? "live" : "dry", progress: results.published + results.staged + results.skipped, window_end: windowEnd, timings, ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
+  return { ok: true, mode: live ? "live" : "dry", progress: results.published + results.staged + results.skipped, window_end: windowEnd, window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() }, timings, ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
 }
 
 function categoryDefaultImage(category: string): string {
