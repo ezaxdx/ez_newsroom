@@ -131,6 +131,11 @@ async function resolveNewsImage(image_url: string | null, site_url: string): Pro
 //   [원하는 문구](https://...) → 문구에 링크
 //   https://... 만 적으면      → 주소 그대로 노출되며 링크
 function linkifyEditorial(text: string): string {
+  // 에디터(contentEditable)는 엔터·끝 줄에 눈에 안 보이는 <br>/공백을 남기므로, 앞뒤에 붙은 빈 줄은 제거
+  text = text.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+|(?:\s|&nbsp;|<br\s*\/?>)+$/gi, "");
+  // 에디터 HTML은 줄바꿈을 <br>로 표현하고 소스의 \n은 브라우저가 공백으로 무시(에디터엔 안 보임) —
+  // 그대로 두면 아래 호출부의 \n→<br> 변환이 보이지 않던 \n까지 줄바꿈으로 만들어 문단 사이가 한 줄씩 더 벌어짐
+  if (/<(?:br|b|i|span|a|div)\b/i.test(text)) text = text.replace(/\s*\n\s*/g, " ");
   const anchors: string[] = [];
   const anchor = (label: string, url: string) =>
     `<a href="${url}" target="_blank" style="color:${C.green};text-decoration:underline;font-family:${FONT_NOTO};">${label}</a>`;

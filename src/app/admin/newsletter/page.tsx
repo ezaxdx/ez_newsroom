@@ -523,11 +523,18 @@ export default function NewsletterPage() {
       alert("링크를 걸 문구를 먼저 드래그로 선택해주세요.");
       return;
     }
-    const url = window.prompt("이동할 주소(URL)를 입력하세요", "https://");
-    if (!url || !/^https?:\/\/\S+$/.test(url.trim())) return;
+    const input = window.prompt("이동할 주소(URL)를 입력하세요", "https://");
+    if (input === null) return;
+    // https:// 없이 붙여넣어도 동작하도록 보정, 주소에 섞인 공백·줄바꿈은 제거
+    let url = input.replace(/\s+/g, "");
+    if (url && !/^https?:\/\//i.test(url)) url = `https://${url}`;
+    if (!/^https?:\/\/[^/]+\.[^/]+/i.test(url)) {
+      alert("올바른 주소가 아닙니다. 예: https://ezpmp.com/event");
+      return;
+    }
     const range = sel.getRangeAt(0);
     const a = document.createElement("a");
-    a.href = url.trim();
+    a.href = url;
     a.target = "_blank";
     a.appendChild(range.extractContents());
     range.insertNode(a);
