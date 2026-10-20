@@ -133,6 +133,9 @@ async function resolveNewsImage(image_url: string | null, site_url: string): Pro
 function linkifyEditorial(text: string): string {
   // 에디터(contentEditable)는 엔터·끝 줄에 눈에 안 보이는 <br>/공백을 남기므로, 앞뒤에 붙은 빈 줄은 제거
   text = text.replace(/^(?:\s|&nbsp;|<br\s*\/?>)+|(?:\s|&nbsp;|<br\s*\/?>)+$/gi, "");
+  // 제미나이·노션 등에서 복사해 온 <p>는 클라이언트마다 기본 여백(1em)이 달라 미리보기와 수신 메일의 줄 간격이 어긋남 —
+  // 여백을 0으로 고정(문단 사이를 띄우려면 엔터 두 번)하고, 복사 때 딸려온 data-* 속성은 제거
+  text = text.replace(/\sdata-[\w-]+="[^"]*"/gi, "").replace(/<p\b[^>]*>/gi, '<p style="margin:0;">');
   // 에디터 HTML은 줄바꿈을 <br>로 표현하고 소스의 \n은 브라우저가 공백으로 무시(에디터엔 안 보임) —
   // 그대로 두면 아래 호출부의 \n→<br> 변환이 보이지 않던 \n까지 줄바꿈으로 만들어 문단 사이가 한 줄씩 더 벌어짐
   if (/<(?:br|b|i|span|a|div)\b/i.test(text)) text = text.replace(/\s*\n\s*/g, " ");
