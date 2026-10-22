@@ -120,7 +120,7 @@ export async function resolveNewsImage(image_url: string | null, site_url: strin
     : await isImageReachable(image_url);
   if (!reachable) return null;
   // 미리보기/발송 모두 프록시 경유 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
-  return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}`;
+  return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}&v=2`;   // v: 예전에 저장된 대체 이미지(캐시)를 피하는 버전 값
 }
 
 // 인사말에 적은 링크를 이메일에서 클릭 가능하게 변환.

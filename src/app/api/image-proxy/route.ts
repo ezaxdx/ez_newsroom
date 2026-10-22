@@ -19,13 +19,19 @@ async function fallbackLogoResponse(): Promise<NextResponse> {
     status: 200,
     headers: {
       "Content-Type": "image/png",
-      "Cache-Control": "public, max-age=86400",
+      // 일시적인 실패로 만든 대체 이미지가 브라우저·CDN에 하루 동안 저장되면 사이트가 정상으로 돌아와도 로고가 계속 보이므로 저장하지 않음
+      "Cache-Control": "no-store",
       "Access-Control-Allow-Origin": "*",
     },
   });
 }
 
-const fetchImage = (url: string) => fetchRemoteImage(url);
+// 처음 요청이 느려 실패하는 경우가 있어 한 번 더 시도
+async function fetchImage(url: string): Promise<Response | null> {
+  return (await fetchRemoteImage(url)) ?? (await fetchRemoteImage(url));
+}
+
+export const maxDuration = 30;   // 시도 2회(각 8초) + 여유
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
