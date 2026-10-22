@@ -14,7 +14,8 @@ import { fetchRemoteImage } from "@/lib/fetch-remote-image";
  * 거치는 뉴스레터 이미지가 그대로 깨진 이미지 아이콘으로 보임
  */
 async function fallbackLogoResponse(): Promise<NextResponse> {
-  const buffer = await readFile(path.join(process.cwd(), "public", "ez-fallback.png"));
+  // 뉴스레터 카드(255x129) 비율에 맞춘 "EZ Letter" 자리표시 — 회사 로고(ez-fallback.png)를 카드에 꽉 채우면 옆으로 늘어나 보였음
+  const buffer = await readFile(path.join(process.cwd(), "public", "images", "ez-letter-placeholder.png"));
   return new NextResponse(buffer, {
     status: 200,
     headers: {

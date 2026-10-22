@@ -92,23 +92,22 @@ function sectionDivider(title: string): string {
 }
 
 // ── 외부 이미지 → 프록시 URL 변환 ────────────────────────
-// 원본이 실제로 접근 가능한지 생성 시점에 먼저 확인함 — image-proxy가 실패 시
-// EZPMP 로고로 대체해주긴 하지만, 그 대체 이미지를 "실제 사진" 자리(255x129,
-// 꽉 채워 늘리는 스타일)에 그대로 넣으면 로고가 옆으로 늘어나 크게 보임.
-// 여기서 미리 걸러서 실패하면 null을 반환해 "이미지 없음"(작게 중앙 배치) 스타일로
-// 렌더링되게 함 — image-proxy의 대체 로직은 그래도 만약을 위한 마지막 안전망으로 유지
+// 이미지는 항상 image-proxy를 거쳐 넣음. 생성 시점의 접근 확인은 "실패 기록(IMG_FALLBACK 표식·디스코드 경고)"용일 뿐
+// 이미지를 빼는 데 쓰지 않음 — 서버 인스턴스마다 나가는 IP가 달라, 생성 서버에서는 막혔는데 메일을 열 때
+// 프록시 서버에서는 정상으로 가져와지는 경우가 실제로 있었음(ekn.kr). 프록시도 실패하면 카드 비율에 맞춘
+// "EZ Letter" 자리표시 이미지를 돌려주므로(저장 안 함) 이미지 없음 처리와 같은 모양으로 보임
 async function isImageReachable(url: string): Promise<boolean> {
-  // 이미지 프록시와 같은 요청(헤더·Referer)으로 확인 — 확인 단계만 막혀 로고로 대체되는 불일치 방지. 한 번 실패하면 한 번 더 시도(처음 호출이 느린 사이트 대응)
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const res = await fetchRemoteImage(url, 8000);
-    if (res) { void res.body?.cancel().catch(() => {}); return true; }
-  }
+  // 이미지 프록시와 같은 요청(헤더·Referer)으로 확인
+  const res = await fetchRemoteImage(url, 8000);
+  if (res) { void res.body?.cancel().catch(() => {}); return true; }
   return false;
 }
 
-export async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {
-  if (!image_url) return null;
-  if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
+export type ResolvedImage = { src: string | null; reachable: boolean };
+
+export async function resolveNewsImage(image_url: string | null, site_url: string): Promise<ResolvedImage> {
+  if (!image_url) return { src: null, reachable: false };
+  if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return { src: image_url, reachable: true };
 
   // 언론사 자체 Next.js 이미지 리사이저(/_next/image?url=...)는 클라우드 IP를 차단하는
   // 경우가 있음(news1.kr에서 실제 확인) — 원본이 살아있어도 리사이저만 막혀서 여기서
@@ -118,9 +117,8 @@ export async function resolveNewsImage(image_url: string | null, site_url: strin
   const reachable = unwrapped
     ? (await isImageReachable(unwrapped)) || (await isImageReachable(image_url))
     : await isImageReachable(image_url);
-  if (!reachable) return null;
   // 미리보기/발송 모두 프록시 경유 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
-  return `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}&v=2`;   // v: 예전에 저장된 대체 이미지(캐시)를 피하는 버전 값
+  return { src: `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}&v=2`, reachable };   // v: 예전에 저장된 대체 이미지(캐시)를 피하는 버전 값
 }
 
 // 인사말에 적은 링크를 이메일에서 클릭 가능하게 변환.
@@ -167,10 +165,10 @@ function newsDeepLink(id: string, site_url: string): string {
 // max-width:255px로 그 이상 커지지만 않게 캡을 씌우므로, 좁은 화면에서는 부모와 함께 비례로 줄어든다
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<string> {
-  const proxied = await resolveNewsImage(item.image_url, site_url);
+  const { src: proxied, reachable } = await resolveNewsImage(item.image_url, site_url);
   // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
   const img = proxied
-    ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+    ? `${reachable ? "" : `<!--IMG_FALLBACK:${item.id}-->`}<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
            <img src="${proxied}" alt="" width="100%" height="129"
                 style="display:block;width:100%;height:129px;border:0;">
@@ -199,10 +197,10 @@ async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<
 
 // ── Pick 행사 카드 ────────────────────────────────────────
 async function pickCard(ev: EventCard, vol: number, site_url: string): Promise<string> {
-  const proxied = await resolveNewsImage(ev.image_url ?? null, site_url);
+  const { src: proxied, reachable } = await resolveNewsImage(ev.image_url ?? null, site_url);
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
-    ? `<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
+    ? `${reachable ? "" : `<!--IMG_FALLBACK:${ev.name}-->`}<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
            <img src="${proxied}" width="100%" height="129" alt=""
                 style="display:block;width:100%;height:129px;border:0;">
