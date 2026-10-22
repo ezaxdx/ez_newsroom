@@ -106,7 +106,7 @@ async function isImageReachable(url: string): Promise<boolean> {
   return false;
 }
 
-async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {
+export async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {
   if (!image_url) return null;
   if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return image_url;
 
