@@ -155,7 +155,8 @@ alter table public.curation_settings
   add column if not exists newsletter_footer_banner jsonb default '{}',
   add column if not exists category_hints    jsonb default '{}',     -- AI 카테고리 판단 시 참고 키워드 {MICE:{strong:[],weak:[]}, ...}
   add column if not exists category_examples jsonb default '[]',     -- 관리자가 고친 카테고리 사례 [{title, category}] — few-shot 예시
-  add column if not exists level_examples    jsonb default '[]';     -- 관리자가 고친 레벨 사례 [{title, level}] — few-shot 예시
+  add column if not exists level_examples    jsonb default '[]',     -- 관리자가 고친 레벨 사례 [{title, level}] — few-shot 예시
+  add column if not exists fit_examples      jsonb default '[]';     -- 관리자 적합성 판정 사례 [{title, fit, note, kind(good|bad|manual), at}] — judgeFit few-shot 예시
 
 -- ── convention_events ─────────────────────────────────────────────────
 create table if not exists public.convention_events (
@@ -282,7 +283,7 @@ create table if not exists public.news_original_text (
 create table if not exists public.curation_seen (
   url_key       text primary key,       -- 정규화한 URL
   original_url  text,
-  reason        text not null,          -- too_old|too_short|low_score|low_fit|duplicate|off_topic|fetch_failed
+  reason        text not null,          -- too_old|too_short|low_score|low_fit|duplicate|off_topic|fetch_failed|admin_rejected(보드에서 부적합 표시)
   source_name   text,
   title         text,
   seen_at       timestamptz default now()

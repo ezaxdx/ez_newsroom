@@ -7,8 +7,8 @@ import {
 import {
   calcScheduledRun, checkWindow, hostOf, isSameStory, mapPool, normalizeUrl, normTitle, parseDateLoose, sleep, StoryIndex, STORY_SIM_ASK, STORY_SIM_SAME, storyDice, storyProfile, toISO, withTimeout,
 } from "./util.ts";
-import type { CatSetting } from "./ai.ts";
-import { buildHintBlock, canonicalDomain, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
+import type { CatSetting, FitAnchor } from "./ai.ts";
+import { buildHintBlock, canonicalDomain, FIT_ANCHORS, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
 
 /* ───────── 타입 ───────── */
@@ -182,6 +182,19 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     const { data: lv, error: lvErr } = await supabase.from("curation_settings").select("level_examples").limit(1).single();
     if (!lvErr && Array.isArray(lv?.level_examples)) levelExamples = lv.level_examples;
   } catch { /* level_examples 컬럼 없음 — 사례 없이 진행 */ }
+  // 관리자 적합성 판정 사례(보드의 좋은 기사·부적합 표시, 직접 작성 기사) — 기본 예시 12건 앞에 최신순으로 붙임.
+  // 적합/부적합 각각 최대 15건만 넣어 한쪽으로 쏠리지 않게 함. 컬럼이 없으면(11_fit_examples.sql 실행 전) 기본 예시만 사용
+  let fitAnchors: FitAnchor[] = FIT_ANCHORS;
+  try {
+    const { data: fx, error: fxErr } = await supabase.from("curation_settings").select("fit_examples").limit(1).single();
+    if (!fxErr && Array.isArray(fx?.fit_examples) && fx.fit_examples.length) {
+      const list = fx.fit_examples as { title: string; fit: number; note?: string; kind: string }[];
+      const pick = (bad: boolean) => list.filter((e) => (e.kind === "bad") === bad).slice(0, 15).map((e) => ({ title: e.title, fit: e.fit, note: e.note }));
+      const admin = [...pick(false), ...pick(true)];
+      const adminTitles = new Set(admin.map((a) => a.title));
+      fitAnchors = [...admin, ...FIT_ANCHORS.filter((a) => !adminTitles.has(a.title))];
+    }
+  } catch { /* fit_examples 컬럼 없음 — 기본 예시만 */ }
   const focusKeywords: string[] = (settings?.focus_keywords?.length ? settings.focus_keywords : DEFAULT_FOCUS).map((k: string) => k.toLowerCase());
   const domainExamples: { title: string; business_domains: string[] }[] = Array.isArray(settings?.business_domain_examples) ? settings.business_domain_examples : [];
   const qualityNotes: string[] = Array.isArray(settings?.content_quality_notes) ? settings.content_quality_notes : [];
@@ -628,7 +641,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       out.push(c); return;
     }
     if (!calibrated) { out.push(c); return; }   // v1 프롬프트 모드: 작성 호출의 fit 을 그대로 씀
-    const j = await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/") });
+    const j = await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/"), fitAnchors });
     if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `적합성 판정 실패: ${j.error}` }); return; }
     judgedMap.set(c, { fit: j.fit, reason: j.reason });
     if (j.fit < FIT_DISCARD) {

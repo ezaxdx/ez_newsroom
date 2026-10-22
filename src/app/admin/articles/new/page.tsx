@@ -41,6 +41,13 @@ const EMPTY: ArticleFields = {
 /* ── 레벨 메타 ── */
 const LEVELS = ["Beginner", "Intermediate", "Advanced"] as const;
 
+// curation_seen.reason → 관리자에게 보여줄 말 (자동 큐레이션이 원문을 버린 사유)
+const COLLECT_REASON_LABEL: Record<string, string> = {
+  too_old: "발행 기간이 지남", too_short: "본문이 너무 짧음", fetch_failed: "원문을 못 읽음",
+  low_score: "품질 점수 낮음", low_fit: "적합성 낮음", duplicate: "중복 기사", off_topic: "주제 무관",
+  admin_rejected: "관리자가 부적합 표시",
+};
+
 const LEVEL_META: Record<string, {
   label: string;
   color: string;
@@ -298,6 +305,7 @@ export default function NewArticlePage() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [collect, setCollect] = useState<{ status: "discarded" | "no_source"; reason?: string; host: string } | null>(null);
 
   const update = (partial: Partial<ArticleFields>) =>
     setFields((prev) => ({ ...prev, ...partial }));
@@ -349,7 +357,9 @@ export default function NewArticlePage() {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "저장 실패");
       setSaved(true);
-      setTimeout(() => router.push("/admin"), 1200);
+      // 자동 큐레이션이 이 원문을 왜 못 가져왔는지 알려줄 게 있으면 보드로 바로 넘기지 않고 안내를 보여줌
+      if (json.collect && json.collect.status !== "has_source") setCollect(json.collect);
+      else setTimeout(() => router.push("/admin"), 1200);
     } catch (e: unknown) {
       setSaveError(e instanceof Error ? e.message : "저장 실패");
     } finally {
@@ -539,6 +549,25 @@ export default function NewArticlePage() {
             {saveError && (
               <p className="m-0 text-xs" style={{ color: "#dc2626" }}>{saveError}</p>
             )}
+          </div>
+        )}
+
+        {collect && (
+          <div className="mt-4 p-4 rounded-lg text-sm" style={{ background: "var(--surface-container-low)", border: "1px solid var(--surface-container-highest)", color: "var(--on-surface)" }}>
+            <p className="m-0 mb-1 font-semibold">{fields.category === "EZPMP" ? "저장됐습니다" : "이 기사는 좋은 기사 예시로 학습됐습니다"}</p>
+            <p className="m-0 mb-3 text-xs" style={{ color: "var(--on-surface-variant)" }}>
+              {collect.status === "discarded"
+                ? `자동 큐레이션이 이 원문을 수집했지만 "${COLLECT_REASON_LABEL[collect.reason ?? ""] ?? collect.reason}" 사유로 버렸습니다. 이번 학습으로 비슷한 기사는 앞으로 덜 버려지게 됩니다.`
+                : `이 매체(${collect.host})를 직접 수집하는 소스가 없습니다. 키워드 검색으로 잡히지 않으면 비슷한 기사도 수집되지 않으니, 자주 쓰는 매체라면 소스 관리에서 추가해 주세요.`}
+            </p>
+            <div className="flex gap-2">
+              <button onClick={() => router.push("/admin")} className="h-9 px-4 rounded-md text-xs font-semibold"
+                style={{ background: "var(--primary)", color: "var(--on-primary)", border: "none", cursor: "pointer" }}>큐레이션 보드로</button>
+              {collect.status === "no_source" && (
+                <button onClick={() => router.push("/admin/rss")} className="h-9 px-4 rounded-md text-xs font-semibold"
+                  style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>소스 관리로</button>
+              )}
+            </div>
           </div>
         )}
       </div>

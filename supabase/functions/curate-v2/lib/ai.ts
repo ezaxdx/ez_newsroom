@@ -74,8 +74,9 @@ export const FIT_ANCHORS: { title: string; fit: number }[] = [
  * 기사 작성 호출에는 넣지 않음: 작성 호출은 시스템 지침(회사 소개)이 "사업과 연결해서 분석하라"고 시키기 때문에
  * AI가 어떤 기사든 "이즈피엠피 AXDX 사업과 연결된다"고 합리화해서 적합성을 후하게 주는 문제가 확인됨 (판정 12건 중 4건 오판).
  */
-export function fitRubricText(fitAnchors: { title: string; fit: number }[] = FIT_ANCHORS): string {
-  const anchors = fitAnchors.map((a) => `  · "${a.title}" → fit ${a.fit}`).join("\n");
+export type FitAnchor = { title: string; fit: number; note?: string };
+export function fitRubricText(fitAnchors: FitAnchor[] = FIT_ANCHORS): string {
+  const anchors = fitAnchors.map((a) => `  · "${a.title}" → fit ${a.fit}${a.note ? ` (관리자 사유: ${a.note})` : ""}`).join("\n");
   return `fit(적합성) 기준 — 이 뉴스룸(MICE·관광·AI 업계 실무자 대상)에 실을 가치가 있는가. 기사 소재가 아니라 "독자 실무와의 접점"으로 판단하세요.
   판정 방법: 먼저 fit_reason 에 "이 기사가 독자(MICE·관광·AI 실무자)의 어떤 업무와 닿는지"를 한 줄로 쓰고(닿는 업무가 없으면 "없음"), 그에 맞춰 fit 점수를 정하세요. 업무와의 연결이 한 줄로 설명되지 않거나 억지스러우면 5점 이하입니다. 기사에 "AI"나 "관광" 단어가 있다는 것만으로 높은 점수를 주지 마세요. 우리 회사 사업과 연결 지으려 애쓰지 말고, 독자에게 유용한지만 보세요.
   7~10 (꼭 실음):
@@ -203,7 +204,7 @@ ${i.text.slice(0, 5000)}`;
 
 export type FitJudgement = { ok: true; fit: number; reason: string } | { ok: false; error: string };
 /** 적합성 판정 전용 짧은 호출 — 회사 소개(시스템 지침) 없이, 편집장 입장에서 "이 뉴스룸에 실을 기사인가"만 판단 */
-export async function judgeFit(i: { apiKey: string; title: string; text: string; category: string; fitAnchors?: { title: string; fit: number }[] }): Promise<FitJudgement> {
+export async function judgeFit(i: { apiKey: string; title: string; text: string; category: string; fitAnchors?: FitAnchor[] }): Promise<FitJudgement> {
   const prompt = `당신은 MICE·관광·AI 업계 실무자를 위한 뉴스룸의 편집장입니다. 아래 기사를 이 뉴스룸에 실을지 판정하세요.
 
 ${fitRubricText(i.fitAnchors)}

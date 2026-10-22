@@ -5,7 +5,7 @@ import type React from "react";
 import { useRouter } from "next/navigation";
 import {
   GripVertical, Eye, EyeOff, ArrowUp, ArrowDown, Trash2,
-  ExternalLink, Sparkles, Loader2, RefreshCw, TrendingUp, Pencil, X,
+  ExternalLink, Sparkles, Loader2, RefreshCw, TrendingUp, Pencil, X, ThumbsUp, ThumbsDown,
 } from "lucide-react";
 import { NewsItem } from "@/lib/types";
 import { calcLastScheduledRun } from "@/lib/schedule";
@@ -215,6 +215,34 @@ export default function CurationBoard({
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeletedIds((prev) => [...prev, id]);
   };
+
+  // ── 적합성 학습 표시 — 좋은 기사(적합 예시로 쌓기) / 부적합(사유와 함께 예시로 쌓고 재수집 차단 후 삭제) ──
+  // 일반 삭제와 달리 다음 큐레이션의 적합성 판정에 반영됨. 서버에 바로 저장(“변경사항 저장” 불필요)
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [rejectItem, setRejectItem] = useState<NewsItem | null>(null);
+  const [fitBusy, setFitBusy] = useState(false);
+  const [fitError, setFitError] = useState("");
+  const sendFitFeedback = async (id: string, verdict: "good" | "bad", reason?: string) => {
+    setFitBusy(true); setFitError("");
+    try {
+      const res = await fetch("/api/admin/news/fit-feedback", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, verdict, reason }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error ?? "저장 실패");
+      if (verdict === "good") setLikedIds((prev) => new Set(prev).add(id));
+      else { setItems((prev) => prev.filter((i) => i.id !== id)); setRejectItem(null); }
+      return true;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "저장 실패";
+      if (verdict === "good") alert(msg); else setFitError(msg);
+      return false;
+    } finally {
+      setFitBusy(false);
+    }
+  };
+  const markGood = (item: NewsItem) => { if (!likedIds.has(item.id)) void sendFitFeedback(item.id, "good"); };
 
   // ── 기사 편집 (제목/요약/시사점/이미지 + 카테고리·레벨) — 편집 진입점을 이 창 하나로 모음 ──
   const [editingItem, setEditingItem] = useState<NewsItem | null>(null);
@@ -634,6 +662,9 @@ export default function CurationBoard({
                         onRemove={remove}
                         onRepublish={republish}
                         onEdit={openEdit}
+                  onMarkGood={markGood}
+                  onReject={(it) => { setFitError(""); setRejectItem(it); }}
+                  liked={likedIds.has(item.id)}
                   onPatch={patchItem}
                         LEVEL_STYLE={LEVEL_STYLE}
                       />
@@ -657,6 +688,9 @@ export default function CurationBoard({
                   onRemove={remove}
                   onRepublish={republish}
                   onEdit={openEdit}
+                  onMarkGood={markGood}
+                  onReject={(it) => { setFitError(""); setRejectItem(it); }}
+                  liked={likedIds.has(item.id)}
                   onPatch={patchItem}
                   LEVEL_STYLE={LEVEL_STYLE}
                   selected={tab === "staging" ? selectedIds.has(item.id) : undefined}
@@ -701,6 +735,9 @@ export default function CurationBoard({
                     onRemove={remove}
                     onRepublish={republish}
                     onEdit={openEdit}
+                  onMarkGood={markGood}
+                  onReject={(it) => { setFitError(""); setRejectItem(it); }}
+                  liked={likedIds.has(item.id)}
                   onPatch={patchItem}
                     LEVEL_STYLE={LEVEL_STYLE}
                   />
@@ -746,6 +783,65 @@ export default function CurationBoard({
           onSave={saveEdit}
         />
       )}
+
+      {rejectItem && (
+        <RejectFitModal
+          item={rejectItem}
+          busy={fitBusy}
+          error={fitError}
+          onCancel={() => { setRejectItem(null); setFitError(""); }}
+          onConfirm={(reason) => void sendFitFeedback(rejectItem.id, "bad", reason)}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── 부적합 표시 모달 — 사유를 골라 학습 예시로 남김 ── */
+const REJECT_REASONS = ["주제 무관", "너무 일반적인 소식", "홍보성·광고성", "독자 업무와 거리 멂", "특정 산업 전용"];
+function RejectFitModal({ item, busy, error, onCancel, onConfirm }: {
+  item: NewsItem; busy: boolean; error: string;
+  onCancel: () => void; onConfirm: (reason: string) => void;
+}) {
+  const [reason, setReason] = useState(REJECT_REASONS[0]);
+  const [custom, setCustom] = useState("");
+  const finalReason = reason === "직접 입력" ? custom.trim() : reason;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(0,0,0,0.35)" }} onClick={onCancel}>
+      <div className="w-full max-w-md rounded-xl p-5" style={{ background: "var(--surface-container-lowest)" }} onClick={(e) => e.stopPropagation()}>
+        <p className="font-bold text-sm m-0 mb-1" style={{ color: "var(--on-surface)" }}>부적합으로 표시</p>
+        <p className="text-xs m-0 mb-3 truncate" style={{ color: "var(--on-surface-variant)" }}>{item.title}</p>
+        <p className="text-xs m-0 mb-2" style={{ color: "var(--on-surface-variant)" }}>
+          이 기사는 삭제되고, 제목과 사유가 다음 큐레이션의 적합성 판정 예시로 들어갑니다. 같은 기사는 다시 수집되지 않습니다.
+          (중복·오류라서 지우는 거라면 일반 삭제를 쓰세요 — 학습되지 않습니다)
+        </p>
+        <div className="flex flex-wrap gap-1.5 mb-3">
+          {[...REJECT_REASONS, "직접 입력"].map((r) => (
+            <button key={r} onClick={() => setReason(r)}
+              className="px-2.5 py-1 rounded-full text-[0.72rem] font-semibold"
+              style={{
+                border: "1px solid var(--surface-container-highest)", cursor: "pointer",
+                background: reason === r ? "var(--on-surface)" : "transparent",
+                color: reason === r ? "var(--surface-container-lowest)" : "var(--on-surface-variant)",
+              }}>{r}</button>
+          ))}
+        </div>
+        {reason === "직접 입력" && (
+          <input value={custom} onChange={(e) => setCustom(e.target.value)} maxLength={80} placeholder="예: 대학 홍보 기사"
+            className="w-full text-sm mb-3"
+            style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--surface-container-high)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
+        )}
+        {error && <p className="text-xs m-0 mb-2" style={{ color: "#b91c1c" }}>{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="px-3 py-1.5 rounded-md text-xs font-semibold"
+            style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>취소</button>
+          <button onClick={() => onConfirm(finalReason)} disabled={busy || !finalReason}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold"
+            style={{ background: "#dc2626", color: "#fff", border: "none", cursor: busy || !finalReason ? "default" : "pointer", opacity: busy || !finalReason ? 0.6 : 1 }}>
+            {busy && <Loader2 size={12} className="animate-spin" />} 부적합으로 표시
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -924,9 +1020,12 @@ function EditArticleModal({
 function ArticleCard({
   item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
-  onTogglePublish, onMove, onRemove, onRepublish, onEdit, onPatch,
+  onTogglePublish, onMove, onRemove, onRepublish, onEdit, onPatch, onMarkGood, onReject, liked,
   LEVEL_STYLE, selected, onToggleSelect,
 }: {
+  onMarkGood: (item: NewsItem) => void;
+  onReject: (item: NewsItem) => void;
+  liked: boolean;
   item: NewsItem;
   idx: number;
   tab: Tab;
@@ -1116,7 +1215,22 @@ function ArticleCard({
           <Pencil size={14} style={{ color: "var(--on-surface-variant)" }} />
         </button>
 
-        <button title="삭제" onClick={() => onRemove(item.id)}
+        {item.category !== "EZPMP" && (
+          <>
+            <button title={liked ? "좋은 기사로 학습됨" : "좋은 기사 — 이런 기사를 더 뽑도록 학습"} onClick={() => onMarkGood(item)}
+              className="p-1.5 rounded hover:bg-[--surface-container-high] transition-colors"
+              style={{ background: liked ? "rgba(22,163,74,0.12)" : "transparent", border: "none", cursor: liked ? "default" : "pointer" }}>
+              <ThumbsUp size={14} style={{ color: liked ? "#16a34a" : "var(--on-surface-variant)" }} />
+            </button>
+            <button title="부적합 — 사유와 함께 학습하고 삭제 (다시 수집 안 됨)" onClick={() => onReject(item)}
+              className="p-1.5 rounded hover:bg-[--surface-container-high] transition-colors"
+              style={{ background: "transparent", border: "none", cursor: "pointer" }}>
+              <ThumbsDown size={14} style={{ color: "var(--on-surface-variant)" }} />
+            </button>
+          </>
+        )}
+
+        <button title="삭제 (중복·오류용 — 학습되지 않음)" onClick={() => onRemove(item.id)}
           className="p-1.5 rounded hover:bg-red-50 transition-colors"
           style={{ background: "transparent", border: "none", cursor: "pointer" }}>
           <Trash2 size={14} style={{ color: "#dc2626" }} />

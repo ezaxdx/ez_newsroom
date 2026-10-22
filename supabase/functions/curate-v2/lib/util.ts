@@ -12,7 +12,8 @@ export function decodeEntities(s: string): string {
     .replace(/&gt;/g, ">").replace(/&nbsp;/g, " ").replace(/&amp;/g, "&");
 }
 
-/* ── URL 정규화 — 같은 기사의 표기 차이(http/https, m., amp, 추적 파라미터)를 지움 ── */
+/* ── URL 정규화 — 같은 기사의 표기 차이(http/https, m., amp, 추적 파라미터)를 지움 ──
+   앱 쪽 복사본 src/lib/normalize-url.ts 와 같은 결과여야 함 (관리자 부적합 표시가 curation_seen.url_key 로 씀) */
 const TRACKING_PARAM = /^(utm_|fbclid|gclid|mc_|ncid|spm|share|fromrss|trackingcode)/i;
 export function normalizeUrl(raw: string): string {
   let s = (raw || "").trim();

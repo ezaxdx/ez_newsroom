@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { requireAdmin } from "@/lib/admin-auth";
+import { addFitExample } from "@/lib/fit-examples";
+import { normalizeUrl } from "@/lib/normalize-url";
 
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
@@ -76,5 +78,22 @@ export async function POST(req: NextRequest) {
     }).catch(() => {});
   }
 
-  return NextResponse.json({ data });
+  // 직접 작성한 기사 = 관리자가 "실을 만하다"고 고른 기사 → 적합성 판정 예시로 쌓음 (이즈픽은 판정 면제라 제외)
+  // 실패해도 저장 자체는 성공이므로 응답을 막지 않음
+  if (body.category !== "EZPMP" && body.title) {
+    await addFitExample(supabase, { title: body.title, kind: "manual" }).catch(() => null);
+  }
+
+  return NextResponse.json({ data, collect: body.original_url ? await diagnoseCollection(supabase, body.original_url) : null });
+}
+
+// 이 원문을 자동 큐레이션이 왜 못 가져왔는지 — 수집은 됐는데 AI가 버렸는지(discarded), 그 매체를 보는 소스가 아예 없는지(no_source)
+async function diagnoseCollection(supabase: SupabaseClient, originalUrl: string) {
+  const key = normalizeUrl(originalUrl);
+  const host = key.split("/")[0] ?? "";
+  const { data: seen } = await supabase.from("curation_seen").select("reason").eq("url_key", key).maybeSingle();
+  if (seen) return { status: "discarded" as const, reason: seen.reason as string, host };
+  const { data: sources } = await supabase.from("rss_sources").select("url").eq("is_active", true);
+  const hasSource = (sources ?? []).some((s) => normalizeUrl(s.url).split("/")[0] === host);
+  return { status: hasSource ? ("has_source" as const) : ("no_source" as const), host };
 }
