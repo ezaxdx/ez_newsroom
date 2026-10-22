@@ -1,4 +1,5 @@
 import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
+import { fetchRemoteImage } from "@/lib/fetch-remote-image";
 
 export type NewsCard = {
   id: string;
@@ -97,17 +98,12 @@ function sectionDivider(title: string): string {
 // 여기서 미리 걸러서 실패하면 null을 반환해 "이미지 없음"(작게 중앙 배치) 스타일로
 // 렌더링되게 함 — image-proxy의 대체 로직은 그래도 만약을 위한 마지막 안전망으로 유지
 async function isImageReachable(url: string): Promise<boolean> {
-  try {
-    const res = await fetch(url, {
-      headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36" },
-      signal: AbortSignal.timeout(5000),
-    });
-    if (!res.ok) return false;
-    const contentType = res.headers.get("content-type") ?? "";
-    return contentType.startsWith("image/");
-  } catch {
-    return false;
+  // 이미지 프록시와 같은 요청(헤더·Referer)으로 확인 — 확인 단계만 막혀 로고로 대체되는 불일치 방지. 한 번 실패하면 한 번 더 시도(처음 호출이 느린 사이트 대응)
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const res = await fetchRemoteImage(url, 8000);
+    if (res) { void res.body?.cancel().catch(() => {}); return true; }
   }
+  return false;
 }
 
 async function resolveNewsImage(image_url: string | null, site_url: string): Promise<string | null> {

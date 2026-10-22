@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
 import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
+import { fetchRemoteImage } from "@/lib/fetch-remote-image";
 
 /**
  * 외부 이미지 프록시
@@ -24,40 +25,7 @@ async function fallbackLogoResponse(): Promise<NextResponse> {
   });
 }
 
-async function fetchImage(url: string): Promise<Response | null> {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return null;
-  }
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
-
-  try {
-    // Referer: 이미지 원본 도메인으로 설정 → 핫링크 보호 우회
-    const referer = `${parsed.protocol}//${parsed.host}/`;
-    const response = await fetch(url, {
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
-        "Referer": referer,
-        "sec-fetch-dest": "image",
-        "sec-fetch-mode": "no-cors",
-        "sec-fetch-site": "same-site",
-      },
-      signal: AbortSignal.timeout(8000),
-    });
-    if (!response.ok) return null;
-    const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.startsWith("image/")) return null;
-    return response;
-  } catch (err) {
-    console.error("[image-proxy] fetch error:", url, err);
-    return null;
-  }
-}
+const fetchImage = (url: string) => fetchRemoteImage(url);
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
