@@ -13,11 +13,11 @@ const toNewsCard = (n: RawNews): NewsCard => ({ id: n.id, title: n.title, summar
 
 /** 큐레이션 라이브 범위(최근 실행 이후) — 안 씌우면 아카이브된 옛 기사가 display_order 낮은 값으로 계속 뽑힘 */
 export async function liveRangeStart(supabase: SupabaseClient): Promise<string> {
-  const { data } = await supabase.from("curation_settings").select("auto_schedule").limit(1).single();
+  const { data } = await supabase.from("curation_settings").select("auto_schedule, active_curation_window").limit(1).single();
   const schedule = data?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
-  return schedule.enabled && schedule.days?.length > 0
+  return data?.active_curation_window ?? (schedule.enabled && schedule.days?.length > 0
     ? calcLastScheduledRun(schedule.days, schedule.hour ?? 9).toISOString()
-    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 }
 
 export type NewsSections = { mice: NewsCard[]; tourism: NewsCard[]; ai: NewsCard[]; ezpmp: NewsCard[] };

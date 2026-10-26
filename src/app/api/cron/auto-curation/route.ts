@@ -85,8 +85,7 @@ export async function GET(req: Request) {
   if (alreadyRan) {
     return NextResponse.json({ skipped: `already ran today (day=${dayKST})` });
   }
-  // Edge Function 호출 — await으로 요청 전송을 보장하되 8초 내 응답 없으면 포기
-  // (Supabase Edge Function은 클라이언트 연결 끊겨도 계속 실행됨)
+  // Edge Function이 DB 작업 접수 후 202를 반환하는지 확인한다.
   // curate-v2 는 기본이 시험 실행(저장 안 함) — 정기 실행은 live: true 를 명시
   const edgeFnUrl = `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/curate-v2`;
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY ?? "";
@@ -100,16 +99,20 @@ export async function GET(req: Request) {
         "X-Cron-Secret": process.env.CRON_SECRET ?? "",
       },
       body: JSON.stringify({ live: true, trigger: "cron" }),
-      signal: AbortSignal.timeout(50000),
+      signal: AbortSignal.timeout(15000),
     });
-    // 보통 실행은 2분 넘게 걸려 여기까지 응답이 오지 않음(아래 catch 의 타임아웃). 50초 안에 응답이 왔다면 거의 실패 — 알림
+    // 접수 실패를 정상 실행으로 숨기지 않는다.
     if (!res.ok) {
       const body = (await res.text().catch(() => "")).slice(0, 300);
       await sendDiscordAlert({ title: "정기 큐레이션 실행 실패", description: `curate-v2 가 HTTP ${res.status} 로 응답했습니다. ${body}`, level: "error" });
       return NextResponse.json({ ok: false, status: res.status, message: "큐레이션 시작 실패" }, { status: 502 });
     }
-  } catch {
-    // 50초 안에 응답이 없으면 Edge Function 이 정상적으로 계속 실행 중(클라이언트 연결이 끊겨도 계속 실행됨) — 무시
+    const accepted = await res.json();
+    if (accepted.skipped) return NextResponse.json(accepted);
+    if (res.status !== 202 || !accepted.batch_id) throw new Error("작업 접수 응답이 올바르지 않습니다.");
+  } catch (e) {
+    await sendDiscordAlert({ title: "정기 큐레이션 접수 확인 실패", description: (e as Error).message, level: "error" });
+    return NextResponse.json({ ok: false, message: "큐레이션 접수를 확인하지 못했습니다." }, { status: 502 });
   }
 
   return NextResponse.json({ ok: true, message: "큐레이션 시작됨" });

@@ -91,14 +91,14 @@ async function fetchPageSettings(): Promise<{ navCategories: string[]; lastRunIS
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("nav_categories, auto_schedule")
+      .select("nav_categories, auto_schedule, active_curation_window")
       .limit(1)
       .single();
     const navCategories = data?.nav_categories?.length ? data.nav_categories : DEFAULT_NAV_CATEGORIES;
     const schedule = data?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
-    const lastRunISO = schedule.enabled && schedule.days?.length > 0
+    const lastRunISO = data?.active_curation_window ?? (schedule.enabled && schedule.days?.length > 0
       ? calcLastScheduledRun(schedule.days, schedule.hour ?? 9).toISOString()
-      : fallbackISO;
+      : fallbackISO);
     return { navCategories, lastRunISO };
   } catch { /* fallback */ }
   return { navCategories: DEFAULT_NAV_CATEGORIES, lastRunISO: fallbackISO };

@@ -14,11 +14,6 @@ export async function POST() {
   const cronSecret = process.env.CRON_SECRET ?? "";
 
   try {
-    // fire-and-forget: Edge Function 응답을 기다리지 않고 즉시 반환
-    // (150초 파이프라인 동안 Vercel 함수가 대기할 필요 없음)
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 55000); // 55초 후 abort
-
     const res = await fetch(edgeFnUrl, {
       method: "POST",
       headers: {
@@ -26,18 +21,13 @@ export async function POST() {
         "Authorization": `Bearer ${cronSecret}`,
       },
       body: JSON.stringify({ live: true, trigger: "manual" }),
-      signal: controller.signal,
+      signal: AbortSignal.timeout(15000),
     });
 
-    clearTimeout(timeoutId);
     const data = await res.json();
-    return NextResponse.json(data);
+    return NextResponse.json(data, { status: res.status });
   } catch (e) {
-    // AbortError = 55초 초과 → Edge Function은 백그라운드에서 계속 실행 중
-    if (e instanceof Error && e.name === "AbortError") {
-      return NextResponse.json({ ok: true, message: "큐레이션이 백그라운드에서 실행 중입니다." });
-    }
     console.error("[run-curation proxy 오류]", e);
-    return NextResponse.json({ error: "Edge Function 호출 실패" }, { status: 500 });
+    return NextResponse.json({ error: "큐레이션 접수를 확인하지 못했습니다. 실행 로그를 확인해 주세요." }, { status: 500 });
   }
 }

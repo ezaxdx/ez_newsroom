@@ -184,12 +184,12 @@ export async function POST(req: NextRequest) {
 
   // 하단 상시 배너 — 발송마다 고르는 게 아니라 curation_settings에 저장된 값을 그대로 항상 반영
   const { data: bannerSettings } = await supabase
-    .from("curation_settings").select("newsletter_footer_banner, auto_schedule").limit(1).single();
+    .from("curation_settings").select("newsletter_footer_banner, auto_schedule, active_curation_window").limit(1).single();
   const footer_banner = bannerSettings?.newsletter_footer_banner ?? null;
   const schedule = bannerSettings?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
-  const lastRunISO = schedule.enabled && schedule.days?.length > 0
+  const lastRunISO = bannerSettings?.active_curation_window ?? (schedule.enabled && schedule.days?.length > 0
     ? calcLastScheduledRun(schedule.days, schedule.hour ?? 9).toISOString()
-    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
 
   const today = new Date();
 

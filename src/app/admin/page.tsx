@@ -53,15 +53,16 @@ async function fetchSettings(): Promise<{
   scheduleDays: number[];
   scheduleHour: number;
   scheduleEnabled: boolean;
+  activeCurationWindow: string | null;
   navCategories: string[];
 }> {
-  const defaults = { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], scheduleHour: 9, scheduleEnabled: true, navCategories: [] };
+  const defaults = { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], scheduleHour: 9, scheduleEnabled: true, navCategories: [], activeCurationWindow: null as string | null };
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return defaults;
   try {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("quality_thresholds, auto_schedule, nav_categories")
+      .select("quality_thresholds, auto_schedule, nav_categories, active_curation_window")
       .limit(1)
       .single();
     const qualityThresholds = data?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
@@ -73,7 +74,7 @@ async function fetchSettings(): Promise<{
     // 실제 live/archive 분류는 CurationBoard에서 calcLastScheduledRun 사용
     const displayWindowDays = 4;
     const navCategories: string[] = data?.nav_categories ?? [];
-    return { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories };
+    return { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories, activeCurationWindow: data?.active_curation_window ?? null };
   } catch { return defaults; }
 }
 
@@ -87,7 +88,7 @@ type CurationLog = {
   skipped: number;
   failed: number;
   run_mode?: string;
-  details?: { trigger?: string; status?: string; chain?: number } | null;
+  details?: { trigger?: string; status?: string; phase?: string; chain?: number; queue?: { published: number; staged: number; prepared: number; excluded: number; pending: number; retry: number; failed: number; expired: number }; continuation?: { status: string; error?: string } } | null;
   errors: Array<{ source: string; url?: string; error: string }> | null;
   source_stats: Array<{ source_name: string; fetched: number; published: number; staged: number; failed: number }> | null;
 };
@@ -104,13 +105,15 @@ async function fetchCurationLogs(): Promise<CurationLog[]> {
   } catch { return []; }
 }
 
+const fallbackBoardWindow = (days: number) => new Date(Date.now() - days * 86400000);
+
 export default async function AdminPage() {
   // "메인 표시 중" 기준 시각은 설정(예약 요일·시각)에서 정해지므로 설정을 먼저 읽고, 그 시각으로 기사를 읽는다
   const settings = await fetchSettings();
   const { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories } = settings;
-  const lastRunISO = (scheduleEnabled && scheduleDays.length > 0
+  const lastRunISO = settings.activeCurationWindow ?? (scheduleEnabled && scheduleDays.length > 0
     ? calcLastScheduledRun(scheduleDays, scheduleHour)
-    : new Date(Date.now() - displayWindowDays * 24 * 60 * 60 * 1000)).toISOString();
+    : fallbackBoardWindow(displayWindowDays)).toISOString();
   const [{ news, counts }, curationLogs] = await Promise.all([fetchBoardNews(lastRunISO), fetchCurationLogs()]);
 
   return (
@@ -168,13 +171,23 @@ export default async function AdminPage() {
                       <td className="px-3 py-2 font-mono" style={{ color: "var(--on-surface-variant)" }}>{dateStr}</td>
                       <td className="px-3 py-2 whitespace-nowrap text-xs">
                         {(() => {
-                          const trig = log.run_mode === "dry" ? "시험" : log.details?.trigger === "manual" ? "수동" : log.details?.trigger === "cron" ? "자동" : "기록 없음";
+                          const trig = log.run_mode === "dry" ? "시험" : log.details?.trigger === "manual" ? "수동" : log.details?.trigger === "cron" ? "자동" : log.details?.trigger === "recovery" ? "복구" : "기록 없음";
                           const status = log.details?.status;
                           const stale = status === "running" && Date.now() - new Date(log.run_at).getTime() > 10 * 60 * 1000;
                           return (
                             <>
                               <span className="font-semibold">{trig}</span>
                               {(log.details?.chain ?? 0) > 0 && <span style={{ color: "var(--on-surface-variant)" }}> · 이어서 {log.details?.chain}회</span>}
+                              {status === "done" && <span> · 완료</span>}
+                              {status === "expired" && <span> · 수집 창 만료</span>}
+                              {log.details?.phase === "collecting" && <div>수집·원문 주소 정리 재개 대기</div>}
+                              {status === "partial" && <span style={{ color: "var(--primary)" }}> · 부분 완료</span>}
+                              {log.details?.queue && <div style={{ marginTop: 4, whiteSpace: "normal" }}>
+                                발행 준비 {log.details.queue.prepared} · 미처리 {log.details.queue.pending} (재시도 {log.details.queue.retry}) · 제외 {log.details.queue.excluded} · 실패 {log.details.queue.failed} · 만료 {log.details.queue.expired}
+                              </div>}
+                              {log.details?.continuation && <div style={{ whiteSpace: "normal" }}>
+                                {log.details.continuation.status === 'accepted' ? '이어서 처리 접수됨' : `재개 실패: ${log.details.continuation.error}`}
+                              </div>}
                               {status === "running" && !stale && <span style={{ color: "var(--primary)" }}> · 실행 중</span>}
                               {(status === "failed" || stale) && <span style={{ color: "var(--error)" }}> · 중단됨</span>}
                             </>
@@ -186,10 +199,10 @@ export default async function AdminPage() {
                       <td className="px-3 py-2">{log.staged ?? "-"}</td>
                       <td className="px-3 py-2">{log.skipped ?? "-"}</td>
                       <td className="px-3 py-2" style={{ color: (log.failed ?? 0) > 0 ? "var(--error)" : undefined }}>
-                        {(log.failed ?? 0) > 0 && log.errors && log.errors.length > 0 ? (
+                        {log.errors && log.errors.length > 0 ? (
                           <details>
                             <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--error)" }}>
-                              {log.failed}
+                              {log.failed || "확인"}
                             </summary>
                             <div style={{ marginTop: 6, padding: "6px 8px", borderRadius: 4, background: "var(--surface-container-low)", fontSize: "0.68rem", lineHeight: 1.6, minWidth: 200 }}>
                               {log.errors.map((e, i) => (

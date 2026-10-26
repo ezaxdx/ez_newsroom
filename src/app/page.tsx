@@ -37,15 +37,15 @@ async function fetchSiteSettings(): Promise<SiteSettings> {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("nav_categories, carousel_interval_sec, auto_schedule")
+      .select("nav_categories, carousel_interval_sec, auto_schedule, active_curation_window")
       .limit(1)
       .single();
     const schedule = data?.auto_schedule ?? { enabled: false, days: [], hour: 9 };
     const scheduleDays: number[] = schedule.days ?? [];
     const scheduleHour: number = schedule.hour ?? 9;
-    const lastRunISO = schedule.enabled && scheduleDays.length > 0
+    const lastRunISO = data?.active_curation_window ?? (schedule.enabled && scheduleDays.length > 0
       ? calcLastScheduledRun(scheduleDays, scheduleHour).toISOString()
-      : FALLBACK_LAST_RUN_ISO();
+      : FALLBACK_LAST_RUN_ISO());
     return {
       navCategories: data?.nav_categories?.length ? data.nav_categories : defaults.navCategories,
       carouselIntervalMs: data?.carousel_interval_sec ? data.carousel_interval_sec * 1000 : defaults.carouselIntervalMs,

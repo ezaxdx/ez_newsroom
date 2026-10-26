@@ -14,7 +14,7 @@ export function decodeEntities(s: string): string {
 
 /* ── URL 정규화 — 같은 기사의 표기 차이(http/https, m., amp, 추적 파라미터)를 지움 ──
    앱 쪽 복사본 src/lib/normalize-url.ts 와 같은 결과여야 함 (관리자 부적합 표시가 curation_seen.url_key 로 씀) */
-const TRACKING_PARAM = /^(utm_|fbclid|gclid|mc_|ncid|spm|share|fromrss|trackingcode)/i;
+const TRACKING_PARAM = /^(utm_.*|fbclid|gclid|mc_cid|mc_eid|ncid|spm|fromrss|trackingcode)$/i;
 export function normalizeUrl(raw: string): string {
   let s = (raw || "").trim();
   if (!s) return "";
@@ -25,7 +25,7 @@ export function normalizeUrl(raw: string): string {
     const params = [...u.searchParams.entries()]
       .filter(([k]) => !TRACKING_PARAM.test(k))
       .sort(([a], [b]) => a.localeCompare(b));
-    const qs = params.map(([k, v]) => `${k}=${v}`).join("&");
+    const qs = params.map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`).join("&");
     const path = u.pathname.replace(/\/amp\/?$/i, "").replace(/\/+$/, "");
     return `${host}${path}${qs ? "?" + qs : ""}`;
   } catch {
@@ -237,14 +237,17 @@ export function extractPublishedDate(html: string): string | null {
 export async function mapPool<T, R>(items: T[], limit: number, fn: (x: T, i: number) => Promise<R>): Promise<R[]> {
   const out = new Array<R>(items.length);
   let next = 0;
+  let failed = false;
   const workers = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
     while (true) {
       const i = next++;
-      if (i >= items.length) return;
-      out[i] = await fn(items[i], i);
+      if (failed || i >= items.length) return;
+      try { out[i] = await fn(items[i], i); } catch (error) { failed = true; throw error; }
     }
   });
-  await Promise.all(workers);
+  const settled = await Promise.allSettled(workers);
+  const failure = settled.find((r) => r.status === "rejected");
+  if (failure?.status === "rejected") throw failure.reason;
   return out;
 }
 export function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {

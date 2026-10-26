@@ -10,9 +10,11 @@ import {
 import type { CatSetting, FitAnchor } from "./ai.ts";
 import { buildHintBlock, canonicalDomain, FIT_ANCHORS, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
+import { claimBatch, readWork, saveWork, queueCounts, retryWork, type Batch, type WorkRow } from "./queue.ts";
 
 /* ───────── 타입 ───────── */
 export interface RunOptions {
+  batch?: Batch;
   dry: boolean;              // true: 기사·소스상태·건너뜀 기록을 저장하지 않음 (시험 실행)
   maxAi?: number;            // 시험 실행에서 AI 작성 건수 상한 (비용 보호)
   onlySource?: string;       // 소스명 일부 — 해당 소스만 실행
@@ -115,26 +117,35 @@ export async function runCuration(deps: Deps, opts: RunOptions) {
   const live = !opts.dry;
   const trigger = opts.trigger ?? (live ? "unknown" : "test");
   let logId: string | null = null;
-  // 이미 도는 실행이 있으면(10분 안에 시작해 "실행 중"인 기록) 겹쳐 돌지 않음 — 보드의 수동 실행 중복 클릭, 정기·수동 실행이 겹치는 경우를 막음.
-  // 도중에 죽은 실행은 10분이 지나면 더 이상 막지 않음
-  if (live && opts.writeLog !== false) {
-    const since = new Date(Date.now() - 10 * 60 * 1000).toISOString();
-    const { data: running } = await deps.supabase.from("curation_logs").select("id, run_at").eq("run_mode", "live").eq("details->>status", "running").gte("run_at", since).limit(1);
-    if (running && running.length > 0) {
-      return { ok: true, skipped: true, message: "이미 큐레이션이 실행 중입니다 (10분 안에 시작한 실행이 아직 끝나지 않았어요). 끝난 뒤 다시 시도하세요.", progress: 0, deferred: 0 } as any;
-    }
+  if (live && opts.onlySource) throw new Error("소스별 실행은 시험 모드에서만 지원합니다.");
+  let batch = opts.batch;
+  if (live && !batch) {
+    const claimed = await claimBatch(deps.supabase);
+    if ('skipped' in claimed) return { ok: true, ...claimed, progress: 0, deferred: 0 } as any;
+    batch = claimed;
   }
+  opts = { ...opts, batch };
   if (live && opts.writeLog !== false) {
     const { data, error } = await deps.supabase.from("curation_logs")
-      .insert({ duration_ms: 0, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0, score_dist: {}, source_stats: [], errors: [], run_mode: "live", details: { trigger, status: "running" } })
+      .insert({ duration_ms: 0, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0, score_dist: {}, source_stats: [], errors: [], run_mode: "live", details: { trigger, status: "running", batch_id: batch?.id } })
       .select("id").single();
-    if (error) console.error("[curation_logs 시작 기록 실패]", error.message); else logId = (data as { id: string } | null)?.id ?? null;
+    if (error) {
+      if (batch) await deps.supabase.from("curation_batches").update({ lease: null, lease_until: null, status: "partial" }).eq("id", batch.id).eq("lease", batch.lease);
+      throw new Error(`실행 기록 실패: ${error.message}`);
+    }
+    logId = (data as { id: string } | null)?.id ?? null;
   }
   try {
     return await runCurationInner(deps, opts, logId, trigger);
   } catch (e) {
-    if (logId) await deps.supabase.from("curation_logs").update({ errors: [{ source: "(시스템)", error: (e as Error).message }], details: { trigger, status: "failed" } }).eq("id", logId);
+    if (logId) await deps.supabase.from("curation_logs").update({ errors: [{ source: "(시스템)", error: (e as Error).message }], details: { trigger, status: "failed", batch_id: batch?.id } }).eq("id", logId);
+    if (batch) await deps.supabase.from("curation_batches").update({ status: "partial" }).eq("id", batch.id).eq("lease", batch.lease);
     throw e;
+  } finally {
+    if (batch) {
+      const { error } = await deps.supabase.from("curation_batches").update({ lease: null, lease_until: null }).eq("id", batch.id).eq("lease", batch.lease);
+      if (error) console.error("큐레이션 잠금 해제 실패", error.message);
+    }
   }
 }
 
@@ -143,7 +154,10 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const log = deps.log ?? ((m: string) => console.log(m));
   const runStart = Date.now();
   const budgetMs = opts.budgetMs ?? 120_000;
-  const overBudget = () => Date.now() - runStart > budgetMs;
+  const remaining = () => budgetMs - (Date.now() - runStart);
+  const overBudget = (reserve = 0) => remaining() <= reserve;
+  const batch = opts.batch;
+  const work = new Map<string, WorkRow>();
   const live = !opts.dry;
   const apiKey = env("GOOGLE_AI_API_KEY");
   if (!apiKey) throw new Error("GOOGLE_AI_API_KEY 없음");
@@ -168,8 +182,8 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const schedule = settings?.auto_schedule ?? {};
   const scheduleDays: number[] = schedule.days?.length ? schedule.days : [2, 4];
   const scheduleHour: number = schedule.hour ?? 9;
-  const windowEnd = calcScheduledRun(scheduleDays, scheduleHour, Date.now());
-  const windowStart = calcScheduledRun(scheduleDays, scheduleHour, windowEnd - 1);
+  const windowEnd = batch ? Date.parse(batch.window_end) : calcScheduledRun(scheduleDays, scheduleHour, Date.now());
+  const windowStart = batch ? Date.parse(batch.window_start) : calcScheduledRun(scheduleDays, scheduleHour, windowEnd - 1);
   const catSettings: Record<string, CatSetting> = settings?.category_settings ?? {};
   const levelPrompts: Record<string, Record<string, string>> = settings?.level_prompts ?? {};
   const thresholds = settings?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
@@ -213,12 +227,12 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const existingRows = await fetchAll((f, t) => supabase.from("news").select("original_url").range(f, t));
   const existingKeys = new Set<string>(existingRows.map((r: any) => normalizeUrl(r.original_url)));
   const seenCutoff = new Date(Date.now() - 90 * 86400000).toISOString();
-  const seenRows = await fetchAll((f, t) => supabase.from("curation_seen").select("url_key, reason, seen_at").gte("seen_at", seenCutoff).range(f, t));
+  const seenRows = await fetchAll((f, t) => supabase.from("curation_seen").select("url_key, original_url, reason, seen_at").gte("seen_at", seenCutoff).range(f, t));
   const seenKeys = new Set<string>();
   for (const r of seenRows) {
     const ttl = RETRY_AFTER_MS[r.reason];
     if (ttl && Date.now() - new Date(r.seen_at).getTime() > ttl) continue;
-    seenKeys.add(r.url_key);
+    seenKeys.add(r.original_url ? normalizeUrl(r.original_url) : r.url_key);
   }
   const recentRows = await fetchAll((f, t) => supabase.from("news").select("title, original_title").gte("created_at", new Date(Date.now() - 7 * 86400000).toISOString()).range(f, t));
   const recentTitles: string[] = recentRows.flatMap((r: any) => [r.title, r.original_title].filter(Boolean));
@@ -245,8 +259,27 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
 
   /* ── 1. 목록 수집 (가벼움 — 소스끼리 동시 실행, 원문은 열지 않음) ── */
   const stats = new Map<string, Stat>();
+  const selected: Cand[] = [];
+  const primaryOf = (c: Cand) => [...c.srcs].sort((a, b) => b.weight - a.weight)[0];
+  const funnel: Record<string, number> = {};
+  const timings: Record<string, number> = {};
+  const earlyStop = (n: number) => (opts.dry && opts.stopAfter === n ? { ok: true, mode: "dry", stopped_after: n, fetched: funnel.raw, duration_ms: Date.now() - runStart, funnel } : null);
+  const pack = (c: Cand) => ({ ...c, vias: [...c.vias], event: c.event ? { ...c.event, matchers: [] } : null });
+  if (batch?.snapshot?.phase === "selected") {
+    for (const st of batch.snapshot.stats) stats.set(st.key, { ...st, fetched: 0, published: 0, staged: 0, skipped: 0, failed: 0, deferred: 0, reasons: {}, status: "skipped" });
+    Object.assign(funnel, batch.snapshot.funnel);
+    for (const row of await readWork(supabase, batch)) {
+      work.set(row.url_key, row);
+      if (!['pending', 'retry'].includes(row.state)) continue;
+      const c = { ...row.payload, vias: new Set<string>(row.payload.vias) } as Cand;
+      if (c.event) c.event.matchers = eventTerms(c.event.queryTerms).matchers;
+      selected.push(c);
+    }
+    timings.collect = 0;
+  } else {
+
   const rawCands: { item: RawItem; src: SrcRef }[] = [];
-  interface Task { key: string; run: () => Promise<FetchResult>; src: SrcRef; via: string }
+  interface Task { query?: string; key: string; run: () => Promise<FetchResult>; src: SrcRef; via: string }
   const tasks: Task[] = [];
   const srcRefOf = (s: Source, via: string): SrcRef => ({
     key: `src:${s.id}`, name: s.source_name, type: s.source_type, weight: s.weight ?? 0, category: (s.default_category ?? "MICE").toUpperCase(), via,
@@ -261,17 +294,17 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     const t = s.source_type;
     if (t === "keyword_search" || t === "naver_news") {
       const engines = t === "naver_news" ? ["naver"] : (cfg.engines?.length ? cfg.engines : ["naver"]);
-      if (engines.includes("naver")) tasks.push({ key, via: "naver", src: srcRefOf(s, "naver"), run: () => fetchNaverSearch(s.url, fenv, 100, { pages: 3, stopBefore: windowStart }) });
-      if (engines.includes("google")) tasks.push({ key, via: "google", src: srcRefOf(s, "google"), run: () => fetchGoogleSearch(s.url, whenDays) });
+      if (engines.includes("naver")) tasks.push({ query: s.url, key, via: "naver", src: srcRefOf(s, "naver"), run: () => fetchNaverSearch(s.url, fenv, 100, { pages: 3, stopBefore: windowStart }) });
+      if (engines.includes("google")) tasks.push({ query: s.url, key, via: "google", src: srcRefOf(s, "google"), run: () => fetchGoogleSearch(s.url, whenDays) });
     } else if (t === "rss") {
       const via = s.url.includes("news.google.com") ? "google" : `rss:${s.source_name}`;
-      tasks.push({ key, via, src: srcRefOf(s, via), run: () => fetchRss(s.url) });
+      tasks.push({ query: s.url, key, via, src: srcRefOf(s, via), run: () => fetchRss(s.url) });
     } else if (t === "web_list" || t === "url") {
       const via = `web:${s.source_name}`;
-      tasks.push({ key, via, src: srcRefOf(s, via), run: () => fetchWebList(s.url, cfg, fenv) });
+      tasks.push({ query: s.url, key, via, src: srcRefOf(s, via), run: () => fetchWebList(s.url, cfg, fenv) });
     } else if (t === "json_list") {
       const via = `api:${s.source_name}`;
-      tasks.push({ key, via, src: srcRefOf(s, via), run: () => fetchJsonList(s.url, cfg) });
+      tasks.push({ query: s.url, key, via, src: srcRefOf(s, via), run: () => fetchJsonList(s.url, cfg) });
     } else {
       const st = stats.get(key)!;
       st.status = "skipped"; st.error = `지원하지 않는 방식(${t})`;
@@ -283,18 +316,42 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     stats.set(key, newStat(key, `행사: ${ev.name}`, "event_search"));
     for (const term of ev.queryTerms.slice(0, 3)) {
       const ref: SrcRef = { key, name: `행사: ${ev.name}`, type: "event_search", weight: 10, category: "MICE", via: "event", maxItems: PICK_PER_EVENT, keywordMode: "none", customKeywords: [], eventId: ev.id };
-      tasks.push({ key, via: "naver", src: ref, run: () => fetchNaverSearch(term, fenv, 20) });
-      tasks.push({ key, via: "google", src: ref, run: () => fetchGoogleSearch(term) });
+      tasks.push({ query: term, key, via: "naver", src: ref, run: () => fetchNaverSearch(term, fenv, 20) });
+      tasks.push({ query: term, key, via: "google", src: ref, run: () => fetchGoogleSearch(term) });
     }
   }
-  const taskResults = await mapPool(tasks, 6, async (t) => {
-    try {
-      const r = await withTimeout(t.run(), 40000, "목록 수집");
-      return { t, r };
-    } catch (e) {
-      return { t, r: { items: [], error: (e as Error).message } as FetchResult };
+  const taskIdentity = (t: Task) => JSON.stringify([t.key, t.via, t.query]);
+  const validTasks = new Set(tasks.map(taskIdentity));
+  const taskResults: { t: Task; r: FetchResult; attempts: number }[] = (batch?.snapshot?.collection ?? []).filter(x=>validTasks.has(taskIdentity(x.t)));
+  const collected = new Set(taskResults.filter(x=>!x.r.error || x.r.items.length>0 || x.attempts>=3).map(({t})=>taskIdentity(t)));
+  const snapshotCollection = async (resolved?: Map<string, string | null>) => {
+    if (!batch) return;
+    const snapshot = { phase: 'collecting' as const, stats: [], funnel: {}, collection: taskResults.map(({t,r,attempts}) => ({ t: { ...t, run: undefined }, r, attempts })), resolved: resolved ? [...resolved.entries()] : batch.snapshot?.resolved };
+    await saveWork(supabase, batch, [], snapshot);
+    batch.snapshot = snapshot;
+  };
+  const finishCollectionLater = async () => {
+    if (logId) await supabase.from('curation_logs').update({ duration_ms: Date.now()-runStart,
+      fetched: taskResults.reduce((n,x)=>n+x.r.items.length,0), errors: taskResults.filter(x=>x.r.error).map(x=>({source:x.t.src.name,error:x.r.error})), details: { trigger, status: 'partial', batch_id: batch?.id, chain: opts.chain ?? 0, phase: 'collecting' } }).eq('id',logId);
+    if (batch) await supabase.from('curation_batches').update({ status: 'partial' }).eq('id',batch.id).eq('lease',batch.lease);
+    return { ok: true, status: 'partial', batch_id: batch?.id, deferred: 1, progress: taskResults.length, window_end: windowEnd } as any;
+  };
+  for (let start=0; start<tasks.length; start+=6) {
+    const wave = tasks.slice(start,start+6).filter(t=>!collected.has(taskIdentity(t)));
+    if (!wave.length) continue;
+    if (batch && overBudget(42_000)) return await finishCollectionLater();
+    const results = await mapPool(wave, 6, async (t) => {
+      try { return { t, r: await withTimeout(t.run(), 40000, '목록 수집') }; }
+      catch (e) { return { t, r: { items: [], error: (e as Error).message } as FetchResult }; }
+    });
+    for (const result of results) {
+      const previous = taskResults.findIndex(x=>taskIdentity(x.t)===taskIdentity(result.t));
+      const entry = { ...result, attempts: previous<0 ? 1 : taskResults[previous].attempts+1 };
+      if (previous<0) taskResults.push(entry); else taskResults[previous]=entry;
     }
-  });
+    await snapshotCollection();
+  }
+  if (batch && taskResults.some(x=>x.r.error && x.r.items.length===0 && x.attempts<3)) return await finishCollectionLater();
   const errorsBySource = new Map<string, string[]>();
   for (const { t, r } of taskResults) {
     const st = stats.get(t.key)!;
@@ -311,10 +368,10 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     else st.status = st.fetched > 0 ? "ok" : "empty";
     if (errs && st.status === "ok") st.error = errs.join(" / "); // 일부 엔진만 실패 — 기록은 남김
   }
-  const funnel: Record<string, number> = { raw: rawCands.length };
-  const timings: Record<string, number> = { collect: Date.now() - runStart };   // 단계별 누적 소요(ms) — 어디서 시간이 갔는지 로그에서 보려고
+  funnel.raw = rawCands.length;
+  timings.collect = Date.now() - runStart;   // 단계별 누적 소요(ms) — 어디서 시간이 갔는지 로그에서 보려고
   log(`[1단계] 후보 ${rawCands.length}건 수집 (${Date.now() - runStart}ms)`);
-  const earlyStop = (n: number) => (opts.dry && opts.stopAfter === n ? { ok: true, mode: "dry", stopped_after: n, fetched: rawCands.length, duration_ms: Date.now() - runStart, funnel } : null);
+
   { const s1 = earlyStop(1); if (s1) return s1 as any; }
 
   /* ── 2. 후보 정리 (구글 URL 복원 말고는 네트워크 안 씀) ── */
@@ -378,12 +435,18 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     googleLinks.set(c.item.link, Math.max(googleLinks.get(c.item.link) ?? 0, score));
   });
   const toResolve = [...googleLinks.entries()].sort((a, b) => b[1] - a[1]).slice(0, GOOGLE_RESOLVE_CAP).map(([l]) => l);
-  const resolvedByLink = new Map<string, string | null>();
-  await mapPool(toResolve, 4, async (link) => {
-    let r = await resolveGoogleNewsUrl(link);
-    if (!r) { await sleep(700); r = await resolveGoogleNewsUrl(link); }   // 구글이 일시적으로 제한할 수 있어 1회 재시도
-    resolvedByLink.set(link, r);
-  });
+  const resolvedByLink = new Map<string, string | null>(batch?.snapshot?.resolved ?? []);
+  for (let start=0; start<toResolve.length; start+=4) {
+    const wave = toResolve.slice(start,start+4).filter(link=>!resolvedByLink.has(link));
+    if (!wave.length) continue;
+    if (batch && overBudget(35_000)) return await finishCollectionLater();
+    await mapPool(wave,4,async link=>{
+      let r = await resolveGoogleNewsUrl(link);
+      if (!r) { await sleep(700); r = await resolveGoogleNewsUrl(link); }
+      resolvedByLink.set(link,r);
+    });
+    await snapshotCollection(resolvedByLink);
+  }
   const resolved: { item: RawItem; src: SrcRef; pubMs: number | null; link: string; extra?: Set<string> }[] = [];
   inWindow.forEach((c, i) => {
     if (dropped.has(i)) return;
@@ -494,11 +557,11 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   funnel.afterDedup = reps.length;
 
   // h) 우선순위 정렬 + 소스별·행사별 상한
-  const primaryOf = (c: Cand) => [...c.srcs].sort((a, b) => b.weight - a.weight)[0];
+
   reps.sort((a, b) => (Number(!!b.event) - Number(!!a.event)) || (primaryOf(b).weight - primaryOf(a).weight) || ((b.pubMs ?? 0) - (a.pubMs ?? 0)));
   const perSource = new Map<string, number>();
   const perEvent = new Map<string, number>();
-  const selected: Cand[] = [];
+
   for (const c of reps) {
     const p = primaryOf(c);
     if (c.event) {
@@ -515,6 +578,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   }
   // g-2) 보강 — 선정된 기사끼리, 제목이 달라도 제목+요약이 닮았거나(0.5 이상) 애매하면(0.3~0.5) AI 가 "같은 사건인지" 판정해 하나로 묶음.
   //      후보 전체(수천 건)가 아니라 선정된 기사(수십~100건)만 비교해야 Edge 함수 CPU 한도를 넘지 않음
+  if (batch && overBudget(45_000)) return await finishCollectionLater();
   const tG2 = Date.now();
   const AI_PAIR_CAP = 12;
   {
@@ -529,7 +593,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     }
     askPairs.sort((a, b) => b.sim - a.sim);
     await Promise.all(askPairs.filter((p) => find2(p.i) !== find2(p.j)).slice(0, AI_PAIR_CAP).map(async (p) => {
-      const same = await judgeSameStory({ apiKey, a: { title: selected[p.i].title, text: selected[p.i].description }, b: { title: selected[p.j].title, text: selected[p.j].description } });
+      const same = await judgeSameStory({ apiKey, deadline: runStart + budgetMs - 5000, a: { title: selected[p.i].title, text: selected[p.i].description }, b: { title: selected[p.j].title, text: selected[p.j].description } });
       if (same) parent2[find2(p.j)] = find2(p.i);
     }));
     // 묶인 기사 중 우선순위가 앞선(selected 는 이미 우선순위 순) 1건만 남기고 나머지의 소스·매체 수를 대표에 합침
@@ -561,7 +625,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   suspects.sort((a, b) => b.sim - a.sim);
   await Promise.all(suspects.slice(0, AI_PAIR_CAP).map(async (s) => {
     const old = (recent14 as any[]).find((r) => r.title === s.title);
-    if (await judgeSameStory({ apiKey, a: { title: s.c.title, text: s.c.description }, b: { title: s.title, text: old?.summary_short } })) s.c.dupOf = s.title;
+    if (await judgeSameStory({ apiKey, deadline: runStart + budgetMs - 5000, a: { title: s.c.title, text: s.c.description }, b: { title: s.title, text: old?.summary_short } })) s.c.dupOf = s.title;
   }));
   funnel.dupSuspect = selected.filter((c) => c.dupOf).length;
   funnel.selected = selected.length;
@@ -570,6 +634,20 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   timings.organize = Date.now() - runStart;
   log(`[2단계] 후보 정리 완료 — 선정 ${selected.length}건 (${Date.now() - runStart}ms)`);
 
+    if (batch) {
+      selected.forEach((c, position) => work.set(c.urlKey, { url_key: c.urlKey, position, state: 'pending', attempts: 0, payload: pack(c) }));
+      await saveWork(supabase, batch, [...work.values()], { phase: "selected", stats: [...stats.values()], funnel });
+    }
+  }
+  const checkpoint = async (c: Cand, state?: string, error?: string) => {
+    if (!batch) return;
+    const row = work.get(c.urlKey)!;
+    row.payload = pack(c);
+    if (state) row.state = state;
+    if (error) retryWork(row, error);
+    await saveWork(supabase, batch, [row]);
+  };
+
   /* ── 3. 원문 확보 (선정된 기사만) ── */
   const seenOut: { url_key: string; original_url: string; reason: string; source_name: string; title: string }[] = [];
   const markSeen = (c: Cand, reason: string) => seenOut.push({ url_key: c.urlKey, original_url: c.link, reason, source_name: primaryOf(c).name, title: c.title.slice(0, 200) });
@@ -577,7 +655,9 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const decisions: any[] = [];
   await mapPool(selected, 5, async (c) => {
     const p = primaryOf(c); const st = stats.get(p.key)!;
-    if (overBudget()) { st.deferred++; return; }
+    if (overBudget(10_000)) { st.deferred++; return; }
+    if (existingKeys.has(normalizeUrl(c.link))) { bump(st, "exists"); await checkpoint(c, "excluded"); return; }
+    if (c.text) { readyList.push(c); return; }
     let scraped = { text: "", image_url: null as string | null, published_at: null as string | null, ok: true };
     if (c.bodyText) scraped = { text: c.bodyText, image_url: null, published_at: null, ok: true };
     else scraped = await fetchArticleData(c.link);
@@ -586,17 +666,19 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       c.pubMs = parseDateLoose(scraped.published_at);
       c.pubDate = toISO(c.pubMs) ?? c.pubDate;
       const v = checkWindow(c.pubMs, windowStart, windowEnd);
-      if (v === "too_old") { bump(st, "too_old"); markSeen(c, "too_old"); return; }
-      if (v === "too_new") { bump(st, "too_new"); return; }
+      if (v === "too_old") { bump(st, "too_old"); markSeen(c, "too_old"); await checkpoint(c, "excluded"); return; }
+      if (v === "too_new") { bump(st, "too_new"); await checkpoint(c, "excluded"); return; }
     }
     c.dateUnknown = c.pubMs == null;
     const text = scraped.text.length >= 200 ? scraped.text : (c.description.length > scraped.text.length ? c.description : scraped.text);
     if (text.length < 200) {
       bump(st, scraped.ok ? "too_short" : "fetch_failed");
-      markSeen(c, scraped.ok ? "too_short" : "fetch_failed");
+      if (batch) await checkpoint(c, undefined, scraped.ok ? "원문 200자 미만" : "원문 요청 실패");
+      else markSeen(c, scraped.ok ? "too_short" : "fetch_failed");
       return;
     }
     c.text = text; c.image = scraped.image_url;
+    await checkpoint(c);
     readyList.push(c);
   });
   // 병렬 처리라 순서가 흐트러지므로 다시 우선순위 순으로
@@ -619,7 +701,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     return real.length ? real : ["MICE"];
   };
   const maxAutoPublish: number = Number.isFinite(Number(thresholds.max_auto_publish)) && Number(thresholds.max_auto_publish) > 0 ? Number(thresholds.max_auto_publish) : 20;
-  let autoPublished = 0;
+  let autoPublished = [...work.values()].filter(r => ['publish', 'published'].includes(r.state) && !r.payload.event && !(r.payload.srcs.every((s: SrcRef) => s.category === 'EZPMP'))).length;
   let cappedCount = 0;
   const aiTargets = opts.dry && opts.maxAi != null ? readyList.slice(0, opts.maxAi) : readyList;
   let aiCalls = 0;
@@ -629,7 +711,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const writeTargets: Cand[] = [];
   const judgeOne = async (c: Cand, out: Cand[]) => {
     const p = primaryOf(c); const st = stats.get(p.key)!;
-    if (overBudget()) { st.deferred++; return; }
+    if (overBudget(15_000)) { st.deferred++; return; }
     const cats = categoriesFor(c);
     if (c.event) {
       judgedMap.set(c, { fit: 10, reason: `이즈픽 행사(${c.event.name}) 관련 기사 — 적합성 관문 면제` });
@@ -641,13 +723,16 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       out.push(c); return;
     }
     if (!calibrated) { out.push(c); return; }   // v1 프롬프트 모드: 작성 호출의 fit 을 그대로 씀
-    const j = await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/"), fitAnchors });
-    if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `적합성 판정 실패: ${j.error}` }); return; }
+    const saved = work.get(c.urlKey)?.judgement;
+    const j = saved ? { ok: true as const, ...saved } : await judgeFit({ apiKey, title: c.title, text: c.text!, category: cats.join("/"), fitAnchors, deadline: runStart + budgetMs });
+    if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `적합성 판정 실패: ${j.error}` }); await checkpoint(c, undefined, j.error); return; }
     judgedMap.set(c, { fit: j.fit, reason: j.reason });
+    if (batch) { work.get(c.urlKey)!.judgement = { fit: j.fit, reason: j.reason }; await checkpoint(c); }
     if (j.fit < FIT_DISCARD) {
       decisions.push({ title: c.title, original_title: c.title, link: c.link, category: cats.join("/"), cats, score: null, fit: j.fit, fit_reason: j.reason, level: null, decision: "discard_fit", pre_write: true, capped: false, pick: null, vias: [...c.vias], coverage: c.coverage, source: p.name });
       results.skipped++; st.skipped++; st.reasons["low_fit"] = (st.reasons["low_fit"] ?? 0) + 1;
       markSeen(c, "low_fit");
+      await checkpoint(c, "excluded");
       return;
     }
     out.push(c);
@@ -664,7 +749,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   // 4b. 글 작성 + 판정·저장 (동시 5건)
   const writeOne = async (c: Cand) => {
     const p = primaryOf(c); const st = stats.get(p.key)!;
-    if (overBudget()) { st.deferred++; return; }
+    if (overBudget(20_000)) { st.deferred++; return; }
     aiCalls++;
     const cats = categoriesFor(c);
     const jf = judgedMap.get(c);
@@ -672,10 +757,16 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     const judgedReason: string | null = jf?.reason ?? null;
     const gen = await generateArticle({
       apiKey, articleText: c.text!, url: c.link, categories: cats, catSettings, levelPrompts, companyContext,
-      hintBlock: cats.length > 1 ? hintBlock : undefined, eventName: c.event?.name, calibrated, levelExamples,
+      hintBlock: cats.length > 1 ? hintBlock : undefined, eventName: c.event?.name, calibrated, levelExamples, deadline: runStart + budgetMs,
     });
-    if (!gen.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `generateArticle 실패: ${gen.error}` }); return; }
+    if (!gen.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `generateArticle 실패: ${gen.error}` }); await checkpoint(c, undefined, gen.error); return; }
     const g = gen.value;
+    if (typeof g.title !== 'string' || !g.title.trim() || typeof g.summary_short !== 'string' || typeof g.content_long !== 'string') {
+      results.failed++; st.failed++;
+      runErrors.push({ source: p.name, url: c.link, error: 'AI 응답의 필수 기사 내용 누락' });
+      await checkpoint(c, undefined, 'AI 응답의 필수 기사 내용 누락');
+      return;
+    }
     const score = g.quality_score ?? 5;
     const fit = judgedFit ?? g.quality_criteria?.fit ?? 5;
     // 저장하는 fit 은 판정 호출의 값. AI 가 레벨을 못 줘서 기본값으로 채웠다면 사유를 level_note 로 남겨 나중에 구분할 수 있게 함
@@ -706,12 +797,13 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
+      await checkpoint(c, "excluded");
       return;
     }
     if (!live) { if (decision === "publish") { results.published++; st.published++; } else { results.staged++; st.staged++; } return; }
     const publish = decision === "publish";
     const priority = p.weight * 10 + Math.min(15, (c.coverage - 1) * 5) + (isPick ? 30 : 0);
-    const { data: ins, error } = await supabase.from("news").upsert({
+    const article = {
       title: g.title, summary_short: g.summary_short, content_long: g.content_long, implications: g.implications,
       level: g.level ?? "Intermediate",
       image_url: c.image ?? categoryDefaultImage(g.category),
@@ -727,16 +819,17 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       original_title: c.title.slice(0, 300), found_via: [...c.vias], coverage_count: c.coverage,
       related_event_id: c.event?.id ?? null, category_reason: g.category_reason, category_edited: false,
       fit_reason: ((dupSuspect ? `[중복 의심: ${c.dupOf?.slice(0, 40)}] ` : "") + (judgedReason ?? g.fit_reason ?? "")).slice(0, 240) || null,
-    }, { onConflict: "original_url", ignoreDuplicates: true }).select("id");
-    if (error) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: error.message }); return; }
-    const newId = ins?.[0]?.id;
-    if (newId) await supabase.from("news_original_text").upsert({ news_id: newId, original_text: c.text });
-    if (publish) { results.published++; st.published++; } else { results.staged++; st.staged++; }
+    };
+    if (batch) {
+      work.get(c.urlKey)!.article = article;
+      await checkpoint(c, publish ? 'publish' : 'stage');
+    }
+
   };
 
   // 판정과 작성을 묶음(16건)으로 번갈아 처리 — 후보 전체를 먼저 판정한 뒤 작성하면 판정에서 시간이 다 가서 한 건도 발행되지 못하는 일이 생김.
   // 묶음마다 판정(동시 8건) → 통과한 기사 바로 작성·저장(동시 5건) → 다음 묶음. 시간 예산이 끝나면 남은 후보는 이월(다음 회차)
-  const CHUNK = 16;
+  const CHUNK = 8;
   let judgeMs = 0, writeMs = 0;
   for (let k = 0; k < aiTargets.length; k += CHUNK) {
     const chunk = aiTargets.slice(k, k + CHUNK);
@@ -756,10 +849,28 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
 
   /* ── 6. 마무리: 소스 상태·건너뜀 기록·정리·로그·알림 ── */
   const budgetExceeded = overBudget();
-  const deferredTotal = [...stats.values()].reduce((s, x) => s + x.deferred, 0);
+  let queue = batch ? queueCounts([...work.values()]) : null;
+  const deferredTotal = queue?.pending ?? [...stats.values()].reduce((s, x) => s + x.deferred, 0);
+  let batchStatus = deferredTotal > 0 ? 'partial' : 'done';
+  if (batch) {
+    const { data, error } = await supabase.rpc('finish_curation_batch', { p_batch: batch.id, p_lease: batch.lease });
+    if (error) throw new Error(`발행 확정 실패: ${error.message}`);
+    batchStatus = data.status;
+    results.published = data.published;
+    results.staged = data.staged;
+    const finishedRows = await readWork(supabase, batch);
+    queue = queueCounts(finishedRows);
+    for (const row of finishedRows) {
+      const st = stats.get(primaryOf(row.payload as Cand).key);
+      if (st && row.state === 'published') st.published++;
+      if (st && row.state === 'staged') st.staged++;
+    }
+    results.failed = Math.max(results.failed, queue.failed);
+  }
   const alerts: { title: string; description: string; level: "error" | "warning"; fields?: { name: string; value: string }[] }[] = [];
 
   if (live) {
+    if (batchStatus === 'done' && results.published === 0) alerts.push({ title: '큐레이션 발행 기사 0건', description: '기존 피드를 유지합니다. 검토 대기·제외·실패 내역을 확인해 주세요.', level: 'warning' });
     // 건너뛴·폐기한 URL 기록 (재처리 방지)
     if (seenOut.length) {
       const dedup = [...new Map(seenOut.map((r) => [r.url_key, r])).values()];
@@ -794,7 +905,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
 
     if (levelDefaulted.length > 0) alerts.push({ title: "레벨 판정 실패 — 기본값(Intermediate)으로 저장", description: `이번 실행에서 AI가 레벨을 돌려주지 못한 ${levelDefaulted.length}건을 Intermediate로 저장했습니다. 해당 기사는 큐레이션 보드에서 레벨을 직접 확인하세요. (news.quality_criteria.level_note 에 사유가 남아 있습니다)`, level: "warning", fields: levelDefaulted.slice(0, 5).map((e) => ({ name: e.source, value: `${e.title.slice(0, 60)} (응답: ${e.raw})` })) });
     if (cappedCount > 0) alerts.push({ title: "자동 발행 상한 초과분을 대기열로 보냄", description: `이번 실행에서 자동 발행 상한(${maxAutoPublish}건)을 넘은 ${cappedCount}건은 대기열에 있습니다. 큐레이션 보드의 대기열에서 검토 후 발행하세요.`, level: "warning" });
-    if (deferredTotal > 0 && opts.finalPass !== false) alerts.push({ title: "시간 초과로 처리 못 한 후보가 남음", description: `시간 예산을 다 써서 ${deferredTotal}건이 다음 실행으로 넘어갔습니다. (다음 실행에서 다시 후보가 됩니다)`, level: "warning" });
+    if (deferredTotal > 0 && opts.finalPass !== false) alerts.push({ title: "시간 초과로 처리 못 한 후보가 남음", description: `시간 예산을 다 써서 ${deferredTotal}건이 저장되어 재개를 기다립니다. 수집 창이 끝나면 만료됩니다.`, level: "warning" });
     if (results.failed >= 3) alerts.push({ title: "큐레이션 개별 기사 생성 실패 다수", description: `이번 실행에서 ${results.failed}건 실패(발행 ${results.published}, 대기 ${results.staged}).`, level: "warning", fields: runErrors.slice(0, 5).map((e) => ({ name: e.source, value: e.error.slice(0, 200) })) });
 
     // 이즈픽 행사: 시작 7일 이내인데 관련 기사가 한 건도 없으면 경고
@@ -815,7 +926,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const logErrors = [...runErrors, ...levelDefaulted.map((e) => ({ source: e.source, error: `레벨 판정 실패(응답: ${e.raw}) → Intermediate 저장: ${e.title.slice(0, 60)}` })), ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
   const fetched = [...stats.values()].reduce((s, x) => s + x.fetched, 0);
   const details = {
-    trigger, status: "done", chain: opts.chain ?? 0, timings,
+    trigger, status: batchStatus, batch_id: batch?.id, queue, chain: opts.chain ?? 0, timings,
     window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() },
     funnel, picks: picks.map((p) => ({ name: p.name, terms: p.queryTerms })), decisions,
     selected: selected.map((c) => ({ title: c.title, source: primaryOf(c).name, vias: [...c.vias], pick: c.event?.name ?? null, cats: categoriesFor(c), coverage: c.coverage, hasText: !!c.text })),
@@ -830,7 +941,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   }
   if (live) for (const a of alerts) await sendAlert(webhook, a);
 
-  return { ok: true, mode: live ? "live" : "dry", progress: results.published + results.staged + results.skipped, window_end: windowEnd, window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() }, timings, ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
+  return { ok: true, mode: live ? "live" : "dry", progress: results.published + results.staged + results.skipped + (queue?.prepared ?? 0), batch_id: batch?.id, status: batchStatus, queue, window_end: windowEnd, window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() }, timings, ...results, capped: cappedCount, fetched, duration_ms: durationMs, budget_exceeded: budgetExceeded, deferred: deferredTotal, funnel, alerts: alerts.map((a) => `${a.level}: ${a.title}`), sources: sourceStats, decisions, selected: details.selected };
 }
 
 function categoryDefaultImage(category: string): string {
