@@ -1,4 +1,5 @@
-import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
+import { createHash } from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 import { fetchRemoteImage } from "@/lib/fetch-remote-image";
 
 export type NewsCard = {
@@ -35,7 +36,7 @@ export type NewsletterData = {
   featured_events: EventCard[]; // 최대 4개
   upcoming_events: EventCard[];  // 이번 주 행사만
   site_url: string;
-  is_email?: boolean; // true이면 이미지 프록시 우회 (실제 발송용)
+  is_email?: boolean;
   header_image_url?: string; // 헤더 배경 이미지 — 절대 URL 또는 "/images/.."처럼 site_url 기준 상대경로. 없으면 기본 헤더 사용
   editorial_flap_url?: string; // 인사말 박스 위 봉투 뚜껑 장식(이벤트용) — 없으면 장식 없이 기본 박스만
   editorial_box_color?: string; // 이벤트 지붕 장식과 짝을 이루는 테두리 박스 색상 — 있으면 흰 박스를 감싸는 색상 프레임으로 렌더링
@@ -91,34 +92,55 @@ function sectionDivider(title: string): string {
 </tr>`;
 }
 
-// ── 외부 이미지 → 프록시 URL 변환 ────────────────────────
-// 이미지는 항상 image-proxy를 거쳐 넣음. 생성 시점의 접근 확인은 "실패 기록(IMG_FALLBACK 표식·디스코드 경고)"용일 뿐
-// 이미지를 빼는 데 쓰지 않음 — 서버 인스턴스마다 나가는 IP가 달라, 생성 서버에서는 막혔는데 메일을 열 때
-// 프록시 서버에서는 정상으로 가져와지는 경우가 실제로 있었음(ekn.kr). 프록시도 실패하면 카드 비율에 맞춘
-// "EZ Letter" 자리표시 이미지를 돌려주므로(저장 안 함) 이미지 없음 처리와 같은 모양으로 보임
-async function isImageReachable(url: string): Promise<boolean> {
-  // 이미지 프록시와 같은 요청(헤더·Referer)으로 확인
-  const res = await fetchRemoteImage(url, 8000);
-  if (res) { void res.body?.cancel().catch(() => {}); return true; }
-  return false;
-}
-
+// 기존 헤더 업로드용 공개 버킷을 재사용. 원본 주소가 바뀌면 새 파일이 되어 지난호를 덮어쓰지 않는다.
+const IMAGE_BUCKET = "newsletter-images";
 export type ResolvedImage = { src: string | null; reachable: boolean };
 
-export async function resolveNewsImage(image_url: string | null, site_url: string): Promise<ResolvedImage> {
-  if (!image_url) return { src: null, reachable: false };
-  if (image_url.startsWith("data:") || image_url.startsWith(site_url)) return { src: image_url, reachable: true };
+async function storedImageExists(url: string): Promise<boolean> {
+  try {
+    const response = await fetch(url, { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(2000) });
+    return response.ok && response.headers.get("content-type")?.startsWith("image/") === true;
+  } catch { return false; }
+}
 
-  // 언론사 자체 Next.js 이미지 리사이저(/_next/image?url=...)는 클라우드 IP를 차단하는
-  // 경우가 있음(news1.kr에서 실제 확인) — 원본이 살아있어도 리사이저만 막혀서 여기서
-  // "접근 불가"로 오판해 image-proxy까지 못 가고 "이미지 없음"으로 떨어지던 문제.
-  // 리사이저 URL이면 감싸인 원본을 먼저 시도하고, 그것도 안 되면 원래 URL도 시도
-  const unwrapped = unwrapNextImageUrl(image_url);
-  const reachable = unwrapped
-    ? (await isImageReachable(unwrapped)) || (await isImageReachable(image_url))
-    : await isImageReachable(image_url);
-  // 미리보기/발송 모두 프록시 경유 → 이메일 클라이언트별 이미지 차단 방지 (User-Agent 헤더 주입)
-  return { src: `${site_url}/api/image-proxy?url=${encodeURIComponent(image_url)}&v=2`, reachable };   // v: 예전에 저장된 대체 이미지(캐시)를 피하는 버전 값
+export async function resolveNewsImage(image_url: string | null, site_url: string, articleUrl?: string): Promise<ResolvedImage> {
+  if (!image_url) return { src: null, reachable: false };
+  let source: URL;
+  try { source = new URL(image_url.trim(), site_url); } catch { return { src: null, reachable: false }; }
+  if (!/^https?:$/.test(source.protocol)) return { src: null, reachable: false };
+  if (source.origin === new URL(site_url).origin && !source.pathname.startsWith("/api/")) {
+    return { src: source.href, reachable: true };
+  }
+
+  const storageUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const storageKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const path = `articles/v1/${createHash("sha256").update(source.href).digest("hex")}.jpg`;
+  const publicUrl = storageUrl ? `${storageUrl.replace(/\/$/, "")}/storage/v1/object/public/${IMAGE_BUCKET}/${path}` : null;
+  if (publicUrl && await storedImageExists(publicUrl)) return { src: publicUrl, reachable: true };
+
+  const buffer = await fetchRemoteImage(source.href, 12000, articleUrl);
+  if (buffer && storageUrl && storageKey && publicUrl) {
+    try {
+      const storage = createClient(storageUrl, storageKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+        global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(4000) }) },
+      }).storage.from(IMAGE_BUCKET);
+      const { error } = await storage.upload(path, buffer, {
+        contentType: "image/jpeg", cacheControl: "31536000", upsert: false,
+      });
+      // 다른 요청이 같은 파일을 먼저 저장한 경우에도 기존 저장본을 재사용한다.
+      if (!error || ((error as { statusCode?: string }).statusCode === "409" && await storedImageExists(publicUrl))) {
+        return { src: publicUrl, reachable: true };
+      }
+      console.warn("[newsletter-image] storage failed", error?.message);
+    } catch (err) {
+      console.warn("[newsletter-image] storage failed", err instanceof Error ? err.message : "unknown error");
+    }
+  }
+  // 확보·저장에 실패해도 열람 시 프록시에서 다시 시도할 수 있도록 주소를 남긴다.
+  const params = new URLSearchParams({ url: source.href, v: "3" });
+  if (articleUrl) params.set("ref", articleUrl);
+  return { src: `${site_url}/api/image-proxy?${params}`, reachable: false };
 }
 
 // 인사말에 적은 링크를 이메일에서 클릭 가능하게 변환.
@@ -165,7 +187,7 @@ function newsDeepLink(id: string, site_url: string): string {
 // max-width:255px로 그 이상 커지지만 않게 캡을 씌우므로, 좁은 화면에서는 부모와 함께 비례로 줄어든다
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<string> {
-  const { src: proxied, reachable } = await resolveNewsImage(item.image_url, site_url);
+  const { src: proxied, reachable } = await resolveNewsImage(item.image_url, site_url, item.url);
   // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
   const img = proxied
     ? `${reachable ? "" : `<!--IMG_FALLBACK:${item.id}-->`}<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
@@ -197,7 +219,7 @@ async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<
 
 // ── Pick 행사 카드 ────────────────────────────────────────
 async function pickCard(ev: EventCard, vol: number, site_url: string): Promise<string> {
-  const { src: proxied, reachable } = await resolveNewsImage(ev.image_url ?? null, site_url);
+  const { src: proxied, reachable } = await resolveNewsImage(ev.image_url ?? null, site_url, ev.website ?? undefined);
   // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
   const img = proxied
     ? `${reachable ? "" : `<!--IMG_FALLBACK:${ev.name}-->`}<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
@@ -303,9 +325,7 @@ export async function generateNewsletterHTML(data: NewsletterData): Promise<stri
 
   // Pick 4개 → 2행
   const picks = featured_events.slice(0, 4);
-  const pickCardsHtml = await Promise.all(picks.map(e => pickCard(e, vol, site_url)));
-  const pickRow1 = pickCardsHtml.slice(0, 2).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
-  const pickRow2 = pickCardsHtml.slice(2, 4).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const pickCardsPromise = Promise.all(picks.map(e => pickCard(e, vol, site_url)));
 
   // 행사 리스트
   const listRows = upcoming_events.map((ev, i) =>
@@ -313,12 +333,15 @@ export async function generateNewsletterHTML(data: NewsletterData): Promise<stri
   ).join("");
 
   // 뉴스 카테고리 4개 섹션 — 템플릿 리터럴 안에서 직접 호출하면 async를 못 기다리므로 미리 계산
-  const [miceSectionHtml, tourismSectionHtml, ezpmpSectionHtml, aiSectionHtml] = await Promise.all([
+  const [pickCardsHtml, miceSectionHtml, tourismSectionHtml, ezpmpSectionHtml, aiSectionHtml] = await Promise.all([
+    pickCardsPromise,
     newsSection("MICE", mice_news, vol, site_url),
     newsSection("Tourism", tourism_news, vol, site_url),
     newsSection("EZPMP", ezpmp_news, vol, site_url),
     newsSection("AI", ai_news, vol, site_url),
   ]);
+  const pickRow1 = pickCardsHtml.slice(0, 2).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
+  const pickRow2 = pickCardsHtml.slice(2, 4).join(`<td width="4%" style="width:4%;max-width:22px;"></td>`);
 
   return `<!DOCTYPE html>
 <html lang="ko">

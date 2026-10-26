@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download, Settings } from "lucide-react";
-import HelpPanel, { HelpTrigger, Section, Step, Item, Indent, Note } from "@/components/admin/HelpPanel";
+import HelpPanel, { HelpTrigger, Section, Item, Indent, Note } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { useTabParam } from "@/lib/useTabParam";
 import { extractContacts, type ParsedContact } from "@/lib/subscriber-excel";
@@ -58,6 +58,12 @@ export default function NewsletterPage() {
   const [skipEzpmp, setSkipEzpmp] = useState(false);
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewMeta, setPreviewMeta] = useState<{ vol_number: number; send_date: string; featured_ids: string[] } | null>(null);
+  const previewRevision = useRef(0);
+  function invalidatePreview() {
+    previewRevision.current++;
+    setPreviewHtml(null);
+    setPreviewMeta(null);
+  }
   const [subjectOverride, setSubjectOverride] = useState(""); // 비워두면 기본 제목([EZ Letter] Vol.N · 날짜) 그대로 발송
   const [headerImages, setHeaderImages] = useState<{ label: string; url: string; flap_url?: string; box_color?: string }[]>([{ label: "기본", url: "/images/ez-letter-header.png" }]);
   const [headerImageLabel, setHeaderImageLabel] = useState("기본");
@@ -266,6 +272,7 @@ export default function NewsletterPage() {
         setBannerImageUrl(json.data.image_url ?? "");
         setBannerLinkUrl(json.data.link_url ?? "");
         setBannerSaved(true);
+        invalidatePreview();
         setTimeout(() => setBannerSaved(false), 2000);
       } else {
         setBannerError(json.error ?? "저장 실패");
@@ -304,6 +311,7 @@ export default function NewsletterPage() {
       const json = await res.json();
       if (json.data) {
         setHeaderImages(json.data);
+        invalidatePreview();
         setNewHeaderLabel("");
         setNewHeaderFile(null);
         setNewHeaderFlapFile(null);
@@ -444,6 +452,7 @@ export default function NewsletterPage() {
         const escaped = (json.editorial as string)
           .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
         setEditorialText(escaped.replace(/\n/g, "<br>"));
+        invalidatePreview();
       } else {
         setEditorialError(json.error ?? "AI 생성 실패");
       }
@@ -471,6 +480,7 @@ export default function NewsletterPage() {
     if (!el) return;
     editorialOwnValueRef.current = el.innerHTML;
     setEditorialText(el.innerHTML);
+    invalidatePreview();
   }
 
   // 툴바(select 등)를 클릭하면 포커스가 에디터 밖으로 빠지면서 선택 영역이 사라지므로,
@@ -662,7 +672,8 @@ export default function NewsletterPage() {
 
   async function handlePreview() {
     setPreviewing(true);
-    setPreviewHtml(null);
+    invalidatePreview();
+    const revision = previewRevision.current;
     setSendResult(null);
     try {
       const res = await fetch("/api/admin/newsletter/send", {
@@ -676,6 +687,10 @@ export default function NewsletterPage() {
         }),
       });
       const json = await res.json();
+      if (revision !== previewRevision.current) {
+        setSendResult({ ok: false, message: "내용이 변경되었습니다. 미리보기를 다시 생성해 주세요." });
+        return;
+      }
       if (res.ok && json.html) {
         setPreviewHtml(json.html);
         setPreviewMeta({ vol_number: json.vol_number, send_date: json.send_date, featured_ids: json.featured_ids ?? [] });
@@ -1051,7 +1066,11 @@ export default function NewsletterPage() {
   function toggleCheck(issueId: string, email: string) {
     setCheckedEmails(prev => {
       const s = new Set(prev[issueId] ?? []);
-      s.has(email) ? s.delete(email) : s.add(email);
+      if (s.has(email)) {
+        s.delete(email);
+      } else {
+        s.add(email);
+      }
       return { ...prev, [issueId]: s };
     });
   }
@@ -1185,14 +1204,18 @@ export default function NewsletterPage() {
     setImageSaving((prev) => new Set(prev).add(id));
     setImageSaved((prev) => { const s = new Set(prev); s.delete(id); return s; });
     try {
-      await fetch("/api/admin/events", {
+      const res = await fetch("/api/admin/events", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id, image_url: imageEdits[id] || null }),
       });
+      if (!res.ok) throw new Error("이미지 저장에 실패했습니다. 다시 시도해 주세요.");
+      invalidatePreview();
       setImageEvents((prev) => prev.map((e) => e.id === id ? { ...e, image_url: imageEdits[id] || null } : e));
       setImageSaved((prev) => new Set(prev).add(id));
       setTimeout(() => setImageSaved((prev) => { const s = new Set(prev); s.delete(id); return s; }), 2000);
+    } catch (err) {
+      setSendResult({ ok: false, message: err instanceof Error ? err.message : "이미지 저장 실패" });
     } finally {
       setImageSaving((prev) => { const s = new Set(prev); s.delete(id); return s; });
     }
@@ -1528,7 +1551,7 @@ export default function NewsletterPage() {
               <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
                 <select
                   value={headerImageLabel}
-                  onChange={(e) => { setHeaderImageLabel(e.target.value); setPreviewHtml(null); }}
+                  onChange={(e) => { setHeaderImageLabel(e.target.value); invalidatePreview(); }}
                   style={{ padding: "6px 10px", borderRadius: 6, border: "1px solid var(--surface-container-highest)",
                     background: "var(--surface-container-low)", color: "var(--on-surface)", fontSize: 13 }}
                 >
@@ -1538,7 +1561,7 @@ export default function NewsletterPage() {
                 </select>
               </div>
               <p style={{ margin: 0, fontSize: 11, color: "var(--on-surface-variant)" }}>
-                새 이벤트 이미지를 등록하려면 "발송 설정" 탭 → "헤더/이벤트 이미지 추가"에서 만들어두세요.
+                새 이벤트 이미지를 등록하려면 &quot;발송 설정&quot; 탭 → &quot;헤더/이벤트 이미지 추가&quot;에서 만들어두세요.
               </p>
             </div>
             </>
@@ -1548,7 +1571,7 @@ export default function NewsletterPage() {
               <input
                 type="checkbox"
                 checked={skipEzpmp}
-                onChange={e => { setSkipEzpmp(e.target.checked); setPreviewHtml(null); }}
+                onChange={e => { setSkipEzpmp(e.target.checked); invalidatePreview(); }}
               />
               <span style={{ color: skipEzpmp ? "#dc2626" : "var(--on-surface-variant)" }}>
                 EZPMP 섹션 제외 {skipEzpmp ? "✓" : ""}
@@ -1678,6 +1701,12 @@ export default function NewsletterPage() {
             {previewHtml && (
               <div style={cardStyle}>
                 <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>미리보기</p>
+                {previewHtml.includes("<!--IMG_FALLBACK:") && (
+                  <p style={{ fontSize: 13, color: "#925B12" }} role="status">
+                    이미지 {(previewHtml.match(/<!--IMG_FALLBACK:/g) ?? []).length}건의 확보·저장을 확인하지 못했습니다.
+                    해당 사진은 열람 시 다시 불러오며, 실패하면 기본 이미지가 표시됩니다.
+                  </p>
+                )}
                 <iframe
                   ref={iframeRef}
                   srcDoc={previewHtml}
@@ -1836,7 +1865,7 @@ export default function NewsletterPage() {
                 </SectionInfoModal>
               </div>
               <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-                여기서 등록해두면 "발송" 탭의 헤더 이미지 드롭다운에서 바로 선택해 쓸 수 있습니다.
+                여기서 등록해두면 &quot;발송&quot; 탭의 헤더 이미지 드롭다운에서 바로 선택해 쓸 수 있습니다.
               </p>
               <div style={{ display: "flex", flexDirection: "column", gap: 10, maxWidth: 460 }}>
                 <input
@@ -2452,7 +2481,11 @@ export default function NewsletterPage() {
                               onChange={() => {
                                 setSelectedSubIds((prev) => {
                                   const s = new Set(prev);
-                                  s.has(sub.id) ? s.delete(sub.id) : s.add(sub.id);
+                                  if (s.has(sub.id)) {
+                                    s.delete(sub.id);
+                                  } else {
+                                    s.add(sub.id);
+                                  }
                                   return s;
                                 });
                               }}
@@ -2548,7 +2581,11 @@ export default function NewsletterPage() {
                                 onChange={() => {
                                   setHistoryStatusFilter((prev) => {
                                     const next = new Set(prev);
-                                    next.has(s) ? next.delete(s) : next.add(s);
+                                    if (next.has(s)) {
+                                      next.delete(s);
+                                    } else {
+                                      next.add(s);
+                                    }
                                     return next;
                                   });
                                 }}

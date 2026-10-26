@@ -14,8 +14,8 @@ async function alertImageFallbacks(html: string, vol_number: number) {
   if (!matches || matches.length === 0) return;
   const names = matches.map(m => m.replace(/<!--IMG_FALLBACK:|-->/g, "")).slice(0, 10);
   await sendDiscordAlert({
-    title: `뉴스레터 Vol.${vol_number} 이미지 ${matches.length}건 로딩 실패`,
-    description: `원본 이미지에 접근할 수 없어 기본 로고로 대체됨: ${names.join(", ")}`,
+    title: `뉴스레터 Vol.${vol_number} 이미지 ${matches.length}건 확인 필요`,
+    description: `이미지 확보·저장을 확인하지 못했습니다. 열람 시 다시 불러오며, 실패하면 기본 이미지가 표시됩니다: ${names.join(", ")}`,
     level: "warning",
   });
 }

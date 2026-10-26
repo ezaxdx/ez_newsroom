@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
-import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
 import { fetchRemoteImage } from "@/lib/fetch-remote-image";
 
 /**
  * 외부 이미지 프록시
- * 이메일 HTML에서 외부 이미지를 자체 도메인을 통해 로드 (Gmail CORS 우회)
+ * 이메일 HTML에서 외부 이미지를 자체 도메인을 통해 로드
  *
  * 원본 이미지를 못 가져오면(핫링크 차단, 삭제됨, 접근 불가 등) 뉴스룸(ArticleImg)과
  * 동일하게 EZPMP 로고로 대체함 — 이메일 클라이언트는 onError 같은 JS 폴백을
@@ -27,12 +26,7 @@ async function fallbackLogoResponse(): Promise<NextResponse> {
   });
 }
 
-// 처음 요청이 느려 실패하는 경우가 있어 한 번 더 시도
-async function fetchImage(url: string): Promise<Response | null> {
-  return (await fetchRemoteImage(url)) ?? (await fetchRemoteImage(url));
-}
-
-export const maxDuration = 30;   // 시도 2회(각 8초) + 여유
+export const maxDuration = 30; // 전체 다운로드 12초 + 이미지 변환·응답 여유
 
 export async function GET(req: NextRequest) {
   const url = req.nextUrl.searchParams.get("url");
@@ -51,18 +45,12 @@ export async function GET(req: NextRequest) {
     return fallbackLogoResponse();
   }
 
-  const unwrapped = unwrapNextImageUrl(url);
-  const candidates = unwrapped ? [unwrapped, url] : [url];
-
-  for (const candidate of candidates) {
-    const response = await fetchImage(candidate);
-    if (!response) continue;
-    const contentType = response.headers.get("content-type") ?? "image/jpeg";
-    const buffer = await response.arrayBuffer();
-    return new NextResponse(buffer, {
+  const buffer = await fetchRemoteImage(url, 12000, req.nextUrl.searchParams.get("ref") ?? undefined);
+  if (buffer) {
+    return new NextResponse(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        "Content-Type": contentType,
+        "Content-Type": "image/jpeg",
         "Cache-Control": "public, max-age=86400, stale-while-revalidate=3600",
         "Access-Control-Allow-Origin": "*",
       },
