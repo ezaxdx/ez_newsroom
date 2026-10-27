@@ -64,9 +64,9 @@ export async function fetchRemoteImage(url: string, timeoutMs = 12000, articleUr
         const metadata = await image.metadata();
         if (!metadata.format || !["jpeg", "png", "webp", "gif", "heif", "avif"].includes(metadata.format) ||
             (metadata.width ?? 0) < 5 || (metadata.height ?? 0) < 5) continue;
-        // 포스터의 글자를 자르거나 사진을 늘리지 않고 기존 카드 비율에 맞춘다.
+        // 비율을 유지한 채 중앙을 잘라 카드 전체를 채운다. 이메일의 object-fit 지원에 의존하지 않는다.
         return await image.rotate()
-          .resize(510, 258, { fit: "contain", background: "#EEEBE5" })
+          .resize(510, 258, { fit: "cover", position: "centre" })
           .flatten({ background: "#EEEBE5" }).jpeg({ quality: 85 })
           .timeout({ seconds: 2 }).toBuffer();
       } catch (err) {

@@ -114,7 +114,7 @@ export async function resolveNewsImage(image_url: string | null, site_url: strin
 
   const storageUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const storageKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const path = `articles/v1/${createHash("sha256").update(source.href).digest("hex")}.jpg`;
+  const path = `articles/v2/${createHash("sha256").update(source.href).digest("hex")}.jpg`;
   const publicUrl = storageUrl ? `${storageUrl.replace(/\/$/, "")}/storage/v1/object/public/${IMAGE_BUCKET}/${path}` : null;
   if (publicUrl && await storedImageExists(publicUrl)) return { src: publicUrl, reachable: true };
 
@@ -138,7 +138,7 @@ export async function resolveNewsImage(image_url: string | null, site_url: strin
     }
   }
   // 확보·저장에 실패해도 열람 시 프록시에서 다시 시도할 수 있도록 주소를 남긴다.
-  const params = new URLSearchParams({ url: source.href, v: "3" });
+  const params = new URLSearchParams({ url: source.href, v: "4" });
   if (articleUrl) params.set("ref", articleUrl);
   return { src: `${site_url}/api/image-proxy?${params}`, reachable: false };
 }
@@ -188,7 +188,7 @@ function newsDeepLink(id: string, site_url: string): string {
 // ── 뉴스 카드 (이메일용 테이블 기반) ─────────────────────
 async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<string> {
   const { src: proxied, reachable } = await resolveNewsImage(item.image_url, site_url, item.url);
-  // object-fit:cover → Outlook 미지원. 고정 셀 안에 이미지를 꽉 채우는 테이블 래퍼로 대체
+  // 서버에서 카드 비율로 잘라낸 이미지를 표시하므로 Outlook에서도 여백 없이 채워진다.
   const img = proxied
     ? `${reachable ? "" : `<!--IMG_FALLBACK:${item.id}-->`}<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
@@ -220,7 +220,7 @@ async function newsCard(item: NewsCard, vol: number, site_url: string): Promise<
 // ── Pick 행사 카드 ────────────────────────────────────────
 async function pickCard(ev: EventCard, vol: number, site_url: string): Promise<string> {
   const { src: proxied, reachable } = await resolveNewsImage(ev.image_url ?? null, site_url, ev.website ?? undefined);
-  // contain 스타일: 이미지가 박스를 넘지 않도록 max-width/height 제한
+  // 뉴스 카드와 동일하게 서버에서 잘라낸 이미지를 카드 전체에 표시한다.
   const img = proxied
     ? `${reachable ? "" : `<!--IMG_FALLBACK:${ev.name}-->`}<table cellpadding="0" cellspacing="0" width="100%" style="width:100%;">
          <tr><td height="129" style="width:100%;height:129px;overflow:hidden;line-height:0;font-size:0;">
