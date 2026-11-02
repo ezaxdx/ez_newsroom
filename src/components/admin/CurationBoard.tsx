@@ -38,6 +38,7 @@ function formatKSTDateTime(ms: number): string {
 
 type Props = {
   initialNews: NewsItem[];
+  temporaryArchiveEnabled?: boolean;
   qualityThresholds?: { auto_publish: number; staging: number };
   displayWindowDays?: number;
   scheduleDays?: number[];
@@ -61,6 +62,7 @@ function isArchive(item: NewsItem, lastRunMs: number) {
 
 export default function CurationBoard({
   initialNews,
+  temporaryArchiveEnabled = false,
   qualityThresholds = { auto_publish: 8, staging: 5 },
   displayWindowDays = 4,
   scheduleDays = [],
@@ -73,6 +75,7 @@ export default function CurationBoard({
   const router = useRouter();
   const [items, setItems] = useState<NewsItem[]>(initialNews);
   const [saving, setSaving] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [running, setRunning] = useState(false);
   const [runResult, setRunResult] = useState<string | null>(null);
   const [tab, setTab] = useTabParam<Tab>("tab", "live");
@@ -440,6 +443,42 @@ export default function CurationBoard({
     archiveGroups.sort((a, b) => b.dateMs - a.dateMs);
   }
 
+  const handleArchiveEdition = async (disable = false) => {
+    if (saving || running || archiving) return;
+    if (deletedIds.length || republishIds.length || items.some(item =>
+      JSON.stringify(item) !== JSON.stringify(baselineRef.current.get(item.id)))) {
+      setRunResult("먼저 변경사항을 저장한 뒤 아카이빙해 주세요."); return;
+    }
+    setArchiving(true);
+    const request = async (body: Record<string, unknown>) => {
+      const response = await fetch("/api/admin/news/archive", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error ?? "아카이빙 처리에 실패했습니다.");
+      return result;
+    };
+    try {
+      if (disable) {
+        if (!window.confirm("자동 발행이 안정화됐다면 임시 아카이빙 기능을 종료하세요.\n종료 후 버튼과 실행 기능이 비활성화됩니다. 다시 사용하려면 운영 설정 변경이 필요합니다.\n종료할까요?")) return;
+        await request({ action: "disable" });
+        setRunResult("임시 아카이빙 기능을 종료했습니다.");
+      } else {
+        const preview = await request({ action: "preview" });
+        if (!preview.available) { setRunResult("넘길 이전 회차 기사가 없습니다. 현재 회차는 그대로 유지됩니다."); return; }
+        const message = formatKSTDateTime(Date.parse(preview.cutoff)) + " (한국시간) 이전의 메인 기사 " + preview.count + "건을 아카이브로 넘깁니다.\n"
+          + "해당 시각 이후 기사 " + preview.kept + "건은 메인에 남습니다. 기사는 삭제되지 않습니다.\n"
+          + (preview.kept === 0 ? "새 기사를 수동 발행하기 전까지 메인 기사 목록이 비게 됩니다.\n" : "")
+          + "이전 회차를 아카이빙할까요?";
+        if (!window.confirm(message)) return;
+        const result = await request({ action: "archive", cutoff: preview.cutoff, boundary: preview.boundary, count: preview.count });
+        setRunResult("이전 회차 " + result.count + "건을 아카이브로 넘겼습니다. 새 기사를 수동 발행할 수 있습니다.");
+      }
+      router.refresh();
+    } catch (error) { setRunResult((error as Error).message); }
+    finally { setArchiving(false); }
+  };
+
   const hasPendingChanges = deletedIds.length > 0 || republishIds.length > 0;
 
   return (
@@ -455,7 +494,7 @@ export default function CurationBoard({
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={handleRunCuration}
-            disabled={running}
+            disabled={running || archiving}
             className="flex items-center gap-2 h-9 px-4 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}
           >
@@ -464,7 +503,7 @@ export default function CurationBoard({
           </button>
           <button
             onClick={handleSave}
-            disabled={saving}
+            disabled={saving || archiving}
             className="h-9 px-5 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
           >
@@ -472,6 +511,21 @@ export default function CurationBoard({
           </button>
         </div>
       </div>
+
+      {temporaryArchiveEnabled && (
+        <div className="mb-5 p-3 rounded-lg text-sm" style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)" }}>
+          <p className="m-0 mb-2 text-xs" style={{ color: "var(--on-surface-variant)" }}>자동 발행 실패 시 수동 발행을 준비하는 임시 기능입니다. 최근 예약 시각 이전 기사만 아카이브로 넘깁니다.</p>
+          <div className="flex gap-3 items-center flex-wrap">
+            <button onClick={() => void handleArchiveEdition()} disabled={archiving || saving || running}
+              className="px-3 py-2 rounded-md text-sm font-semibold disabled:opacity-50"
+              style={{ background: "var(--surface-container-highest)", border: "none", cursor: "pointer" }}>
+              {archiving ? "처리 중…" : "이전 회차 아카이빙 · 임시"}
+            </button>
+            <button onClick={() => void handleArchiveEdition(true)} disabled={archiving || saving || running}
+              className="text-xs underline disabled:opacity-50" style={{ background: "none", border: "none", color: "var(--on-surface-variant)", cursor: "pointer" }}>임시 기능 종료</button>
+          </div>
+        </div>
+      )}
 
       {/* ── Top News 현황 패널 ── */}
       <div className="mb-6 p-4 rounded-xl" style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)" }}>
@@ -1020,7 +1074,7 @@ function EditArticleModal({
 function ArticleCard({
   item, idx, tab, qualityThresholds, isTopNews,
   onDragStart, onDragEnter, onDragEnd,
-  onTogglePublish, onMove, onRemove, onRepublish, onEdit, onPatch, onMarkGood, onReject, liked,
+  onTogglePublish, onMove, onRemove, onRepublish, onEdit, onMarkGood, onReject, liked,
   LEVEL_STYLE, selected, onToggleSelect,
 }: {
   onMarkGood: (item: NewsItem) => void;
@@ -1044,6 +1098,7 @@ function ArticleCard({
   selected?: boolean;
   onToggleSelect?: (id: string) => void;
 }) {
+  const [observedAt] = useState(() => Date.now());
   const isDraggable = tab === "live";
 
   return (
@@ -1133,7 +1188,7 @@ function ArticleCard({
             </span>
           )}
           {tab === "staging" && item.created_at &&
-            Date.now() - new Date(item.created_at).getTime() < 48 * 60 * 60 * 1000 && (
+            observedAt - new Date(item.created_at).getTime() < 48 * 60 * 60 * 1000 && (
             <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
               style={{ background: "#16a34a", color: "#fff" }}>
               NEW

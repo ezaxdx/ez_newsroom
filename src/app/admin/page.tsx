@@ -54,15 +54,16 @@ async function fetchSettings(): Promise<{
   scheduleHour: number;
   scheduleEnabled: boolean;
   activeCurationWindow: string | null;
+  temporaryArchiveEnabled: boolean;
   navCategories: string[];
 }> {
-  const defaults = { qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], scheduleHour: 9, scheduleEnabled: true, navCategories: [], activeCurationWindow: null as string | null };
+  const defaults = { temporaryArchiveEnabled: false, qualityThresholds: { auto_publish: 8, staging: 5 }, displayWindowDays: 4, scheduleDays: [2, 4], scheduleHour: 9, scheduleEnabled: true, navCategories: [], activeCurationWindow: null as string | null };
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL) return defaults;
   try {
     const supabase = createAdminClient();
     const { data } = await supabase
       .from("curation_settings")
-      .select("quality_thresholds, auto_schedule, nav_categories, active_curation_window")
+      .select("quality_thresholds, auto_schedule, nav_categories, active_curation_window, temporary_archive_control")
       .limit(1)
       .single();
     const qualityThresholds = data?.quality_thresholds ?? { auto_publish: 8, staging: 5 };
@@ -74,7 +75,7 @@ async function fetchSettings(): Promise<{
     // 실제 live/archive 분류는 CurationBoard에서 calcLastScheduledRun 사용
     const displayWindowDays = 4;
     const navCategories: string[] = data?.nav_categories ?? [];
-    return { qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories, activeCurationWindow: data?.active_curation_window ?? null };
+    return { temporaryArchiveEnabled: data?.temporary_archive_control?.enabled === true, qualityThresholds, displayWindowDays, scheduleDays, scheduleHour, scheduleEnabled, navCategories, activeCurationWindow: data?.active_curation_window ?? null };
   } catch { return defaults; }
 }
 
@@ -140,7 +141,7 @@ export default async function AdminPage() {
         ))}
       </div>
 
-      <CurationBoard initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} scheduleHour={scheduleHour} scheduleEnabled={scheduleEnabled} navCategories={navCategories} lastRunISO={lastRunISO} archiveTotal={counts.archive} />
+      <CurationBoard temporaryArchiveEnabled={settings.temporaryArchiveEnabled} initialNews={news} qualityThresholds={qualityThresholds} displayWindowDays={displayWindowDays} scheduleDays={scheduleDays} scheduleHour={scheduleHour} scheduleEnabled={scheduleEnabled} navCategories={navCategories} lastRunISO={lastRunISO} archiveTotal={counts.archive} />
 
       {/* 큐레이션 실행 로그 */}
       <div className="mt-8 mb-8">

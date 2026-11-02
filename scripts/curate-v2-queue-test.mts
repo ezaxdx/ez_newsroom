@@ -331,4 +331,28 @@ test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: 
   await q("delete from curation_notifications where notification_key='edition:blocked'");
   assert.ok(await notify('edition:blocked'),'failed delivery can retry');
 
+  const archiveMigration=await readFile(new URL('../supabase/revamp/14_manual_archive.sql',import.meta.url),'utf8');
+  await pg.exec(archiveMigration);await pg.exec(archiveMigration);
+  await q("update curation_batches set lease_until=null where id is not null");
+  await q("update curation_settings set active_curation_window=$1 where id=1",[new Date(end-2*86400000).toISOString()]);
+  await q("insert into news(title,original_url,category,is_published,published_at) values('previous','https://fixture.test/previous','MICE',true,$1),('current','https://fixture.test/current','MICE',true,$2)",[new Date(end-3600000).toISOString(),new Date(end).toISOString()]);
+  const archive=async(action='preview',preview?:any)=>(await q('select manual_archive_curation($1,$2,$3,$4) as result',[action,preview?.cutoff??null,preview?.boundary??null,preview?.count??null]))[0].result;
+  const preview=await archive();assert.equal(preview.count,1);assert.equal(preview.available,true);
+  assert.equal(new Date(preview.cutoff).getTime(),end);
+  await assert.rejects(archive('archive',{...preview,count:2}),/다시 확인/);
+  await q("update curation_batches set lease_until=now()+interval '10 minutes' where id=$1",[invalid.id]);
+  await assert.rejects(archive('archive',preview),/실행 중/);
+  await q("update curation_batches set lease_until=null where id=$1",[invalid.id]);
+  const oldCount=(await q('select count(*)::int as n from news'))[0].n;
+  assert.equal((await archive('archive',preview)).archived,true);
+  assert.equal((await q('select count(*)::int as n from news'))[0].n,oldCount,'no article deleted');
+  assert.equal((await q("select count(*)::int as n from news where original_url='https://fixture.test/current' and published_at>=(select active_curation_window from curation_settings)"))[0].n,1,'exact boundary article remains live');
+  assert.equal((await archive()).available,false);
+  await assert.rejects(archive('archive',preview),/다시 확인/);
+  assert.equal((await q("select temporary_archive_control->'last_action'->>'count' as n from curation_settings"))[0].n,'1');
+  assert.equal((await archive('disable')).disabled,true);
+  await q("update curation_settings set auto_schedule='{\"days\":[2,4],\"hour\":8}' where id=1");
+  await assert.rejects(archive(),/종료/);
+  assert.equal((await q("select has_function_privilege('anon','manual_archive_curation(text,timestamptz,timestamptz,integer)','execute') as allowed"))[0].allowed,false);
+
 });
