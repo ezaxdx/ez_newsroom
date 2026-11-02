@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export const DEFAULT_HEADER_IMAGE = { label: "기본", url: "/images/ez-letter-header.png", flap_url: undefined as string | undefined, box_color: undefined as string | undefined };
+const DEFAULT_HEADER_IMAGE = { label: "기본", url: "/images/ez-letter-header.png", flap_url: undefined as string | undefined, box_color: undefined as string | undefined };
 
 // 뉴스레터 헤더 배경 이미지 후보 목록 관리 — "기본" 하나는 코드에 고정, 나머지(이벤트용 등)는 curation_settings에 누적
 export async function GET() {
