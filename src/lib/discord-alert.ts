@@ -21,13 +21,13 @@ export async function sendDiscordAlert(params: {
   description: string;
   level?: AlertLevel;
   fields?: { name: string; value: string }[];
-}): Promise<void> {
+}): Promise<boolean> {
   const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
-  if (!webhookUrl) return; // 미설정 시 조용히 무시 — 알림 실패가 본 기능을 막으면 안 됨
+  if (!webhookUrl) return false; // 미설정 시 조용히 무시 — 알림 실패가 본 기능을 막으면 안 됨
 
   const level = params.level ?? "error";
   try {
-    await fetch(webhookUrl, {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -41,7 +41,9 @@ export async function sendDiscordAlert(params: {
       }),
       signal: AbortSignal.timeout(5000),
     });
+    return response.ok;
   } catch (err) {
     console.error("[discord-alert] 전송 실패:", err);
+    return false;
   }
 }

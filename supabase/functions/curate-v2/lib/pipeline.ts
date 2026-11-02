@@ -853,8 +853,23 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const deferredTotal = queue?.pending ?? [...stats.values()].reduce((s, x) => s + x.deferred, 0);
   let batchStatus = deferredTotal > 0 ? 'partial' : 'done';
   if (batch) {
+    // Include prepared rows on resume: manual articles may have arrived since collection.
+    const latestNews = await fetchAll((f, t) => supabase.from("news").select("original_url").order("id").range(f, t));
+    const latestKeys = new Set(latestNews.map((r: any) => normalizeUrl(r.original_url)));
+    const duplicates = [...work.values()].filter(r => ['publish', 'stage'].includes(r.state)
+      && latestKeys.has(normalizeUrl(r.article?.original_url ?? r.payload.link)));
+    for (const row of duplicates) { row.state = 'excluded'; row.last_error = '발행 직전 확인: 이미 저장된 기사 URL'; }
+    await saveWork(supabase, batch, duplicates);
     const { data, error } = await supabase.rpc('finish_curation_batch', { p_batch: batch.id, p_lease: batch.lease });
-    if (error) throw new Error(`발행 확정 실패: ${error.message}`);
+    if (error) {
+      // SQL/data/schema errors need a fix; network/timeout errors retain bounded retries.
+      if (/^(22|23|42)/.test(error.code ?? '') || /UPDATE requires a WHERE clause/.test(error.message)) {
+        const blocked = await supabase.from('curation_batches').update({ retry_blocked_reason: error.message })
+          .eq('id', batch.id).eq('lease', batch.lease);
+        if (blocked.error) console.error('재시도 중지 기록 실패', blocked.error.message);
+      }
+      throw new Error(`발행 확정 실패: ${error.message}`);
+    }
     batchStatus = data.status;
     results.published = data.published;
     results.staged = data.staged;

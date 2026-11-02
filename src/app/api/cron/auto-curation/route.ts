@@ -19,22 +19,58 @@ async function checkMissedRun(
   const lastRun = calcLastScheduledRun(schedule.days, schedule.hour ?? 9);
   if (Date.now() - lastRun.getTime() < GRACE_MS) return; // 아직 여유시간 이내 — 판단 보류
 
-  // 예정 시각 이후에 "끝난 정기·수동 실행(live, 완료)"이 없으면 누락 — 시험 실행(dry)과 도중에 죽은 실행("실행 중"·"실패")은 실행으로 치지 않음
-  const { data: sinceLogs } = await supabase
-    .from("curation_logs")
-    .select("run_at, run_mode, details")
-    .gte("run_at", lastRun.toISOString());
-  const liveLogs = (sinceLogs ?? []).filter((l) => l.run_mode === "live");
-  const done = liveLogs.some((l) => ((l.details as { status?: string } | null)?.status ?? "done") === "done");
-  if (done) return; // 정상 실행됨
-  const broken = liveLogs.filter((l) => ["running", "failed"].includes((l.details as { status?: string } | null)?.status ?? "")).length;
-  await sendDiscordAlert({
+  const edition = lastRun.toISOString();
+  const [logsResult, batchResult] = await Promise.all([
+    supabase.from("curation_logs").select("run_at, run_mode, details, errors")
+      .eq("run_mode", "live").gte("run_at", edition).order("run_at", { ascending: false }),
+    supabase.from("curation_batches").select("id, status, attempts, retry_blocked_reason, dispatch_error")
+      .eq("window_end", edition).limit(1),
+  ]);
+  // A failed query is not evidence of a missing run.
+  if (logsResult.error || batchResult.error) {
+    console.error("[curation-watch] 조회 실패", logsResult.error ?? batchResult.error);
+    return;
+  }
+  const batch = batchResult.data?.[0];
+  const logs = (logsResult.data ?? []).filter(l => {
+    const detail = l.details as { batch_id?: string } | null;
+    return !detail?.batch_id || detail.batch_id === batch?.id;
+  });
+  if (batch?.status === "done" || logs.some(l =>
+    ((l.details as { status?: string } | null)?.status ?? "done") === "done")) return;
+
+  const state = batch?.retry_blocked_reason ? "blocked" : (batch?.attempts ?? 0) >= 8 ? "limit"
+    : batch || logs.length ? "incomplete" : "missing";
+  const cause = state === "blocked" ? "DB 오류로 자동 재시도를 중지했습니다."
+    : state === "limit" ? "해당 회차의 실행 상한(8회)에 도달했습니다."
+    : state === "incomplete" ? "작업 접수 또는 시작 기록은 있지만 완료 기록이 없습니다."
+    : "이 회차의 작업 접수·실행 기록이 없습니다. 시작 요청 누락 또는 접수 전 실패 가능성이 있습니다.";
+  const action = state === "blocked" ? "발행 DB 오류를 수정한 뒤 해당 회차의 재시도 중지 상태를 해제해야 합니다."
+    : state === "limit" ? "실행 로그에서 반복 실패 원인을 확인한 뒤 재개 여부를 결정해야 합니다. 새 회차의 실행 한도는 별도입니다."
+    : state === "incomplete" ? "실행 로그와 자동 복구 기록에서 중단 원인·잔여 후보를 확인해 주세요."
+    : "Vercel 크론 호출 기록과 curate-v2 접수 응답·인증 설정을 확인해 주세요.";
+  const errors = logs[0]?.errors as { error?: string }[] | null;
+  const error = batch?.retry_blocked_reason ?? batch?.dispatch_error ?? errors?.[0]?.error;
+  const target = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "full", timeStyle: "short" }).format(lastRun);
+  const key = edition + ":" + state;
+  const claim = await supabase.rpc("claim_curation_notification", { p_key: key });
+  if (claim.error) { console.error("[curation-watch] 알림 접수 실패", claim.error); return; }
+  if (!claim.data) return;
+  const sent = await sendDiscordAlert({
     title: "큐레이션 자동 실행 누락 감지",
-    description: broken > 0
-      ? `예정된 실행 시각(${lastRun.toISOString()}) 이후로 끝난 실행이 없습니다. 시작은 했지만 끝나지 못한 실행 기록이 ${broken}건 있어 함수가 도중에 중단된 것으로 보입니다(자원 한도 등). 큐레이션 보드 하단 로그에서 "중단됨"을 확인하세요.`
-      : `예정된 실행 시각(${lastRun.toISOString()}) 이후로 curation_logs에 실행 기록이 없습니다. 크론이 실행되지 않았거나 시작 전에 실패했을 수 있습니다.`,
+    description: ["대상 회차: " + target + " (한국시간)", cause,
+      error ? "기록된 오류: " + String(error).slice(0, 600) : "",
+      "조치: " + action,
+      "화·목 발행 회차를 매일 점검한 결과입니다. 같은 회차·상태는 중복 전송하지 않습니다. 수동 등록 기사 유무와는 별개입니다."
+    ].filter(Boolean).join("\n"),
     level: "error",
   });
+  const notification = supabase.from("curation_notifications");
+  const result = sent
+    ? await notification.update({ sent_at: new Date().toISOString() }).eq("notification_key", key).eq("claim_token", claim.data)
+    : await notification.delete().eq("notification_key", key).eq("claim_token", claim.data);
+  if (result.error) console.error("[curation-watch] 전송 결과 저장 실패", result.error);
+
 }
 
 export async function GET(req: Request) {
@@ -75,7 +111,7 @@ export async function GET(req: Request) {
   const { data: todayLogs } = await supabase
     .from("curation_logs")
     .select("run_at, run_mode, details")
-    .gte("run_at", todayStartUTC);
+    .gte("run_at", new Date(Math.max(Date.parse(todayStartUTC), calcLastScheduledRun(schedule.days, schedule.hour ?? 9).getTime())).toISOString());
   const alreadyRan = (todayLogs ?? []).some((l) => {
     if (l.run_mode !== "live") return false;
     const status = (l.details as { status?: string } | null)?.status ?? "done";   // 상태 기록이 생기기 전의 옛 기록은 완료로 봄

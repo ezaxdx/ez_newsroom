@@ -64,6 +64,45 @@ test('Edge handler acknowledges durable acceptance and records a rejected contin
   assert.match(updates.at(-1).details.continuation.error,/401/);
 });
 
+test('watcher identifies the KST edition, deduplicates alerts and retries failed delivery', async t => {
+  const globals=globalThis as any;const originalNow=Date.now;
+  Date.now=()=>Date.parse('2026-11-02T00:00:00Z'); // Monday, checking last Thursday
+  const edition='2026-10-28T23:00:00.000Z';
+  let logs:any[]=[],batches:any[]=[],queryError=false,delivery=true;
+  const sent:any[]=[],claims=new Map<string,string>();
+  const db:any={rpc:async(_n:string,args:any)=>{
+    if(claims.has(args.p_key))return {data:null,error:null};
+    const token=crypto.randomUUID();claims.set(args.p_key,token);return {data:token,error:null};
+  },from:(table:string)=>{
+    let key='',op='select';const filters:any[]=[];
+    const q:any={select(){return this;},gte(){return this;},order(){return this;},limit(){return this;},
+      eq(k:string,v:any){filters.push([k,v]);if(k==='notification_key')key=v;return this;},
+      update(){op='update';return this;},delete(){op='delete';return this;},
+      then(resolve:any){
+        if(table==='curation_notifications'&&op==='delete')claims.delete(key);
+        resolve({data:table==='curation_logs'?logs:table==='curation_batches'?batches:[],error:queryError?{message:'query failed'}:null});
+      }};return q;
+  }};
+  globals.__watchTest={createAdminClient:()=>db,verifyCronAuth:()=>null,
+    calcLastScheduledRun:()=>new Date(edition),NextResponse:{json:Response.json},
+    sendDiscordAlert:async(a:any)=>{sent.push(a);return delivery;}};
+  t.after(()=>{Date.now=originalNow;delete globals.__watchTest;});
+  const source=(await readFile(new URL('../src/app/api/cron/auto-curation/route.ts',import.meta.url),'utf8')).replace(/^import .*;\r?$/gm,'');
+  const js=ts.transpileModule('const {createAdminClient,verifyCronAuth,calcLastScheduledRun,NextResponse,sendDiscordAlert}=globalThis.__watchTest;\n'+source+'\nexport {checkMissedRun};',{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext}}).outputText;
+  const {checkMissedRun}=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
+  const watch=()=>checkMissedRun(db,{days:[2,4],hour:8});
+  await watch();await watch();assert.equal(sent.length,1);
+  assert.match(sent[0].description,/10월 29일/);assert.match(sent[0].description,/한국시간/);assert.match(sent[0].description,/조치:/);
+  batches=[{id:'b',status:'partial',attempts:2,retry_blocked_reason:'UPDATE requires a WHERE clause'}];
+  delivery=false;await watch();assert.equal(sent.length,2);
+  delivery=true;await watch();await watch();assert.equal(sent.length,3,'failed send retried, successful send deduplicated');
+  assert.match(sent[2].description,/UPDATE requires a WHERE clause/);
+  batches=[{id:'b',status:'done'}];await watch();assert.equal(sent.length,3);
+  batches=[];logs=[{details:{batch_id:'old',status:'done'}}];claims.clear();
+  await watch();assert.equal(sent.length,4,'old batch completion cannot mask missing edition');
+  queryError=true;claims.clear();await watch();assert.equal(sent.length,4,'query failure is not a missing-run alert');
+});
+
 const runtime = process.env.CURATION_TEST_PGLITE;
 test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: !runtime }, async t => {
   const { PGlite } = await import(pathToFileURL(runtime!).href);
@@ -94,6 +133,8 @@ test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: 
   const migration = await readFile(new URL('../supabase/revamp/12_curation_queue.sql', import.meta.url),'utf8');
   await pg.exec(migration);
   await pg.exec(migration); // idempotent migration
+  const fix = await readFile(new URL('../supabase/revamp/13_curation_reliability.sql', import.meta.url),'utf8');
+  await pg.exec(fix); await pg.exec(fix);
   const q = async (sql: string, params: any[] = []) => (await pg.query(sql,params)).rows;
   const claim = async () => (await q(`select claim_curation_batch(now()-interval '3 days',now()-interval '1 day',now()+interval '1 day') as b`))[0].b;
   const b = await claim();
@@ -120,7 +161,14 @@ test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: 
   assert.equal((await finish()).published,0,'finalization idempotent');
   const boundary=(await q('select active_curation_window from curation_settings'))[0].active_curation_window;
   assert.notEqual(String(boundary),String(oldBoundary));
-  assert.equal(String((await q('select published_at from news'))[0].published_at),String(boundary));
+  assert.equal(new Date(boundary).getTime(),new Date(b.window_end).getTime());
+  assert.ok(new Date((await q('select published_at from news'))[0].published_at).getTime()>=new Date(boundary).getTime());
+  // A manual boundary from this edition must not be advanced by finalization.
+  await q("update curation_settings set active_curation_window=now() where id=1");
+  const manualBoundary=(await q('select active_curation_window from curation_settings'))[0].active_curation_window;
+  await save({...row,url_key:'example.com/manual-preservation',article:{...row.article,original_url:'https://example.com/manual-preservation'},state:'publish'});
+  assert.equal((await finish()).published,1);
+  assert.equal(String((await q('select active_curation_window from curation_settings'))[0].active_curation_window),String(manualBoundary));
   assert.equal((await q("select has_function_privilege('anon','finish_curation_batch(uuid,uuid)','execute') as allowed"))[0].allowed,false);
 
   // Minimal PostgREST adapter over a real local PostgreSQL instance. The pipeline and RPCs are unchanged.
@@ -128,7 +176,7 @@ test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: 
     rpc: async (name: string, args: any) => {
       const params=Object.values(args).map(v=>typeof v==='object'&&v!==null?JSON.stringify(v):v);
       try { return {data:(await q(`select ${name}(${Object.keys(args).map((k,i)=>`${k} => $${i+1}`).join(',')}) as result`,params))[0].result,error:null}; }
-      catch(e) {return {data:null,error:{message:(e as Error).message}};}
+      catch(e) {return {data:null,error:{message:(e as Error).message,code:(e as any).code}};}
     },
     from: (table: string) => {
       let op='select',value:any, single=false,limit:number|undefined,offset=0,order='';
@@ -234,5 +282,53 @@ test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: 
   await pg.exec("insert into net._http_response select id,401,null from net.requests; update curation_batches set last_dispatch_at=now()-interval '11 minutes'; select resume_curation_batches()");
   assert.match((await q("select details->'continuation'->>'error' as error from curation_logs where details->>'batch_id'=$1 order by run_at desc limit 1",[empty.data.id]))[0].error,/401/);
   await pg.exec("update curation_batches set attempts=8,attempt_day=(now() at time zone 'Asia/Seoul')::date,last_dispatch_at=null; select resume_curation_batches()");
-  assert.equal((await q('select count(*)::int as n from net.requests'))[0].n,2,'daily cap blocks further automatic retries');
+  assert.equal((await q('select count(*)::int as n from net.requests'))[0].n,2,'per-edition cap blocks further automatic retries');
+  // Yesterday's attempts remain capped, but cannot consume the next edition's budget.
+  await pg.exec("update curation_batches set attempt_day=current_date-1,lease=null,lease_until=null");
+  assert.equal((await db.rpc('claim_curation_batch',{p_start:empty.data.window_start,p_end:empty.data.window_end,p_expires:empty.data.expires_at})).data.skipped,true);
+  const fresh=(await db.rpc('claim_curation_batch',{...args,p_end:new Date(end+3).toISOString()})).data;
+  assert.ok(fresh.lease);assert.equal(fresh.attempts,1);
+  await q("update curation_batches set retry_blocked_reason='fixture schema error',lease=null,lease_until=null where id=$1",[fresh.id]);
+  const requests=(await q('select count(*)::int as n from net.requests'))[0].n;
+  await pg.exec('select resume_curation_batches()');
+  assert.equal((await q('select count(*)::int as n from net.requests'))[0].n,requests);
+  assert.equal((await db.rpc('claim_curation_batch',{...args,p_end:fresh.window_end})).data.skipped,true);
+
+  // Resume a prepared article after manual publication of a tracking-URL variant.
+  await q("update curation_batches set retry_blocked_reason=null where id=$1",[fresh.id]);
+  const prepared=(await db.rpc('claim_curation_batch',{...args,p_end:fresh.window_end})).data;
+  const preparedRow={...originalRow,state:'publish',article:{...originalRow.article,original_url:'https://www.fixture.test/article?id=manual&utm_source=google'},
+    url_key:'fixture.test/article?id=manual',payload:{...originalRow.payload,link:'https://www.fixture.test/article?id=manual&utm_source=google'}};
+  await db.rpc('save_curation_work',{p_batch:prepared.id,p_lease:prepared.lease,p_rows:[preparedRow],p_snapshot:snapshot});
+  prepared.snapshot=snapshot;
+  await q("insert into news(title,original_url,category,is_published,published_at) values('manual','http://fixture.test/article?id=manual#naver','MICE',true,now())");
+  const beforeAI=aiCalls;
+  const deduped:any=await runCuration(deps,{dry:false,batch:prepared,budgetMs:105000});
+  assert.equal(deduped.published,0);assert.equal(aiCalls,beforeAI);
+  assert.equal((await q('select state from curation_work where batch_id=$1',[prepared.id]))[0].state,'excluded');
+
+  // A deterministic finalization failure is recorded and cannot be retried automatically.
+  const invalid=(await db.rpc('claim_curation_batch',{...args,p_end:new Date(end+4).toISOString()})).data;
+  const invalidRow={...preparedRow,url_key:'fixture.test/invalid',article:{original_url:'https://fixture.test/invalid',category:'MICE'}};
+  await db.rpc('save_curation_work',{p_batch:invalid.id,p_lease:invalid.lease,p_rows:[invalidRow],p_snapshot:snapshot});
+  invalid.snapshot=snapshot;
+  await assert.rejects(runCuration(deps,{dry:false,batch:invalid,budgetMs:105000}),/발행 확정 실패/);
+  const blocked=(await q('select retry_blocked_reason,lease from curation_batches where id=$1',[invalid.id]))[0];
+  assert.match(blocked.retry_blocked_reason,/null value/);assert.equal(blocked.lease,null);
+  assert.equal((await db.rpc('claim_curation_batch',{...args,p_end:invalid.window_end})).data.skipped,true);
+
+  // Persistent notification claims: concurrency, failed delivery, stale ownership, state changes.
+  const notify=async(key:string)=>(await q('select claim_curation_notification($1) as token',[key]))[0].token;
+  const token=await notify('edition:missing');assert.ok(token);
+  assert.equal(await notify('edition:missing'),null);
+  await q("update curation_notifications set claimed_at=now()-interval '11 minutes' where notification_key='edition:missing'");
+  const replacement=await notify('edition:missing');assert.ok(replacement);assert.notEqual(replacement,token);
+  await q("delete from curation_notifications where notification_key='edition:missing' and claim_token=$1",[token]);
+  assert.equal(await notify('edition:missing'),null,'old sender cannot release new claim');
+  await q("update curation_notifications set sent_at=now() where notification_key='edition:missing' and claim_token=$1",[replacement]);
+  assert.equal(await notify('edition:missing'),null,'sent alert remains deduplicated');
+  assert.ok(await notify('edition:blocked'),'changed state can notify');
+  await q("delete from curation_notifications where notification_key='edition:blocked'");
+  assert.ok(await notify('edition:blocked'),'failed delivery can retry');
+
 });

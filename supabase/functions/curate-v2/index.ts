@@ -15,7 +15,6 @@ import type { PreviewInput } from "./lib/preview.ts";
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 
 const MAX_CHAIN = Math.max(0, Number(Deno.env.get("CURATE_MAX_CHAIN") ?? 7));   // 시간 초과로 남은 후보를 이어서 처리하는 연속 실행의 최대 횟수 (처음 실행 + 이만큼)
-const MAX_LIVE_RUNS_PER_DAY = 8;                                                   // 하루에 시작할 수 있는 정기·수동 실행(연속 실행 포함) 상한 — 폭주 방지
 const MAX_CHAIN_MS = 15 * 60 * 1000;                                              // 연속 실행 전체가 이 시간을 넘기면 중단
 
 Deno.serve(async (req) => {
@@ -59,15 +58,7 @@ Deno.serve(async (req) => {
   const webhook = Deno.env.get("DISCORD_WEBHOOK_URL");
   const chain = Math.max(0, Number(body.chain) || 0);
   if (live && chain > MAX_CHAIN) return new Response(JSON.stringify({ ok: false, error: `연속 실행 상한(${MAX_CHAIN}회) 초과` }), { status: 400, headers: { "Content-Type": "application/json" } });
-  // 하루 실행 횟수 상한 — 이어서 실행이 어떤 이유로든 반복되더라도 하루 8회를 넘지 못함
-  if (live && chain > 0) {
-    const kstNow = new Date(Date.now() + 9 * 3600000); kstNow.setUTCHours(0, 0, 0, 0);
-    const { count } = await supabase.from("curation_logs").select("id", { count: "exact", head: true }).eq("run_mode", "live").gte("run_at", new Date(kstNow.getTime() - 9 * 3600000).toISOString());
-    if ((count ?? 0) >= MAX_LIVE_RUNS_PER_DAY) {
-      await sendAlert(webhook, { title: "큐레이션 이어서 실행 중단 — 하루 실행 상한", description: `오늘 이미 ${count}회 실행해 이어서 처리하지 않습니다.`, level: "warning" });
-      return new Response(JSON.stringify({ ok: false, error: "하루 실행 상한" }), { status: 429, headers: { "Content-Type": "application/json" } });
-    }
-  }
+  // 실행 한도는 DB에서 회차별로 적용한다. 이전 회차가 새 회차를 막지 않는다.
 
   const execute = async (batch?: Batch) => {
   let result;
@@ -84,7 +75,7 @@ Deno.serve(async (req) => {
   }
 
   // 후보 수가 그대로여도 원문/AI 결과를 저장했을 수 있으므로 단계 진행을 허용한다.
-  // 횟수·시간·DB의 하루 실행 상한과 후보별 재시도 상한으로 반복을 제한한다.
+  // 횟수·시간·DB의 회차별 실행 상한과 후보별 재시도 상한으로 반복을 제한한다.
   const r = result as { ok?: boolean; skipped?: boolean; deferred?: number; progress?: number; window_end?: number; batch_id?: string; status?: string } | undefined;
   let willContinue = false;
   if (live && r?.ok && !r.skipped && (r.deferred ?? 0) > 0) {
