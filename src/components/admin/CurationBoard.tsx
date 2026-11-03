@@ -258,7 +258,7 @@ export default function CurationBoard({
   const [editError, setEditError] = useState("");
   const [rewriteFor, setRewriteFor] = useState<{ id: string; target: string } | null>(null);   // "다시 쓰기"를 고른 카테고리 변경
 
-  const [editorWide, setEditorWide] = useState(false);
+  const [editorWide, setEditorWide] = useState(true);
   const [editorRevision, setEditorRevision] = useState(0);
   const [editorIds, setEditorIds] = useState<string[]>([]);
   const [editNotice, setEditNotice] = useState("");
@@ -301,7 +301,7 @@ export default function CurationBoard({
   const closeEditor = () => {
     if (!canLeaveEditor()) return;
     editDirty.current = false; rewriteState.current = { busy: false, dirty: false };
-    setEditingItem(null); setRewriteFor(null); setEditorWide(false); setEditError("");
+    setEditingItem(null); setRewriteFor(null); setEditorWide(true); setEditError("");
     requestAnimationFrame(() => window.scrollTo({ top: boardPosition.current }));
   };
 
@@ -541,7 +541,7 @@ export default function CurationBoard({
         <header className="flex items-center justify-between flex-wrap gap-3 p-4 border-b shrink-0" style={{ borderColor: "var(--surface-container-high)" }}>
           <div><h2 className="text-lg font-semibold m-0">{rewriteFor ? "기사 다시 쓰기" : "기사 편집"}</h2><p className="text-xs m-0 mt-1" style={{ color: "var(--on-surface-variant)" }}>{selectedIndex + 1} / {editorList.length} · {editingItem.category}</p></div>
           <div className="flex gap-2 flex-wrap">
-            <button type="button" onClick={() => setEditorWide(value => !value)} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--surface-container-highest)" }}>{editorWide ? "기본 너비로 보기" : "넓게 보기"}</button>
+            <button type="button" onClick={() => setEditorWide(value => !value)} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--surface-container-highest)" }}>{editorWide ? "좁게 보기" : "넓게 보기"}</button>
             <button type="button" onClick={closeEditor} disabled={editSaving} className="px-3 py-2 rounded-md text-sm disabled:opacity-50" style={{ background: "var(--surface-container-highest)" }}>닫기</button>
           </div>
         </header>
