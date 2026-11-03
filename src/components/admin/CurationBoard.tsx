@@ -1000,7 +1000,7 @@ function EditArticlePanel({ item, focus, categoryOptions, saving, error, notice,
   useEffect(() => { onDirtyChange(dirty); }, [dirty, onDirtyChange]);
   useEffect(() => { if (focus && detailState === "ready") classRef.current?.scrollIntoView({ block: "nearest" }); }, [focus, detailState]);
   const update = (key: keyof typeof fields, value: string) => setFields(previous => ({ ...previous, [key]: value }));
-  const inputStyle: React.CSSProperties = { background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)", borderRadius: 6, color: "var(--on-surface)", padding: "9px 11px", fontSize: "0.875rem", width: "100%", boxSizing: "border-box" };
+  const inputStyle: React.CSSProperties = { background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)", borderRadius: 6, color: "var(--on-surface)", padding: "9px 11px", fontSize: "0.875rem", fontWeight: 400, lineHeight: 1.7, width: "100%", boxSizing: "border-box" };
   const valid = detailState === "ready" && !!fields.title.trim() && !!fields.summary_short.trim() && (!!fields.content_long.trim() || fields.content_long === baseline.content_long);
   return <div className="flex flex-col h-full min-h-0">
     <div className="flex gap-2 flex-wrap p-4 border-b shrink-0" style={{ borderColor: "var(--surface-container-high)" }} role="tablist" aria-label="기사 편집 항목">
@@ -1019,7 +1019,7 @@ function EditArticlePanel({ item, focus, categoryOptions, saving, error, notice,
           </div>
           <label className="text-xs font-semibold">요약<textarea rows={3} className="block mt-2" value={fields.summary_short} onChange={e => update('summary_short', e.target.value)} style={inputStyle} /></label>
           <label className="text-xs font-semibold">본문<textarea rows={8} className="block mt-2" value={fields.content_long} onChange={e => update('content_long', e.target.value)} style={inputStyle} /></label>
-          <label className="text-xs font-semibold">시사점<textarea rows={4} className="block mt-2" value={fields.implications} onChange={e => update('implications', e.target.value)} style={inputStyle} /></label>
+          <label className="text-xs font-semibold">시사점<textarea rows={8} className="block mt-2" value={fields.implications} onChange={e => update('implications', e.target.value)} style={inputStyle} /></label>
           <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>여기서 카테고리·레벨을 바꾸면 분류 값만 저장됩니다. 글도 바꾸려면 ‘기사 다시 쓰기’를 선택하세요.</p>
         </>}
         {pane === "image" && <>
