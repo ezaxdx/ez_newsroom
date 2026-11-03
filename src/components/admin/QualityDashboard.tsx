@@ -1531,8 +1531,8 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
       <div className="flex items-center justify-end gap-3 mb-3 text-sm">
         <span>전체 검색 결과 {filtered.length}건 · {page} / {pageCount}페이지</span>
-        <button disabled={page <= 1} onClick={() => { setPagination({ key: filterKey, page: page - 1 }); listRef.current?.scrollTo({ top: 0 }); }}>이전</button>
-        <button disabled={page >= pageCount} onClick={() => { setPagination({ key: filterKey, page: page + 1 }); listRef.current?.scrollTo({ top: 0 }); }}>다음</button>
+        <button type="button" className="inline-flex h-9 items-center justify-center gap-1 rounded-md border px-3 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-low)", color: "var(--on-surface)" }} disabled={page <= 1} onClick={() => { setPagination({ key: filterKey, page: page - 1 }); listRef.current?.scrollTo({ top: 0 }); }}><span aria-hidden="true">←</span> 이전</button>
+        <button type="button" className="inline-flex h-9 items-center justify-center gap-1 rounded-md border px-3 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-low)", color: "var(--on-surface)" }} disabled={page >= pageCount} onClick={() => { setPagination({ key: filterKey, page: page + 1 }); listRef.current?.scrollTo({ top: 0 }); }}>다음 <span aria-hidden="true">→</span></button>
       </div>
       {/* 테이블 */}
       <div className="overflow-x-auto" style={{ borderRadius: 10,
