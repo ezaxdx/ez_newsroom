@@ -28,7 +28,7 @@ export default function CategoryEditor({ item, onOpen }: { item: NewsItem; onOpe
 }
 
 /** 카테고리 변경 창 — 카테고리만 바꾸거나, 새 카테고리 관점으로 글을 다시 써서 비교 후 교체한다 */
-export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item: NewsItem; target: string; onPatch: (patch: Partial<NewsItem>) => void; onClose: () => void }) {
+export function CategoryChangeDialog({ item, target, onPatch, onClose, embedded = false, onStateChange }: { item: NewsItem; target: string; onPatch: (patch: Partial<NewsItem>) => void; onClose: () => void; embedded?: boolean; onStateChange?: (state: { busy: boolean; dirty: boolean; comparing: boolean }) => void }) {
   const [busy, setBusy] = useState<"" | "only" | "rewrite" | "replace">("");
   const [draft, setDraft] = useState<Rewrite | null>(null);          // 다시 쓴 안 (비교 창)
   const [err, setErr] = useState("");
@@ -50,38 +50,46 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
   const curLevel = item.level ?? "Intermediate";
   const effLevel = lvChoice === "keep" ? curLevel : lvChoice;
 
-  const close = () => onClose();
+  useEffect(() => { onStateChange?.({ busy: !!busy, dirty: !!draft, comparing: !!draft }); }, [busy, draft, onStateChange]);
+  const close = () => { if (!busy && (!draft || window.confirm("비교 중인 새 글을 적용하지 않고 편집으로 돌아갈까요?"))) onClose(); };
+  const post = async (url: string, body: Record<string, unknown>) => {
+    const response = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal: AbortSignal.timeout(65000) });
+    const json = await response.json();
+    if (!response.ok) { if (response.status === 422) setBlocked(true); throw new Error(json.error ?? "요청에 실패했습니다."); }
+    return json;
+  };
 
   const saveOnly = async () => {
     setBusy("only"); setErr("");
-    const res = await fetch("/api/admin/news/category", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target }) });
-    const json = await res.json();
-    if (!res.ok) { setErr(json.error ?? "저장 실패"); setBusy(""); return; }
-    onPatch({ category: json.category, category_edited: true, category_reason: null });
-    close();
+    try {
+      const json = await post("/api/admin/news/category", { id: item.id, category: target });
+      onPatch({ category: json.category, category_edited: true, category_reason: null });
+      onClose();
+    } catch (error) { setErr(error instanceof Error ? error.message : "저장 실패"); }
+    finally { setBusy(""); }
   };
   const makeDraft = async () => {
     setBusy("rewrite"); setErr("");
-    const res = await fetch("/api/admin/news/rewrite", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target, ...(lvChoice !== "keep" && { level: lvChoice }) }) });
-    const json = await res.json();
-    setBusy("");
-    if (res.status === 422) { setBlocked(true); setErr(json.error ?? "원문을 읽을 수 없어 다시 쓸 수 없습니다."); return; }
-    if (!res.ok) { setErr(json.error ?? "다시 쓰기 실패"); return; }
-    setDraft(json as Rewrite);
+    try {
+      const json = await post("/api/admin/news/rewrite", { id: item.id, category: target, ...(lvChoice !== "keep" && { level: lvChoice }) });
+      setDraft(json as Rewrite);
+    } catch (error) { setErr(error instanceof Error ? error.message : "다시 쓰기 실패"); }
+    finally { setBusy(""); }
   };
   const replace = async () => {
     if (!draft) return;
     setBusy("replace"); setErr("");
-    const res = await fetch("/api/admin/news/category", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: item.id, category: target, ...draft, ...(lvChoice !== "keep" && { level: lvChoice }) }) });
-    const json = await res.json();
-    if (!res.ok) { setErr(json.error ?? "교체 실패"); setBusy(""); return; }
-    onPatch({ category: json.category, category_edited: true, category_reason: null, ...draft, ...(lvChoice !== "keep" && { level: lvChoice }), audited_at: null, faithfulness_score: null, faithfulness_issues: null });
-    close();
+    try {
+      const json = await post("/api/admin/news/category", { id: item.id, category: target, ...draft, ...(lvChoice !== "keep" && { level: lvChoice }) });
+      onPatch({ category: json.category, category_edited: true, category_reason: null, ...draft, ...(lvChoice !== "keep" && { level: lvChoice }), audited_at: null, faithfulness_score: null, faithfulness_issues: null });
+      onClose();
+    } catch (error) { setErr(error instanceof Error ? error.message : "교체 실패"); }
+    finally { setBusy(""); }
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8" style={{ background: "rgba(26,28,29,0.45)", cursor: "default" }} onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) close(); }}>
-      <div className="w-full rounded-xl p-5 flex flex-col gap-4" style={{ maxWidth: draft ? 960 : 520, background: "var(--surface-container-lowest)", boxShadow: "0 8px 32px rgba(26,28,29,0.18)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
+    <div className={embedded ? "max-h-[82dvh] overflow-y-auto" : "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8"} style={{ background: embedded ? "var(--surface-container-lowest)" : "rgba(26,28,29,0.45)", cursor: "default" }} onMouseDown={(e) => { if (!embedded && e.target === e.currentTarget && !busy) close(); }}>
+      <div className="w-full rounded-xl p-5 flex flex-col gap-4" style={{ maxWidth: embedded ? "100%" : draft ? 960 : 520, background: "var(--surface-container-lowest)", boxShadow: embedded ? "none" : "0 8px 32px rgba(26,28,29,0.18)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold m-0">카테고리 변경 · {item.category} → {target}</h3>
           <button onClick={() => !busy && close()} aria-label="닫기" style={{ background: "none", border: "none", cursor: "pointer", color: "var(--on-surface-variant)" }}><XIcon size={18} /></button>
@@ -99,7 +107,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
                 {LEVEL_CHOICES.map((c) => {
                   const on = lvChoice === c;
                   return (
-                    <button key={c} type="button" onClick={() => setLvChoice(c)} className="flex-1 h-8 rounded-md text-xs font-semibold"
+                    <button key={c} type="button" disabled={!!busy} onClick={() => setLvChoice(c)} className="flex-1 h-8 rounded-md text-xs font-semibold"
                       style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "#fff" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
                       {c === "keep" ? `유지 (${LEVEL_LABEL[curLevel] ?? curLevel})` : LEVEL_LABEL[c]}
                     </button>
@@ -109,7 +117,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
               <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>카테고리가 바뀌면 독자층도 달라질 수 있어요. 바꾸지 않으면 지금 레벨({LEVEL_LABEL[curLevel] ?? curLevel})로 씁니다.</span>
             </div>
             {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
-            <div className="flex justify-end gap-2 flex-wrap">
+            <div className="flex justify-end gap-2 flex-wrap sticky bottom-0 py-3" style={{ background: "var(--surface-container-lowest)" }}>
               <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
               <button onClick={saveOnly} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>
                 {busy === "only" && <Loader2 size={13} className="animate-spin" />}카테고리만 변경
@@ -137,7 +145,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose }: { item:
             </div>
             <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>[교체]하면 지금 글이 새 글로 바뀌고(글 수준: <b>{LEVEL_LABEL[effLevel] ?? effLevel}</b>), 품질 감사를 다시 받아요. 마음에 안 들면 [취소]하세요 (아무것도 바뀌지 않아요).</p>
             {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
-            <div className="flex justify-end gap-2">
+            <div className="flex justify-end gap-2 flex-wrap sticky bottom-0 py-3" style={{ background: "var(--surface-container-lowest)" }}>
               <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
               <button onClick={replace} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
                 {busy === "replace" && <Loader2 size={13} className="animate-spin" />}교체

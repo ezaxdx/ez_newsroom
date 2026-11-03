@@ -6,21 +6,24 @@ const LEVELS = ["Beginner", "Intermediate", "Advanced"];
 const MAX_LEVEL_EXAMPLES = 30;   // AI 레벨 판정 프롬프트에 그대로 들어가는 개수와 같게
 
 /**
- * 큐레이션 보드에서 관리자가 기사 내용을 직접 수정 — 제목/요약/시사점/이미지와 레벨.
- * 본문(content_long)은 상세 편집이 필요해 대상에서 제외(필요하면 정합성 관리의
- * 콘텐츠 감사 수정 화면 사용). 카테고리는 /api/admin/news/category 가 담당.
+ * 큐레이션 보드에서 관리자가 제목/요약/본문/시사점/이미지와 레벨을 직접 수정.
+ * 본문을 수정하면 품질 감사 결과를 초기화한다. 카테고리는 /api/admin/news/category 가 담당.
  * 레벨이 실제로 바뀌면 (원문 제목, 레벨)을 curation_settings.level_examples 에 쌓아 다음 큐레이션의 레벨 판정 예시로 쓴다.
  */
 export async function POST(req: NextRequest) {
   const unauth = await requireAdmin();
   if (unauth) return unauth;
 
-  const { id, title, summary_short, implications, image_url, level } = await req.json();
+  const { id, title, summary_short, content_long, implications, image_url, level } = await req.json();
   if (!id || typeof title !== "string" || !title.trim() || typeof summary_short !== "string" || !summary_short.trim()) {
     return NextResponse.json({ error: "id, title, summary_short 필요" }, { status: 400 });
   }
   if (level !== undefined && !LEVELS.includes(level)) {
     return NextResponse.json({ error: "level 은 Beginner·Intermediate·Advanced 중 하나" }, { status: 400 });
+  }
+
+  if (content_long !== undefined && (typeof content_long !== "string" || !content_long.trim())) {
+    return NextResponse.json({ error: "본문은 비어 있을 수 없습니다." }, { status: 400 });
   }
 
   const supabase = createAdminClient();
@@ -31,6 +34,7 @@ export async function POST(req: NextRequest) {
 
   const { error } = await supabase.from("news").update({
     title: title.trim(),
+    ...(content_long !== undefined && { content_long: content_long.trim(), audited_at: null, faithfulness_score: null, faithfulness_issues: null, audit_dismissed_at: null }),
     summary_short: summary_short.trim(),
     implications: typeof implications === "string" ? implications.trim() : null,
     image_url: typeof image_url === "string" && image_url.trim() ? image_url.trim() : null,
