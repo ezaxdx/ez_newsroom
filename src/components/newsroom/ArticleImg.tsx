@@ -33,7 +33,11 @@ const fallbackBaseStyle = (width: string): React.CSSProperties => ({
   objectFit: "contain",
 });
 
-export default function ArticleImg({
+export default function ArticleImg(props: Props) {
+  return <ArticleImage key={props.src || FALLBACK_IMAGE} {...props} />;
+}
+
+function ArticleImage({
   src,
   alt = "",
   className = "",
@@ -42,9 +46,18 @@ export default function ArticleImg({
 }: Props) {
   const imgRef = useRef<HTMLImageElement>(null);
   const isReal = hasRealImage(src);
+  let isNaver = false;
+  try { isNaver = /^(blogthumb|blogfiles|postfiles)\.pstatic\.net$/.test(new URL(src ?? "").hostname); } catch { /* relative/empty image */ }
+  const resolvedSrc = isNaver ? "/api/image-proxy?" + new URLSearchParams({ url: src!, mode: "newsroom" }) : src;
 
   const applyFallback = (img: HTMLImageElement) => {
     if (img.getAttribute("data-fb") === "1") return;
+    // If the server cannot retrieve it, try the original without a site referer once.
+    if (isNaver && img.getAttribute("data-direct") !== "1") {
+      img.setAttribute("data-direct", "1");
+      img.src = src!;
+      return;
+    }
     img.setAttribute("data-fb", "1");
     img.src = FALLBACK_IMAGE;
     img.className = "";
@@ -70,7 +83,8 @@ export default function ArticleImg({
     // eslint-disable-next-line @next/next/no-img-element
     <img
       ref={imgRef}
-      src={src || FALLBACK_IMAGE}
+      src={resolvedSrc || FALLBACK_IMAGE}
+      referrerPolicy={isNaver ? "no-referrer" : undefined}
       alt={alt}
       className={isReal ? className : ""}
       style={isReal ? style : fallbackBaseStyle(fallbackWidth)}

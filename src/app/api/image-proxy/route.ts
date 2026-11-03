@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { readFile } from "fs/promises";
 import path from "path";
+import { createHash } from "crypto";
+import { createClient } from "@supabase/supabase-js";
 import { fetchRemoteImage } from "@/lib/fetch-remote-image";
 
 /**
@@ -43,6 +45,42 @@ export async function GET(req: NextRequest) {
   }
   if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
     return fallbackLogoResponse();
+  }
+
+  // Only registered Naver blog photos can create persistent newsroom assets.
+  // A separate path keeps newsletter crops and full-aspect newsroom photos independent.
+  if (req.nextUrl.searchParams.get("mode") === "newsroom") {
+    const fail = (status = 503) => new NextResponse(null, { status, headers: { "Cache-Control": "no-store" } });
+    if (parsed.protocol !== "https:" || parsed.port || parsed.username || parsed.password
+      || !/^(blogthumb|blogfiles|postfiles)\.pstatic\.net$/.test(parsed.hostname)) return fail(400);
+    const storageUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!storageUrl || !key) return fail();
+    const file = "newsroom/v1/" + createHash("sha256").update(parsed.href).digest("hex") + ".jpg";
+    const publicUrl = storageUrl.replace(/\/$/, "") + "/storage/v1/object/public/newsletter-images/" + file;
+    try {
+      const cached = await fetch(publicUrl, { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(2000) });
+      if (cached.ok && cached.headers.get("content-type")?.startsWith("image/")) {
+        return new NextResponse(null, { status: 307, headers: { Location: publicUrl, "Cache-Control": "public, max-age=86400" } });
+      }
+    } catch { /* Storage lookup failure must not prevent a fresh photo download. */ }
+    const db = createClient(storageUrl, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+      global: { fetch: (input, init) => fetch(input, { ...init, signal: AbortSignal.timeout(4000) }) },
+    });
+    const { data, error } = await db.from("news").select("id").eq("image_url", url).limit(1);
+    if (error || !data?.length) return fail(error ? 503 : 404);
+    const photo = await fetchRemoteImage(parsed.href, 12000, "https://blog.naver.com/", "newsroom");
+    if (!photo) return fail();
+    try {
+      const stored = await db.storage.from("newsletter-images").upload(file, photo, {
+        contentType: "image/jpeg", cacheControl: "31536000", upsert: false,
+      });
+      if (stored.error && String(stored.error.statusCode) !== "409") console.warn("[newsroom-image] storage failed", stored.error.message);
+    } catch { console.warn("[newsroom-image] storage unavailable; serving downloaded photo"); }
+    return new NextResponse(new Uint8Array(photo), { headers: {
+      "Content-Type": "image/jpeg", "Cache-Control": "public, max-age=3600",
+    } });
   }
 
   const buffer = await fetchRemoteImage(url, 12000, req.nextUrl.searchParams.get("ref") ?? undefined);

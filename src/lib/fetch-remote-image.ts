@@ -4,7 +4,7 @@ import { unwrapNextImageUrl } from "@/lib/unwrap-image-url";
 const MAX_BYTES = 5 * 1024 * 1024;
 
 /** 본문 수신까지 제한 시간에 포함하고, 실제로 해독한 사진만 카드용 JPG로 반환한다. */
-export async function fetchRemoteImage(url: string, timeoutMs = 12000, articleUrl?: string): Promise<Buffer | null> {
+export async function fetchRemoteImage(url: string, timeoutMs = 12000, articleUrl?: string, layout: "newsletter" | "newsroom" = "newsletter"): Promise<Buffer | null> {
   let parsed: URL;
   try { parsed = new URL(url.trim()); } catch { return null; }
   if (!/^https?:$/.test(parsed.protocol)) return null;
@@ -27,6 +27,7 @@ export async function fetchRemoteImage(url: string, timeoutMs = 12000, articleUr
       if (remaining <= 0) return null;
       try {
         const response = await fetch(candidate, {
+          redirect: layout === "newsroom" ? "error" : "follow",
           headers: {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept": "image/jpeg,image/png,image/webp,image/*;q=0.8,*/*;q=0.5",
@@ -66,7 +67,9 @@ export async function fetchRemoteImage(url: string, timeoutMs = 12000, articleUr
             (metadata.width ?? 0) < 5 || (metadata.height ?? 0) < 5) continue;
         // 비율을 유지한 채 중앙을 잘라 카드 전체를 채운다. 이메일의 object-fit 지원에 의존하지 않는다.
         return await image.rotate()
-          .resize(510, 258, { fit: "cover", position: "centre" })
+          .resize(layout === "newsroom"
+            ? { width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }
+            : { width: 510, height: 258, fit: "cover", position: "centre" })
           .flatten({ background: "#EEEBE5" }).jpeg({ quality: 85 })
           .timeout({ seconds: 2 }).toBuffer();
       } catch (err) {
