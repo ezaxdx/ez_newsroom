@@ -916,6 +916,158 @@ function sourceBadges(e: { source: string | null; seen_at?: Record<string, strin
 }
 
 // ── 행사 관리 탭 ─────────────────────────────────────────────────
+
+  function EditableCell({ id, field, value, onSaved, type = "text" }: {
+    id: string; field: string; onSaved: (id: string, field: string, value: string | null) => void; value: string | null; type?: "text" | "date";
+  }) {
+    const [isEditing, setEditing] = useState(false);
+    const [editValue, setEditValue] = useState(value ?? "");
+    const [isSaving, setSaving] = useState(false);
+    const [error, setError] = useState("");
+    const busy = useRef(false);
+    const cancelled = useRef(false);
+    async function saveEdit() {
+      if (busy.current || cancelled.current) return;
+      if (editValue === (value ?? "")) { setEditing(false); return; }
+      if (["event_name", "venue", "start_date"].includes(field) && !editValue.trim()) { setError("필수 항목입니다."); return; }
+      busy.current = true; setSaving(true); setError("");
+      try {
+        const res = await fetch("/api/admin/events", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, [field]: editValue.trim() || null }) });
+        if (!res.ok) { const json = await res.json(); throw new Error(json.error || "저장 실패"); }
+        onSaved(id, field, editValue.trim() || null); setEditing(false);
+      } catch (e) { setError(e instanceof Error ? e.message : "저장 실패"); }
+      finally { busy.current = false; setSaving(false); }
+    }
+    function cancelEdit() { if (busy.current) return; cancelled.current = true; setEditing(false); setError(""); }
+
+    if (isEditing) {
+      return (
+        <div><input
+          readOnly={isSaving}
+          autoFocus
+          type={type}
+          value={editValue}
+          onChange={(e) => setEditValue(e.target.value)}
+          onKeyDown={(e) => { if (e.nativeEvent.isComposing) return; if (e.key === "Enter") { e.preventDefault(); void saveEdit(); } if (e.key === "Escape") cancelEdit(); }}
+          onBlur={saveEdit}
+          style={{
+            width: "100%", fontSize: "0.78rem", padding: "2px 6px", borderRadius: 4,
+            border: "1.5px solid var(--primary)", background: "var(--surface-container-lowest)",
+            color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
+            opacity: isSaving ? 0.5 : 1,
+          }}
+        />{error && <span role="alert" style={{ color: "#dc2626", fontSize: 11 }}>{error} · 입력 후 Enter로 재시도</span>}</div>
+      );
+    }
+    return (
+      <span
+        onClick={() => { cancelled.current = false; setEditValue(value ?? ""); setEditing(true); }}
+        title="클릭해서 편집"
+        style={{
+          display: "block", fontSize: "0.78rem", cursor: "text",
+          color: value ? "var(--on-surface)" : "#ef4444",
+          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+          padding: "2px 4px", borderRadius: 4,
+          border: "1px dashed transparent",
+        }}
+        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--surface-container-high)")}
+        onMouseLeave={(e) => (e.currentTarget.style.borderColor = "transparent")}
+      >
+        {value || "—"}
+      </span>
+    );
+  }
+
+
+function AddEventModal({ onAdd, onClose }: { onAdd: (row: EventRow) => void; onClose: () => void }) {
+  const [newEvent, setNewEvent] = useState({ event_name: "", venue: "", start_date: "", end_date: "", organizer: "", category: "", website: "" });
+  const [addingEvent, setAddingEvent] = useState(false);
+  const [addEventError, setAddEventError] = useState<string | null>(null);
+  const busyRef = useRef(false);
+  async function addEvent() {
+    if (!newEvent.event_name.trim() || !newEvent.venue.trim() || !newEvent.start_date) {
+      setAddEventError("행사명, 센터, 시작일은 필수입니다.");
+      return;
+    }
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setAddingEvent(true);
+    setAddEventError(null);
+    try {
+      const res = await fetch("/api/admin/events", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newEvent),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setAddEventError(json.error || "추가 실패");
+        return;
+      }
+      onAdd(json.data);
+    } catch {
+      setAddEventError("추가 실패");
+    } finally {
+      busyRef.current = false;
+      setAddingEvent(false);
+    }
+  }
+
+
+  return (
+        <div style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999,
+          display: "flex", alignItems: "center", justifyContent: "center",
+        }}>
+          <div style={{ background: "var(--surface-container-lowest)", borderRadius: 12, padding: 24, width: 440, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 15 }}>행사 추가</p>
+            <p style={{ margin: "0 0 14px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
+              여기서 추가한 행사는 자동으로 <b>공개</b> 상태가 되어 뉴스룸 행사 목록과 다음 뉴스레터에 동일하게 반영됩니다.
+            </p>
+            {([
+              { key: "event_name", label: "행사명 *", type: "text" },
+              { key: "venue", label: "센터 *", type: "text" },
+              { key: "start_date", label: "시작일 *", type: "date" },
+              { key: "end_date", label: "종료일", type: "date" },
+              { key: "organizer", label: "주최기관", type: "text" },
+              { key: "category", label: "카테고리", type: "text" },
+              { key: "website", label: "홈페이지 URL", type: "text" },
+            ] as const).map(({ key, label, type }) => (
+              <div key={key} style={{ marginBottom: 10 }}>
+                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--on-surface-variant)", marginBottom: 4 }}>{label}</label>
+                <input
+                  type={type}
+                  value={newEvent[key]}
+                  onChange={(e) => setNewEvent((prev) => ({ ...prev, [key]: e.target.value }))}
+                  style={{
+                    width: "100%", height: 32, padding: "0 10px", borderRadius: 6, fontSize: 13,
+                    border: "1px solid var(--surface-container-highest)",
+                    background: "var(--surface-container-low)",
+                    color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
+                  }}
+                />
+              </div>
+            ))}
+            {addEventError && <p style={{ margin: "4px 0 10px", fontSize: 12, color: "#ef4444" }}>{addEventError}</p>}
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
+              <button
+                disabled={addingEvent} onClick={onClose}
+                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}
+              >
+                취소
+              </button>
+              <button
+                onClick={addEvent}
+                disabled={addingEvent}
+                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: addingEvent ? 0.6 : 1 }}
+              >
+                {addingEvent ? "추가 중..." : "추가"}
+              </button>
+            </div>
+          </div>
+        </div>);
+}
+
 function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const router = useRouter();
   const [events, setEvents] = useState(initialEvents);
@@ -948,17 +1100,6 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [ruleStats, setRuleStats] = useState<{ stats: Record<string, number>; ready: boolean }>({ stats: {}, ready: false });
   // 행사 추가
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newEvent, setNewEvent] = useState({
-    event_name: "", venue: "", start_date: "", end_date: "", organizer: "", category: "", website: "",
-  });
-  const [addingEvent, setAddingEvent] = useState(false);
-  const [addEventError, setAddEventError] = useState<string | null>(null);
-  // 인라인 편집
-  type EditField = "event_name" | "organizer" | "start_date" | "end_date" | "venue";
-  const [editingCell, setEditingCell] = useState<{ id: string; field: EditField } | null>(null);
-  const [editValue, setEditValue] = useState("");
-  const [savingCell, setSavingCell] = useState<string | null>(null); // "id-field"
-
   const venues = useMemo(() => {
     const set = new Set(events.map((e) => e.venue));
     return ["전체", ...Array.from(set).sort()];
@@ -1004,6 +1145,16 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       return true;
     });
   }, [events, statusFilter, hiddenFilter, venueFilter, search, weekAgo, isIncomplete, hideBar, foldConcurrent, expandedParents, eventIds]);
+
+  const filterKey = JSON.stringify([search, statusFilter, hiddenFilter, venueFilter, foldConcurrent, [...expandedParents]]);
+  const [pagination, setPagination] = useState({ key: filterKey, page: 1 });
+  const pageCount = Math.max(1, Math.ceil(filtered.length / 50));
+  const page = pagination.key === filterKey ? Math.min(pagination.page, pageCount) : 1;
+  const visibleEvents = filtered.slice((page - 1) * 50, page * 50);
+  const listRef = useRef<HTMLDivElement>(null);
+  const savedCell = useCallback((id: string, field: string, value: string | null) => {
+    setEvents(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+  }, []);
 
   const stats = useMemo(() => ({
     total: events.length,
@@ -1155,110 +1306,6 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     setHideBar(null);
   }
 
-  function startEdit(id: string, field: EditField, currentValue: string) {
-    setEditingCell({ id, field });
-    setEditValue(currentValue ?? "");
-  }
-
-  async function saveEdit() {
-    if (!editingCell) return;
-    const { id, field } = editingCell;
-    const cellKey = `${id}-${field}`;
-    setSavingCell(cellKey);
-    try {
-      const res = await fetch("/api/admin/events", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, [field]: editValue || null }),
-      });
-      if (res.ok) {
-        setEvents((prev) =>
-          prev.map((e) => e.id === id ? { ...e, [field]: editValue || null } : e)
-        );
-      }
-    } finally {
-      setSavingCell(null);
-      setEditingCell(null);
-    }
-  }
-
-  function cancelEdit() {
-    setEditingCell(null);
-    setEditValue("");
-  }
-
-  async function addEvent() {
-    if (!newEvent.event_name.trim() || !newEvent.venue.trim() || !newEvent.start_date) {
-      setAddEventError("행사명, 센터, 시작일은 필수입니다.");
-      return;
-    }
-    setAddingEvent(true);
-    setAddEventError(null);
-    try {
-      const res = await fetch("/api/admin/events", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newEvent),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        setAddEventError(json.error || "추가 실패");
-        return;
-      }
-      setEvents((prev) =>
-        [json.data, ...prev].sort((a, b) => a.start_date.localeCompare(b.start_date))
-      );
-      setShowAddModal(false);
-      setNewEvent({ event_name: "", venue: "", start_date: "", end_date: "", organizer: "", category: "", website: "" });
-    } catch {
-      setAddEventError("추가 실패");
-    } finally {
-      setAddingEvent(false);
-    }
-  }
-
-  function EditableCell({ id, field, value, type = "text" }: {
-    id: string; field: EditField; value: string | null; type?: "text" | "date";
-  }) {
-    const isEditing = editingCell?.id === id && editingCell?.field === field;
-    const isSaving = savingCell === `${id}-${field}`;
-    if (isEditing) {
-      return (
-        <input
-          autoFocus
-          type={type}
-          value={editValue}
-          onChange={(e) => setEditValue(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") cancelEdit(); }}
-          onBlur={saveEdit}
-          style={{
-            width: "100%", fontSize: "0.78rem", padding: "2px 6px", borderRadius: 4,
-            border: "1.5px solid var(--primary)", background: "var(--surface-container-lowest)",
-            color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
-            opacity: isSaving ? 0.5 : 1,
-          }}
-        />
-      );
-    }
-    return (
-      <span
-        onClick={() => startEdit(id, field, value ?? "")}
-        title="클릭해서 편집"
-        style={{
-          display: "block", fontSize: "0.78rem", cursor: "text",
-          color: value ? "var(--on-surface)" : "#ef4444",
-          overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          padding: "2px 4px", borderRadius: 4,
-          border: "1px dashed transparent",
-        }}
-        onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--surface-container-high)")}
-        onMouseLeave={(e) => (e.currentTarget.style.borderColor = "transparent")}
-      >
-        {value || "—"}
-      </span>
-    );
-  }
-
   function hasIssue(e: EventRow) {
     return !e.organizer || e.event_name.length <= 4 || !e.category;
   }
@@ -1388,59 +1435,10 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       </div>
 
       {/* 행사 추가 모달 */}
-      {showAddModal && (
-        <div style={{
-          position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 999,
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <div style={{ background: "var(--surface-container-lowest)", borderRadius: 12, padding: 24, width: 440, maxHeight: "85vh", overflowY: "auto", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <p style={{ margin: "0 0 6px", fontWeight: 700, fontSize: 15 }}>행사 추가</p>
-            <p style={{ margin: "0 0 14px", fontSize: 12, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
-              여기서 추가한 행사는 자동으로 <b>공개</b> 상태가 되어 뉴스룸 행사 목록과 다음 뉴스레터에 동일하게 반영됩니다.
-            </p>
-            {([
-              { key: "event_name", label: "행사명 *", type: "text" },
-              { key: "venue", label: "센터 *", type: "text" },
-              { key: "start_date", label: "시작일 *", type: "date" },
-              { key: "end_date", label: "종료일", type: "date" },
-              { key: "organizer", label: "주최기관", type: "text" },
-              { key: "category", label: "카테고리", type: "text" },
-              { key: "website", label: "홈페이지 URL", type: "text" },
-            ] as const).map(({ key, label, type }) => (
-              <div key={key} style={{ marginBottom: 10 }}>
-                <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "var(--on-surface-variant)", marginBottom: 4 }}>{label}</label>
-                <input
-                  type={type}
-                  value={newEvent[key]}
-                  onChange={(e) => setNewEvent((prev) => ({ ...prev, [key]: e.target.value }))}
-                  style={{
-                    width: "100%", height: 32, padding: "0 10px", borderRadius: 6, fontSize: 13,
-                    border: "1px solid var(--surface-container-highest)",
-                    background: "var(--surface-container-low)",
-                    color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
-                  }}
-                />
-              </div>
-            ))}
-            {addEventError && <p style={{ margin: "4px 0 10px", fontSize: 12, color: "#ef4444" }}>{addEventError}</p>}
-            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
-              <button
-                onClick={() => { setShowAddModal(false); setAddEventError(null); }}
-                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--surface-container-high)", color: "var(--on-surface)", cursor: "pointer", fontSize: 13 }}
-              >
-                취소
-              </button>
-              <button
-                onClick={addEvent}
-                disabled={addingEvent}
-                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: addingEvent ? 0.6 : 1 }}
-              >
-                {addingEvent ? "추가 중..." : "추가"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {showAddModal && <AddEventModal onClose={() => setShowAddModal(false)} onAdd={row => {
+        setEvents(prev => [row, ...prev].sort((a,b) => a.start_date.localeCompare(b.start_date)));
+        setSearch(row.event_name); setStatusFilter("all"); setVenueFilter("전체"); setShowAddModal(false);
+      }} />}
 
       {/* 행사 점수 — 주최사 가산 목록 (동종 업계·장소 운영사·PEO·수행실적 발주처) */}
       <EventOrgAffinityPanel />
@@ -1531,6 +1529,11 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         </span>
       </div>
 
+      <div className="flex items-center justify-end gap-3 mb-3 text-sm">
+        <span>전체 검색 결과 {filtered.length}건 · {page} / {pageCount}페이지</span>
+        <button disabled={page <= 1} onClick={() => { setPagination({ key: filterKey, page: page - 1 }); listRef.current?.scrollTo({ top: 0 }); }}>이전</button>
+        <button disabled={page >= pageCount} onClick={() => { setPagination({ key: filterKey, page: page + 1 }); listRef.current?.scrollTo({ top: 0 }); }}>다음</button>
+      </div>
       {/* 테이블 */}
       <div className="overflow-x-auto" style={{ borderRadius: 10,
         border: "1px solid var(--surface-container-high)" }}>
@@ -1556,8 +1559,8 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         </div>
 
         {/* 행 */}
-        <div style={{ maxHeight: 600, overflowY: "auto" }}>
-          {filtered.map((e, idx) => (
+        <div ref={listRef} style={{ maxHeight: 600, overflowY: "auto" }}>
+          {visibleEvents.map((e, idx) => (
             <Fragment key={e.id}>
             <div style={{
               display: "grid",
@@ -1569,7 +1572,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
             }}>
               {/* No. */}
               <span style={{ fontSize: "0.68rem", color: "var(--on-surface-variant)", textAlign: "center", display: "block" }}>
-                {idx + 1}
+                {(page - 1) * 50 + idx + 1}
               </span>
 
               {/* 행사명 */}
@@ -1584,7 +1587,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
                   {e.parent_event_id && <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "var(--on-surface-variant)", marginRight: 4 }}>↳ 동시개최</span>}
-                  <EditableCell id={e.id} field="event_name" value={e.event_name} />
+                  <EditableCell onSaved={savedCell} id={e.id} field="event_name" value={e.event_name} />
                   {(childCount.get(e.id) ?? 0) > 0 && (
                     <button
                       onClick={() => setExpandedParents((prev) => { const n = new Set(prev); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); return n; })}
@@ -1625,18 +1628,18 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
               {/* 센터 */}
               <div style={{ minWidth: 0 }}>
-                <EditableCell id={e.id} field="venue" value={e.venue} />
+                <EditableCell onSaved={savedCell} id={e.id} field="venue" value={e.venue} />
               </div>
 
               {/* 주최기관 */}
               <div style={{ minWidth: 0 }}>
-                <EditableCell id={e.id} field="organizer" value={e.organizer} />
+                <EditableCell onSaved={savedCell} id={e.id} field="organizer" value={e.organizer} />
               </div>
 
               {/* 기간 */}
               <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <EditableCell id={e.id} field="start_date" value={e.start_date} type="date" />
-                <EditableCell id={e.id} field="end_date" value={e.end_date} type="date" />
+                <EditableCell onSaved={savedCell} id={e.id} field="start_date" value={e.start_date} type="date" />
+                <EditableCell onSaved={savedCell} id={e.id} field="end_date" value={e.end_date} type="date" />
               </div>
 
               {/* 출처 배지 — 이 행사를 확인한 소스를 모두 표시 (seen_at + 처음 등록한 소스) */}
