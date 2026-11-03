@@ -71,7 +71,7 @@ async function fetchHeroNews(categories: string[], lastRunISO: string): Promise<
           .eq("is_published", true)
           .eq("category", cat)
           .gte("published_at", lastRunISO)
-          .order("display_order", { ascending: true })
+          .order("display_order", { ascending: true }).order("id", { ascending: true })
           .limit(1);
         return (data?.[0] ?? null) as NewsItem | null;
       })
@@ -114,7 +114,7 @@ async function fetchNews(lastRunISO: string): Promise<NewsItem[]> {
       .select("*")
       .eq("is_published", true)
       .gte("published_at", lastRunISO)
-      .order("display_order", { ascending: true });
+      .order("display_order", { ascending: true }).order("id", { ascending: true });
 
     if (error) console.error("[fetchNews] Supabase error:", error);
     return (data as NewsItem[]) ?? [];

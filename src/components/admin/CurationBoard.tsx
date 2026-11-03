@@ -123,7 +123,7 @@ export default function CurationBoard({
   // Top News 계산 (카테고리별 display_order 가장 낮은 live 기사)
   const categories = navCategories ?? [...new Set(live.map((i) => i.category))];
   const topNewsMap = new Map<string, NewsItem>();
-  const sortedLive = [...live].sort((a, b) => a.display_order - b.display_order);
+  const sortedLive = [...live].sort((a, b) => a.display_order - b.display_order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   for (const cat of categories) {
     const found = sortedLive.find((i) => i.category === cat);
     if (found) topNewsMap.set(cat, found);
@@ -135,7 +135,7 @@ export default function CurationBoard({
     const ai = categories.indexOf(a.category);
     const bi = categories.indexOf(b.category);
     if (ai !== bi) return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
-    return a.display_order - b.display_order;
+    return a.display_order - b.display_order || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
   });
 
   // 아카이브 건수: 서버가 센 전체 건수에서, 이 화면에서 재발행·삭제해 아카이브를 벗어난 기사를 뺌
