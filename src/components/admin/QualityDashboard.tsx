@@ -1068,6 +1068,11 @@ function AddEventModal({ onAdd, onClose }: { onAdd: (row: EventRow) => void; onC
         </div>);
 }
 
+function overlapsEventPeriod(event: Pick<EventRow, "start_date" | "end_date">, from: string, to: string) {
+  const end = event.end_date && event.end_date >= event.start_date ? event.end_date : event.start_date;
+  return (!from || end >= from) && (!to || event.start_date <= to);
+}
+
 function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const router = useRouter();
   const [events, setEvents] = useState(initialEvents);
@@ -1100,6 +1105,29 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const [ruleStats, setRuleStats] = useState<{ stats: Record<string, number>; ready: boolean }>({ stats: {}, ready: false });
   // 행사 추가
   const [showAddModal, setShowAddModal] = useState(false);
+  const [period, setPeriod] = useState("upcoming");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [today, setToday] = useState("");
+  const [savedId, setSavedId] = useState<string | null>(null);
+  useEffect(() => {
+    const update = () => setToday(new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10));
+    update(); const timer = setInterval(update, 60000);
+    return () => clearInterval(timer);
+  }, []);
+  const bounds = useMemo(() => {
+    if (period === "custom") return { from: dateFrom, to: dateTo };
+    if (period === "upcoming") return { from: today, to: "" };
+    if ((period === "month" || period === "next") && today) {
+      const [y, m] = today.split("-").map(Number);
+      const offset = period === "next" ? 1 : 0;
+      return { from: new Date(Date.UTC(y, m - 1 + offset, 1)).toISOString().slice(0,10), to: new Date(Date.UTC(y, m + offset, 0)).toISOString().slice(0,10) };
+    }
+    return { from: "", to: "" };
+  }, [period, dateFrom, dateTo, today]);
+  const invalidRange = !!bounds.from && !!bounds.to && bounds.from > bounds.to;
+  const periodLabel = ({ upcoming: "진행 중·예정", month: "이번 달", next: "다음 달", custom: "직접 지정", all: "전체 기간" } as Record<string,string>)[period];
+
   const venues = useMemo(() => {
     const set = new Set(events.map((e) => e.venue));
     return ["전체", ...Array.from(set).sort()];
@@ -1122,12 +1150,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
     for (const e of events) if (e.parent_event_id) m.set(e.parent_event_id, (m.get(e.parent_event_id) ?? 0) + 1);
     return m;
   }, [events]);
-  const eventIds = useMemo(() => new Set(events.map((e) => e.id)), [events]);
+  const eventIds = useMemo(() => new Set(events.filter(e => overlapsEventPeriod(e, bounds.from, bounds.to)).map((e) => e.id)), [events, bounds]);
 
   const filtered = useMemo(() => {
     return events.filter((e) => {
       // 방금 비공개한 행사는 필터와 상관없이 제안 줄이 사라질 때까지 제자리에 둠
+      if (invalidRange) return false;
       if (hideBar?.id === e.id) return true;
+      if (!overlapsEventPeriod(e, bounds.from, bounds.to)) return false;
       if (statusFilter === "published" && !e.is_published) return false;
       if (statusFilter === "hidden" && e.is_published) return false;
       if (statusFilter === "hidden" && hiddenFilter !== "all") {
@@ -1143,10 +1173,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       // 동시개최로 딸린 행사는 대표 행사 밑에 접어 둠 (검색 중에는 펼쳐서 보여줌)
       if (foldConcurrent && !search && e.parent_event_id && eventIds.has(e.parent_event_id) && !expandedParents.has(e.parent_event_id)) return false;
       return true;
+    }).sort((a,b) => {
+      const activeA = !!today && a.start_date <= today && overlapsEventPeriod(a, today, today);
+      const activeB = !!today && b.start_date <= today && overlapsEventPeriod(b, today, today);
+      return Number(activeB) - Number(activeA) || a.start_date.localeCompare(b.start_date) || a.id.localeCompare(b.id);
     });
-  }, [events, statusFilter, hiddenFilter, venueFilter, search, weekAgo, isIncomplete, hideBar, foldConcurrent, expandedParents, eventIds]);
+  }, [today, bounds, invalidRange, events, statusFilter, hiddenFilter, venueFilter, search, weekAgo, isIncomplete, hideBar, foldConcurrent, expandedParents, eventIds]);
 
-  const filterKey = JSON.stringify([search, statusFilter, hiddenFilter, venueFilter, foldConcurrent, [...expandedParents]]);
+  const filterKey = JSON.stringify([period, bounds, search, statusFilter, hiddenFilter, venueFilter, foldConcurrent, [...expandedParents]]);
   const [pagination, setPagination] = useState({ key: filterKey, page: 1 });
   const pageCount = Math.max(1, Math.ceil(filtered.length / 50));
   const page = pagination.key === filterKey ? Math.min(pagination.page, pageCount) : 1;
@@ -1154,6 +1188,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
   const listRef = useRef<HTMLDivElement>(null);
   const savedCell = useCallback((id: string, field: string, value: string | null) => {
     setEvents(prev => prev.map(row => row.id === id ? { ...row, [field]: value } : row));
+    setSavedId(id);
   }, []);
 
   const stats = useMemo(() => ({
@@ -1318,6 +1353,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
   return (
     <div>
+      <p className="text-xs mb-2">전체 데이터 현황 · 아래 조회 기간과 관계없는 전체 건수입니다.</p>
       {/* ① KPI 카드 — 클릭 시 해당 필터 적용 / 검토 대기는 변경 내역 패널로 이동 */}
       <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: 12, marginBottom: 16 }}>
         {([
@@ -1437,12 +1473,21 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       {/* 행사 추가 모달 */}
       {showAddModal && <AddEventModal onClose={() => setShowAddModal(false)} onAdd={row => {
         setEvents(prev => [row, ...prev].sort((a,b) => a.start_date.localeCompare(b.start_date)));
-        setSearch(row.event_name); setStatusFilter("all"); setVenueFilter("전체"); setShowAddModal(false);
+        setSavedId(row.id); setSearch(row.event_name); setStatusFilter("all"); setVenueFilter("전체"); setShowAddModal(false);
       }} />}
 
       {/* 행사 점수 — 주최사 가산 목록 (동종 업계·장소 운영사·PEO·수행실적 발주처) */}
       <EventOrgAffinityPanel />
 
+      <div className="flex flex-wrap items-center gap-2 my-4 text-sm" aria-label="행사 조회 기간">
+        <span className="font-semibold">조회 기간</span>
+        {([["upcoming","진행 중·예정"],["month","이번 달"],["next","다음 달"],["custom","직접 지정"],["all","전체"]] as const).map(([key,label]) => <button key={key} type="button" aria-pressed={period === key} onClick={() => setPeriod(key)} className="rounded-md border px-3 py-2" style={{ background: period === key ? "var(--primary)" : "var(--surface-container-low)", color: period === key ? "#fff" : "var(--on-surface)", borderColor: "var(--surface-container-high)" }}>{label}</button>)}
+        {period === "custom" && <><input aria-label="조회 시작일" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded p-2" /><span>~</span><input aria-label="조회 종료일" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded p-2" /></>}
+      </div>
+      <p className="text-xs mb-3">{periodLabel} · 한국시간 기준 · 진행 중 우선, 시작일 가까운 순 · 종료일이 없으면 시작일 하루로 조회합니다.</p>
+      {invalidRange && <p role="alert" className="text-sm text-red-600">종료일을 시작일 이후로 선택해주세요.</p>}
+      {savedId && <p role="status" className="text-sm mb-3">저장했습니다. 현재 조건에 따라 목록에서 보이지 않을 수 있습니다. <button className="underline font-semibold" onClick={() => { const row = events.find(e => e.id === savedId); if (row) { setPeriod("all"); setSearch(row.event_name); setStatusFilter("all"); setVenueFilter("전체"); } }}>해당 행사 보기</button></p>}
+      {!invalidRange && filtered.length === 0 && <p className="text-sm my-3">선택한 조건에 검색 결과가 없습니다. {period !== "all" && <button className="underline font-semibold" onClick={() => setPeriod("all")}>전체 기간에서 검색</button>}</p>}
       {/* 필터 */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <button
@@ -1530,7 +1575,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       </div>
 
       <div className="flex items-center justify-end gap-3 mb-3 text-sm">
-        <span>전체 검색 결과 {filtered.length}건 · {page} / {pageCount}페이지</span>
+        <span>{periodLabel} 검색 결과 {filtered.length}건 · {page} / {pageCount}페이지</span>
         <button type="button" className="inline-flex h-9 items-center justify-center gap-1 rounded-md border px-3 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-low)", color: "var(--on-surface)" }} disabled={page <= 1} onClick={() => { setPagination({ key: filterKey, page: page - 1 }); listRef.current?.scrollTo({ top: 0 }); }}><span aria-hidden="true">←</span> 이전</button>
         <button type="button" className="inline-flex h-9 items-center justify-center gap-1 rounded-md border px-3 text-sm font-semibold transition-colors hover:brightness-95 focus-visible:outline-2 focus-visible:outline-offset-2 disabled:opacity-40 disabled:cursor-not-allowed" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-low)", color: "var(--on-surface)" }} disabled={page >= pageCount} onClick={() => { setPagination({ key: filterKey, page: page + 1 }); listRef.current?.scrollTo({ top: 0 }); }}>다음 <span aria-hidden="true">→</span></button>
       </div>
@@ -1541,7 +1586,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         {/* 헤더 */}
         <div style={{
           display: "grid",
-          gridTemplateColumns: "40px 1fr 100px 140px 100px 64px 50px 70px",
+          gridTemplateColumns: "40px 1fr 100px 100px 140px 64px 50px 70px",
           padding: "8px 14px", gap: 8,
           background: "var(--surface-container)",
           fontSize: "0.68rem", fontWeight: 700,
@@ -1550,9 +1595,9 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
         }}>
           <span style={{ textAlign: "center" }}>No.</span>
           <span>행사명</span>
+          <span>기간</span>
           <span>센터</span>
           <span>주최기관</span>
-          <span>기간</span>
           <span style={{ textAlign: "center" }}>소스</span>
           <span style={{ textAlign: "center" }}>픽</span>
           <span>공개여부</span>
@@ -1564,7 +1609,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
             <Fragment key={e.id}>
             <div style={{
               display: "grid",
-              gridTemplateColumns: "40px 1fr 100px 140px 100px 64px 50px 70px",
+              gridTemplateColumns: "40px 1fr 100px 100px 140px 64px 50px 70px",
               padding: "9px 14px", gap: 8, alignItems: "center",
               borderTop: idx > 0 ? "1px solid var(--surface-container-high)" : "none",
               background: hasIssue(e) ? "#ef444406" : e.parent_event_id ? "var(--surface-container-low)" : "var(--surface-container-lowest)",
@@ -1587,6 +1632,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 )}
                 <div style={{ minWidth: 0, flex: 1 }}>
                   {e.parent_event_id && <span style={{ fontSize: "0.62rem", fontWeight: 700, color: "var(--on-surface-variant)", marginRight: 4 }}>↳ 동시개최</span>}
+                  {today && e.start_date <= today && overlapsEventPeriod(e, today, today) && <span className="text-xs text-green-700">진행 중</span>}
                   <EditableCell onSaved={savedCell} id={e.id} field="event_name" value={e.event_name} />
                   {(childCount.get(e.id) ?? 0) > 0 && (
                     <button
@@ -1626,6 +1672,12 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 </div>
               </div>
 
+              {/* 기간 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                <EditableCell onSaved={savedCell} id={e.id} field="start_date" value={e.start_date} type="date" />
+                <EditableCell onSaved={savedCell} id={e.id} field="end_date" value={e.end_date} type="date" />
+              </div>
+
               {/* 센터 */}
               <div style={{ minWidth: 0 }}>
                 <EditableCell onSaved={savedCell} id={e.id} field="venue" value={e.venue} />
@@ -1634,12 +1686,6 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               {/* 주최기관 */}
               <div style={{ minWidth: 0 }}>
                 <EditableCell onSaved={savedCell} id={e.id} field="organizer" value={e.organizer} />
-              </div>
-
-              {/* 기간 */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
-                <EditableCell onSaved={savedCell} id={e.id} field="start_date" value={e.start_date} type="date" />
-                <EditableCell onSaved={savedCell} id={e.id} field="end_date" value={e.end_date} type="date" />
               </div>
 
               {/* 출처 배지 — 이 행사를 확인한 소스를 모두 표시 (seen_at + 처음 등록한 소스) */}
