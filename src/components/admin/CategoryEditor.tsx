@@ -88,7 +88,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose, embedded 
   };
 
   return (
-    <div className={embedded ? "max-h-[82dvh] overflow-y-auto" : "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8"} style={{ background: embedded ? "var(--surface-container-lowest)" : "rgba(26,28,29,0.45)", cursor: "default" }} onMouseDown={(e) => { if (!embedded && e.target === e.currentTarget && !busy) close(); }}>
+    <div className={embedded ? "h-full overflow-y-auto" : "fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8"} style={{ background: embedded ? "var(--surface-container-lowest)" : "rgba(26,28,29,0.45)", cursor: "default" }} onMouseDown={(e) => { if (!embedded && e.target === e.currentTarget && !busy) close(); }}>
       <div className="w-full rounded-xl p-5 flex flex-col gap-4" style={{ maxWidth: embedded ? "100%" : draft ? 960 : 520, background: "var(--surface-container-lowest)", boxShadow: embedded ? "none" : "0 8px 32px rgba(26,28,29,0.18)", textTransform: "none", letterSpacing: "normal", fontWeight: 400 }}>
         <div className="flex items-center justify-between">
           <h3 className="text-base font-bold m-0">카테고리 변경 · {item.category} → {target}</h3>

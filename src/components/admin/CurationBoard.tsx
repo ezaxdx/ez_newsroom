@@ -270,10 +270,15 @@ export default function CurationBoard({
     if (state.comparing) setEditorWide(true);
   }, []);
   const boardPosition = useRef(0);
-  const editorRoot = useRef<HTMLDivElement>(null);
+  const editorRoot = useRef<HTMLDialogElement>(null);
   const editorOpen = editingItem !== null;
   useEffect(() => {
-    if (editorOpen) editorRoot.current?.scrollIntoView({ block: "start" });
+    if (!editorOpen) return;
+    const dialog = editorRoot.current;
+    const previousOverflow = document.body.style.overflow;
+    dialog?.showModal();
+    document.body.style.overflow = "hidden";
+    return () => { dialog?.close(); document.body.style.overflow = previousOverflow; };
   }, [editorOpen]);
   useEffect(() => {
     if (!editorOpen) return;
@@ -528,26 +533,19 @@ export default function CurationBoard({
 
   const hasPendingChanges = deletedIds.length > 0 || republishIds.length > 0;
 
-  if (editingItem) {
-    const editorList = editorIds.map(id => itemsById.get(id)).filter((row): row is NewsItem => !!row);
-    const selectedIndex = editorList.findIndex(row => row.id === editingItem.id);
-    return (
-      <div ref={editorRoot} data-article-editor className="scroll-mt-4 rounded-xl overflow-hidden" style={{ border: "1px solid var(--surface-container-high)", background: "var(--surface-container-lowest)" }}>
-        <header className="flex items-center justify-between flex-wrap gap-3 p-4 border-b" style={{ borderColor: "var(--surface-container-high)" }}>
+  const editorList = editorIds.map(id => itemsById.get(id)).filter((row): row is NewsItem => !!row);
+  const selectedIndex = editorList.findIndex(row => row.id === editingItem?.id);
+  const editor = editingItem ? (
+      <dialog ref={editorRoot} aria-label="기사 편집" className="fixed inset-y-0 left-auto right-0 m-0 p-0 border-0 h-dvh max-h-none max-w-full backdrop:bg-black/40" style={{ width: editorWide ? "min(1200px, 100vw)" : "min(680px, 100vw)", background: "var(--surface-container-lowest)", color: "var(--on-surface)", boxShadow: "-8px 0 32px #0002" }} onCancel={event => { event.preventDefault(); closeEditor(); }} onClick={event => { if (event.target === event.currentTarget) { const rect = event.currentTarget.getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right) closeEditor(); } }}>
+      <div className="flex flex-col h-full">
+        <header className="flex items-center justify-between flex-wrap gap-3 p-4 border-b shrink-0" style={{ borderColor: "var(--surface-container-high)" }}>
           <div><h2 className="text-lg font-semibold m-0">{rewriteFor ? "기사 다시 쓰기" : "기사 편집"}</h2><p className="text-xs m-0 mt-1" style={{ color: "var(--on-surface-variant)" }}>{selectedIndex + 1} / {editorList.length} · {editingItem.category}</p></div>
           <div className="flex gap-2 flex-wrap">
-            <button type="button" onClick={() => setEditorWide(value => !value)} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--surface-container-highest)" }}>{editorWide ? "목록과 함께 보기" : "넓게 보기"}</button>
-            <button type="button" onClick={closeEditor} disabled={editSaving} className="px-3 py-2 rounded-md text-sm disabled:opacity-50" style={{ background: "var(--surface-container-highest)" }}>보드로 돌아가기</button>
+            <button type="button" onClick={() => setEditorWide(value => !value)} className="px-3 py-2 rounded-md text-sm" style={{ background: "var(--surface-container-highest)" }}>{editorWide ? "기본 너비로 보기" : "넓게 보기"}</button>
+            <button type="button" onClick={closeEditor} disabled={editSaving} className="px-3 py-2 rounded-md text-sm disabled:opacity-50" style={{ background: "var(--surface-container-highest)" }}>닫기</button>
           </div>
         </header>
-        <div className={editorWide ? "" : "grid grid-cols-1 md:grid-cols-[260px_minmax(0,1fr)]"}>
-          {!editorWide && <aside aria-label="편집할 기사 목록" className="max-h-48 md:max-h-[78dvh] overflow-y-auto border-b md:border-b-0 md:border-r" style={{ borderColor: "var(--surface-container-high)" }}>
-            {editorList.map(row => <button key={row.id} type="button" aria-current={row.id === editingItem.id ? "true" : undefined} onClick={() => row.id !== editingItem.id && openEdit(row)} className="block w-full text-left p-4 border-b" style={{ borderColor: "var(--surface-container-high)", background: row.id === editingItem.id ? "var(--surface-container-high)" : "transparent", color: "var(--on-surface)" }}>
-              <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>{row.category} · {row.id === editingItem.id ? "편집 중" : row.is_published ? "발행됨" : "대기 중"}</span>
-              <span className="block text-sm font-medium mt-1">{row.title}</span>
-            </button>)}
-          </aside>}
-          <section className="min-w-0" aria-label="기사 편집 내용">
+          <section className="min-w-0 min-h-0 flex-1" aria-label="기사 편집 내용">
             {rewriteFor ? <CategoryChangeDialog key={rewriteFor.id + rewriteFor.target} embedded item={editingItem} target={rewriteFor.target}
               onStateChange={handleRewriteState}
               onPatch={patch => { patchItem(editingItem.id, patch); setEditingItem(previous => previous ? { ...previous, ...patch } : previous); setEditNotice("변경 내용을 저장했습니다."); }}
@@ -558,11 +556,9 @@ export default function CurationBoard({
                 onPrevious={selectedIndex > 0 ? () => openEdit(editorList[selectedIndex - 1]) : undefined}
                 onNext={selectedIndex + 1 < editorList.length ? () => openEdit(editorList[selectedIndex + 1]) : undefined} />}
           </section>
-        </div>
       </div>
-    );
-  }
-
+      </dialog>
+    ) : null;
 
   return (
     <div>
@@ -913,6 +909,7 @@ export default function CurationBoard({
           onConfirm={(reason) => void sendFitFeedback(rejectItem.id, "bad", reason)}
         />
       )}
+      {editor}
     </div>
   );
 }
@@ -1005,8 +1002,8 @@ function EditArticlePanel({ item, focus, categoryOptions, saving, error, notice,
   const update = (key: keyof typeof fields, value: string) => setFields(previous => ({ ...previous, [key]: value }));
   const inputStyle: React.CSSProperties = { background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)", borderRadius: 6, color: "var(--on-surface)", padding: "9px 11px", fontSize: "0.875rem", width: "100%", boxSizing: "border-box" };
   const valid = detailState === "ready" && !!fields.title.trim() && !!fields.summary_short.trim() && (!!fields.content_long.trim() || fields.content_long === baseline.content_long);
-  return <div className="flex flex-col max-h-[82dvh]">
-    <div className="flex gap-2 flex-wrap p-4 border-b" style={{ borderColor: "var(--surface-container-high)" }} role="tablist" aria-label="기사 편집 항목">
+  return <div className="flex flex-col h-full min-h-0">
+    <div className="flex gap-2 flex-wrap p-4 border-b shrink-0" style={{ borderColor: "var(--surface-container-high)" }} role="tablist" aria-label="기사 편집 항목">
       {([['content', '기사 내용'], ['image', '이미지·원문'], ['rewrite', '기사 다시 쓰기']] as const).map(([key, label]) =>
         <button key={key} type="button" role="tab" aria-selected={pane === key} aria-controls={"edit-pane-" + item.id} disabled={saving} onClick={() => setPane(key)} className="px-3 py-2 rounded-md text-sm" style={{ background: pane === key ? "var(--primary)" : "var(--surface-container-highest)", color: pane === key ? "var(--on-primary)" : "var(--on-surface)" }}>{label}</button>)}
     </div>
@@ -1038,7 +1035,7 @@ function EditArticlePanel({ item, focus, categoryOptions, saving, error, notice,
         </>}
       </fieldset>
     </div>
-    <footer className="p-4 border-t flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-lowest)" }}>
+    <footer className="p-4 border-t shrink-0 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-lowest)" }}>
       <span role={error ? "alert" : "status"} className="text-xs" style={{ color: error ? "#b91c1c" : "var(--on-surface-variant)" }}>{error || (dirty ? "저장하지 않은 변경사항" : notice || "수정사항 없음")}</span>
       <div className="flex gap-2 flex-wrap">
         <button type="button" disabled={saving || !onPrevious} onClick={onPrevious} className="px-3 py-2 rounded text-sm disabled:opacity-40" style={{ background: "var(--surface-container-highest)" }}>이전</button>

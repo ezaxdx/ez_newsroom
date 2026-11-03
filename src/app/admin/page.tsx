@@ -119,7 +119,7 @@ export default async function AdminPage() {
 
   return (
     <HelpProvider>
-    <div className="p-4 sm:p-8 max-w-4xl has-[[data-article-editor]]:max-w-[1600px]">
+    <div className="p-4 sm:p-8 max-w-4xl">
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4 mb-8">
         {[
