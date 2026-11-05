@@ -52,3 +52,19 @@ export function retryWork(row: WorkRow, error: string) {
   row.state = row.attempts >= 3 ? 'failed' : 'retry';
   row.last_error = error;
 }
+
+// Ordinary eligible articles only; picked-event and own content never consume these slots.
+export function selectCategorySlots<T extends { category: string; fit: number; score: number; key: string }>(rows: T[], limit: number, minimum = 4): Set<string> {
+  const ranked = [...rows].sort((a,b) => b.fit - a.fit || b.score - a.score || a.key.localeCompare(b.key));
+  const selected = new Set<string>();
+  const cap = Math.max(0, Math.floor(limit));
+  for (let round = 0; round < minimum && selected.size < cap; round++) {
+    for (const category of ["MICE", "TOURISM", "AI"]) {
+      if (selected.size >= cap) break;
+      const next = ranked.find(row => row.category === category && !selected.has(row.key));
+      if (next) selected.add(next.key);
+    }
+  }
+  for (const row of ranked) { if (selected.size >= cap) break; selected.add(row.key); }
+  return selected;
+}

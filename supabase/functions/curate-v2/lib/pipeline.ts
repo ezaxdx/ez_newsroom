@@ -10,7 +10,7 @@ import {
 import type { CatSetting, FitAnchor } from "./ai.ts";
 import { buildHintBlock, canonicalDomain, FIT_ANCHORS, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
-import { claimBatch, readWork, saveWork, queueCounts, retryWork, type Batch, type WorkRow } from "./queue.ts";
+import { selectCategorySlots, claimBatch, readWork, saveWork, queueCounts, retryWork, type Batch, type WorkRow } from "./queue.ts";
 
 /* ───────── 타입 ───────── */
 export interface RunOptions {
@@ -41,6 +41,7 @@ interface Source {
 interface PickEvent { id: string; name: string; start: string | null; end: string | null; queryTerms: string[]; matchers: RegExp[] }
 interface SrcRef { key: string; name: string; type: string; weight: number; category: string; via: string; maxItems: number; keywordMode: string; customKeywords: string[]; eventId?: string }
 interface Cand {
+  allocationEligible?: boolean;
   title: string; link: string; pubDate: string; pubMs: number | null; description: string; bodyText?: string;
   urlKey: string; srcs: SrcRef[]; vias: Set<string>; event: PickEvent | null; eventSearchOnly: boolean; coverage: number;
   text?: string; image?: string | null;
@@ -701,8 +702,8 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     return real.length ? real : ["MICE"];
   };
   const maxAutoPublish: number = Number.isFinite(Number(thresholds.max_auto_publish)) && Number(thresholds.max_auto_publish) > 0 ? Number(thresholds.max_auto_publish) : 20;
-  let autoPublished = [...work.values()].filter(r => ['publish', 'published'].includes(r.state) && !r.payload.event && !(r.payload.srcs.every((s: SrcRef) => s.category === 'EZPMP'))).length;
   let cappedCount = 0;
+  let allocation: Record<string, unknown> | null = null;
   const aiTargets = opts.dry && opts.maxAi != null ? readyList.slice(0, opts.maxAi) : readyList;
   let aiCalls = 0;
   // 4a. 적합성 판정 — 짧은 호출이라 한꺼번에(동시 8건). 싣지 않을 기사는 여기서 걸러 글 작성(가장 오래 걸리는 호출)을 건너뜀.
@@ -799,11 +800,8 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     let dupSuspect = false;
     if (decision === "publish" && c.dupOf && !isPick) { decision = "stage"; dupSuspect = true; }
     let capped = false;
-    if (decision === "publish" && !isPick && !isOwn) {
-      if (autoPublished >= maxAutoPublish) { decision = "stage"; capped = true; cappedCount++; }
-      else autoPublished++;
-    }
-    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, dupSuspect, levelDefaulted: g.level_defaulted !== undefined, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
+    c.allocationEligible = decision === "publish" && !isPick && !isOwn;
+    decisions.push({ title: g.title, original_title: c.title, link: c.link, undated, dupSuspect, levelDefaulted: g.level_defaulted !== undefined, category: g.category, category_reason: g.category_reason, cats, score, fit, fit_reason: judgedReason ?? g.fit_reason ?? null, level: g.level, level_axes: g.level_axes ?? null, decision, capped, allocationEligible: c.allocationEligible, pick: c.event?.name ?? null, vias: [...c.vias], coverage: c.coverage, source: p.name });
     if (decision === "discard_score" || decision === "discard_fit") {
       results.skipped++; st.skipped++; st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] = (st.reasons[decision === "discard_score" ? "low_score" : "low_fit"] ?? 0) + 1;
       markSeen(c, decision === "discard_score" ? "low_score" : "low_fit");
@@ -853,6 +851,11 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     await mapPool(out, 5, writeOne);
     writeMs += Date.now() - tw;
   }
+  if (!batch) {
+    const eligible = decisions.filter(d => d.allocationEligible);
+    const chosen = selectCategorySlots(eligible.map(d => ({ key: d.link, category: d.category, fit: d.fit, score: d.score })), maxAutoPublish);
+    for (const d of eligible) if (!chosen.has(d.link)) { d.decision = "stage"; d.capped = true; cappedCount++; results.published--; results.staged++; const st = [...stats.values()].find(s => s.name === d.source); if (st) { st.published--; st.staged++; } }
+  }
   timings.write = Date.now() - runStart; timings.judge_total = judgeMs; timings.write_total = writeMs;
   log(`[4a단계] 적합성 판정 ${aiTargets.length}건 중 작성 대상 ${writeTargets.length}건 (판정 ${judgeMs}ms / 작성 ${writeMs}ms)`);
   log(`[4~5단계] AI ${aiCalls}건 처리 — 발행 ${results.published} 대기 ${results.staged} 폐기 ${results.skipped} 실패 ${results.failed} (${Date.now() - runStart}ms)`);
@@ -870,6 +873,25 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       && latestKeys.has(normalizeUrl(r.article?.original_url ?? r.payload.link)));
     for (const row of duplicates) { row.state = 'excluded'; row.last_error = '발행 직전 확인: 이미 저장된 기사 URL'; }
     await saveWork(supabase, batch, duplicates);
+    // Finalize allocation only after all retries finish, using persisted eligibility across invocations.
+    if (![...work.values()].some(r => ['pending', 'retry'].includes(r.state))) {
+      const eligible = [...work.values()].filter(r => ['publish', 'stage'].includes(r.state) && r.payload.allocationEligible === true && r.article);
+      const alreadyPublished = [...work.values()].filter(r => (r.state === 'published' || (r.state === 'publish' && r.payload.allocationEligible !== true)) && !r.payload.event && !r.payload.srcs.every((s: SrcRef) => s.category === 'EZPMP')).length;
+      const chosen = selectCategorySlots(eligible.map(r => ({ key: r.url_key, category: r.article.category, fit: r.judgement?.fit ?? r.article.quality_criteria?.fit ?? 5, score: r.article.quality_score ?? 5 })), Math.max(0, maxAutoPublish - alreadyPublished));
+      for (const row of eligible) {
+        const publish = chosen.has(row.url_key);
+        row.state = publish ? 'publish' : 'stage'; row.article.is_published = publish;
+        row.last_error = publish ? null : '카테고리별 4건 우선 배분 후 전체 자동 발행 상한 초과';
+        const d = decisions.find(d => d.link === row.article.original_url);
+        if (d) { d.decision = publish ? 'publish' : 'stage'; d.capped = !publish; }
+      }
+      cappedCount = eligible.length - chosen.size;
+      allocation = { minimum_per_category: 4, limit: maxAutoPublish, eligible: eligible.length, capped: cappedCount,
+        published_by_category: eligible.filter(r => chosen.has(r.url_key)).reduce((counts: Record<string, number>, r) => { counts[r.article.category] = (counts[r.article.category] ?? 0) + 1; return counts; }, {}) };
+      await saveWork(supabase, batch, eligible);
+      log(`[발행 배분] 카테고리별 최대 4건 우선, 일반 기사 ${chosen.size}/${maxAutoPublish}건 선정`);
+    }
+
     const { data, error } = await supabase.rpc('finish_curation_batch', { p_batch: batch.id, p_lease: batch.lease });
     if (error) {
       // SQL/data/schema errors need a fix; network/timeout errors retain bounded retries.
@@ -951,7 +973,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const logErrors = [...runErrors, ...levelDefaulted.map((e) => ({ source: e.source, error: `레벨 판정 실패(응답: ${e.raw}) → Intermediate 저장: ${e.title.slice(0, 60)}` })), ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
   const fetched = [...stats.values()].reduce((s, x) => s + x.fetched, 0);
   const details = {
-    trigger, status: batchStatus, batch_id: batch?.id, queue, chain: opts.chain ?? 0, timings,
+    trigger, status: batchStatus, batch_id: batch?.id, allocation, queue, chain: opts.chain ?? 0, timings,
     window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() },
     funnel, picks: picks.map((p) => ({ name: p.name, terms: p.queryTerms })), decisions,
     selected: selected.map((c) => ({ title: c.title, source: primaryOf(c).name, vias: [...c.vias], pick: c.event?.name ?? null, cats: categoriesFor(c), coverage: c.coverage, hasText: !!c.text })),

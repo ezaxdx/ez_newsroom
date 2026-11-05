@@ -356,3 +356,17 @@ test('PostgreSQL queue + real pipeline integration (no external APIs)', { skip: 
   assert.equal((await q("select has_function_privilege('anon','manual_archive_curation(text,timestamptz,timestamptz,integer)','execute') as allowed"))[0].allowed,false);
 
 });
+
+test('category slots reserve four, redistribute shortage, cap and remain deterministic', async () => {
+  const { selectCategorySlots } = await import('../supabase/functions/curate-v2/lib/queue.ts');
+  const rows = (category: string, n: number, fit: number) => Array.from({length:n}, (_,i)=>({category,key:category+i,fit,score:8}));
+  const candidates = [...rows('TOURISM',30,10),...rows('MICE',8,9),...rows('AI',8,7)];
+  const chosen=selectCategorySlots(candidates,20);
+  assert.equal(chosen.size,20);
+  for (const cat of ['MICE','TOURISM','AI']) assert.ok(candidates.filter(r=>r.category===cat&&chosen.has(r.key)).length>=4);
+  assert.deepEqual([...selectCategorySlots([...candidates].reverse(),20)].sort(),[...chosen].sort());
+  const scarce=[...rows('AI',2,7),...rows('TOURISM',30,9)];const freed=selectCategorySlots(scarce,20);
+  assert.equal(freed.size,20);assert.equal(scarce.filter(r=>r.category==='AI'&&freed.has(r.key)).length,2);
+  assert.equal(selectCategorySlots(rows('AI',2,7),20).size,2);
+  assert.equal(selectCategorySlots(candidates,5).size,5);
+});
