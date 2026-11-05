@@ -714,7 +714,17 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     if (overBudget(15_000)) { st.deferred++; return; }
     const cats = categoriesFor(c);
     if (c.event) {
-      judgedMap.set(c, { fit: 10, reason: `이즈픽 행사(${c.event.name}) 관련 기사 — 적합성 관문 면제` });
+      const saved = work.get(c.urlKey)?.judgement;
+      const j = saved?.reason?.startsWith("[event-focus-v1:") ? { ok: true as const, ...saved }
+        : await judgeFit({ apiKey, title: c.title, text: c.text!, category: "MICE", eventName: c.event.name, deadline: runStart + budgetMs });
+      if (!j.ok) { results.failed++; st.failed++; runErrors.push({ source: p.name, url: c.link, error: `행사 중심 판정 실패: ${j.error}` }); await checkpoint(c, undefined, j.error); return; }
+      judgedMap.set(c, { fit: j.fit, reason: j.reason });
+      if (batch) { work.get(c.urlKey)!.judgement = { fit: j.fit, reason: j.reason }; await checkpoint(c); }
+      if (j.fit === 2) {
+        decisions.push({ title: c.title, original_title: c.title, link: c.link, category: "MICE", cats, score: null, fit: j.fit, fit_reason: j.reason, level: null, decision: "discard_fit", pre_write: true, capped: false, pick: c.event.name, vias: [...c.vias], coverage: c.coverage, source: p.name });
+        results.skipped++; st.skipped++; st.reasons["event_company_focus"] = (st.reasons["event_company_focus"] ?? 0) + 1;
+        markSeen(c, "event_company_focus"); await checkpoint(c, "excluded"); return;
+      }
       out.push(c); return;
     }
     // 자사 콘텐츠(EZPMP 카테고리: 우리 블로그·오투미트 등) — 발행 주기가 길어서 적합성 관문과 자동 발행 상한을 적용하지 않고, 발행 창에 맞으면 모두 발행
@@ -777,7 +787,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     const isPick = !!c.event;
     let decision: "publish" | "stage" | "discard_score" | "discard_fit";
     const isOwn = !isPick && cats.length === 1 && cats[0] === "EZPMP";   // 자사 콘텐츠 — 이즈픽 기사와 같이 적합성 관문 면제, 자동 발행 상한에도 안 셈
-    if (isPick || isOwn) decision = score >= PICK_PUBLISH_SCORE ? "publish" : "stage";   // 적합성 관문 면제
+    if (isPick || isOwn) decision = score >= PICK_PUBLISH_SCORE && (!isPick || judgedFit === 10) ? "publish" : "stage";   // 적합성 관문 면제
     else if (score < (thresholds.staging ?? 5)) decision = "discard_score";
     else if (fit < FIT_DISCARD) decision = "discard_fit";
     else decision = score >= (thresholds.auto_publish ?? 8) && fit >= FIT_PUBLISH ? "publish" : "stage";
