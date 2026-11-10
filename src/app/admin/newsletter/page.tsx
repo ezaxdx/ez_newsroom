@@ -1579,7 +1579,7 @@ export default function NewsletterPage() {
               </span>
             </label>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 16 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 16 }}>
               <button
                 onClick={handlePreview}
                 disabled={previewing}
@@ -1659,14 +1659,14 @@ export default function NewsletterPage() {
                 );
               })()}
 
+              <NewsletterSchedule html={previewHtml} vol={previewMeta?.vol_number} subject={subjectOverride.trim() || `[EZ Letter] Vol.${previewMeta?.vol_number} · ${previewMeta?.send_date}`} editorial={editorialText} featured={previewMeta?.featured_ids} disabled={sending || !!sendProgress} />
+
               {activeCount !== null && (
                 <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>
                   현재 활성 수신자: <strong>{activeCount}명</strong>
                 </span>
               )}
             </div>
-
-            <NewsletterSchedule html={previewHtml} vol={previewMeta?.vol_number} subject={subjectOverride.trim() || `[EZ Letter] Vol.${previewMeta?.vol_number} · ${previewMeta?.send_date}`} editorial={editorialText} featured={previewMeta?.featured_ids} disabled={sending || !!sendProgress} />
 
             {sending && (
               <div style={{
