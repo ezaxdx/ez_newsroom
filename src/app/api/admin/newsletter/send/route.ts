@@ -55,6 +55,9 @@ export async function POST(req: NextRequest) {
   const editorial_flap_url = body.editorial_flap_url || undefined;
   const editorial_box_color = body.editorial_box_color || undefined;
   const supabase = createAdminClient();
+  const { data: scheduled, error: scheduleError } = await supabase.from("newsletter_schedules").select("id").in("status", ["scheduled", "running", "attention"]).limit(1);
+  if (!dry_run && scheduleError) return NextResponse.json({ error: "예약 상태 확인 실패" }, { status: 503 });
+  if (!dry_run && scheduled?.length) return NextResponse.json({ error: "예약 발송이 진행 중입니다. 예약을 취소·중지한 뒤 진행해주세요." }, { status: 409 });
 
   // ── 미리보기에서 생성된 HTML 캐시로 바로 발송 ──────────
   if (!dry_run && body.cached_html) {
@@ -78,7 +81,7 @@ export async function POST(req: NextRequest) {
     // 같은 vol_number 이슈가 이미 있으면 재사용 (재발송 시 중복 방지)
     const { data: existingIssue } = await supabase
       .from("newsletter_issues")
-      .select("id, total_sent")
+      .select("id, total_sent, status")
       .eq("vol_number", vol_number)
       .order("sent_at", { ascending: false })
       .limit(1)
@@ -88,7 +91,8 @@ export async function POST(req: NextRequest) {
 
     if (existingIssue) {
       issueId = existingIssue.id;
-      await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId);
+      const { error: startError } = await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId);
+      if (startError) return NextResponse.json({ error: startError.message }, { status: 409 });
     } else {
       await alertImageFallbacks(sendHtml, vol_number);
       const { data: newIssue, error: issueErr } = await supabase
@@ -279,7 +283,8 @@ export async function POST(req: NextRequest) {
   let issueId2: string;
   if (existingIssue2) {
     issueId2 = existingIssue2.id;
-    await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId2);
+    const { error: startError } = await supabase.from("newsletter_issues").update({ status: "sending" }).eq("id", issueId2);
+    if (startError) return NextResponse.json({ error: startError.message }, { status: 409 });
   } else {
     await alertImageFallbacks(html, vol_number);
     const { data: newIssue2, error: issueErr2 } = await supabase

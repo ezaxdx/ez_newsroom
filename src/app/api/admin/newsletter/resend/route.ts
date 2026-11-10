@@ -83,6 +83,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "발송할 이메일 목록이 없습니다." }, { status: 400 });
 
   const supabase = createAdminClient();
+  const { data: scheduled, error: scheduleError } = await supabase.from("newsletter_schedules").select("id").in("status", ["scheduled", "running", "attention"]).limit(1);
+  if (scheduleError) return NextResponse.json({ error: "예약 상태 확인 실패" }, { status: 503 });
+  if (scheduled?.length) return NextResponse.json({ error: "예약 발송을 취소·중지한 뒤 재발송해주세요." }, { status: 409 });
 
   const { data: issue, error: issueErr } = await supabase
     .from("newsletter_issues")
@@ -95,9 +98,10 @@ export async function POST(req: NextRequest) {
   if (!issue.html_content)
     return NextResponse.json({ error: "저장된 HTML이 없습니다." }, { status: 400 });
 
-  await supabase.from("newsletter_issues")
+  const { error: startError } = await supabase.from("newsletter_issues")
     .update({ status: "sending" })
     .eq("id", issue_id);
+  if (startError) return NextResponse.json({ error: startError.message }, { status: 409 });
 
   const todayKST = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const send_date = `${todayKST.getUTCFullYear()}.${String(todayKST.getUTCMonth() + 1).padStart(2, "0")}.${String(todayKST.getUTCDate()).padStart(2, "0")}`;

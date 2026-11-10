@@ -15,6 +15,10 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "issue_id가 필요합니다." }, { status: 400 });
 
   const supabase = createAdminClient();
+  const { data: schedule, error: scheduleError } = await supabase.from("newsletter_schedules")
+    .select("id").eq("issue_id", issue_id).in("status", ["scheduled", "running", "attention"]).limit(1);
+  if (scheduleError) return NextResponse.json({ error: "예약 상태 확인 실패" }, { status: 503 });
+  if (schedule?.length) return NextResponse.json({ error: "예약 발송을 먼저 취소·중지한 뒤 상태를 복구해주세요." }, { status: 409 });
 
   const { data: issue } = await supabase
     .from("newsletter_issues")

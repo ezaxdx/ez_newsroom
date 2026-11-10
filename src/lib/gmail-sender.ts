@@ -161,6 +161,7 @@ export async function sendNewsletterViaGmail(params: {
   /** 전체 시간 예산(ms) — 초과 시 남은 수신자는 처리하지 않고 반환 (Vercel 강제종료 방지) */
   timeBudgetMs?: number;
   onBatchComplete?: (results: SendResult[]) => Promise<void>;
+  beforeBatch?: () => Promise<boolean>;
 }): Promise<{ results: SendResult[]; total_sent: number; total_failed: number; processed: number }> {
   const gmail = await getGmailClient();
   const started = Date.now();
@@ -176,6 +177,7 @@ export async function sendNewsletterViaGmail(params: {
     // 시간 예산 초과 → 즉시 중단, 미처리분은 다음 회차에서 발송 (로그 기반 중복 방지)
     if (params.timeBudgetMs && Date.now() - started > params.timeBudgetMs) break;
 
+    if (params.beforeBatch && !await params.beforeBatch()) break;
     const batch = recipients.slice(i, i + BATCH_SIZE);
     if (i > 0) await new Promise(r => setTimeout(r, 200));
     const batchResults = await Promise.all(

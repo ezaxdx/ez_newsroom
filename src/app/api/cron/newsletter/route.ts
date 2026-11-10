@@ -27,6 +27,9 @@ export async function GET(req: NextRequest) {
   if (unauth) return unauth;
 
   const supabase = createAdminClient();
+  const { data: scheduled, error: scheduleError } = await supabase.from("newsletter_schedules").select("id").in("status", ["scheduled", "running", "attention"]).limit(1);
+  if (scheduleError) return NextResponse.json({ error: "예약 상태 확인 실패" }, { status: 503 });
+  if (scheduled?.length) return NextResponse.json({ error: "예약 발송이 진행 중입니다. 예약을 취소·중지한 뒤 진행해주세요." }, { status: 409 });
 
   const { data: settings } = await supabase.from("newsletter_cron_settings").select("*").single();
   if (!settings?.enabled) return NextResponse.json({ skipped: true, reason: "auto-send disabled" });

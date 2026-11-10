@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { Trash2, ToggleLeft, ToggleRight, Plus, Loader2, Sparkles, CheckCircle, XCircle, ExternalLink, Download, Settings } from "lucide-react";
+import NewsletterSchedule from "@/components/admin/NewsletterSchedule";
 import HelpPanel, { HelpTrigger, Section, Item, Indent, Note } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { useTabParam } from "@/lib/useTabParam";
@@ -106,8 +107,8 @@ export default function NewsletterPage() {
   // ── History tab state ──
   const [issues, setIssues] = useState<Issue[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const HISTORY_STATUSES = ["sent", "partial", "sending", "failed", "draft"] as const;
-  const HISTORY_STATUS_LABELS: Record<string, string> = { sent: "발송완료", partial: "일부발송", sending: "발송중", failed: "실패", draft: "임시저장" };
+  const HISTORY_STATUSES = ["sent", "partial", "sending", "failed", "draft", "scheduled", "cancelled"] as const;
+  const HISTORY_STATUS_LABELS: Record<string, string> = { sent: "발송완료", partial: "일부발송", sending: "발송중", failed: "실패", draft: "임시저장", scheduled: "예약대기", cancelled: "취소·중지" };
   const [historyStatusFilter, setHistoryStatusFilter] = useState<Set<string>>(new Set(HISTORY_STATUSES));
   const [historyDateFrom, setHistoryDateFrom] = useState<string>(""); // "YYYY-MM-DD" or ""
   const [historyDateTo, setHistoryDateTo] = useState<string>("");
@@ -1665,6 +1666,8 @@ export default function NewsletterPage() {
               )}
             </div>
 
+            <NewsletterSchedule html={previewHtml} vol={previewMeta?.vol_number} subject={subjectOverride.trim() || `[EZ Letter] Vol.${previewMeta?.vol_number} · ${previewMeta?.send_date}`} editorial={editorialText} featured={previewMeta?.featured_ids} disabled={sending || !!sendProgress} />
+
             {sending && (
               <div style={{
                 padding: "10px 14px", borderRadius: 6, marginBottom: 16,
@@ -2651,7 +2654,7 @@ export default function NewsletterPage() {
                           const s = issue.status;
                           const statusBg    = s === "sent" ? "#D4EDDA" : s === "partial" ? "#FFF3CD" : s === "sending" ? "#D1ECF1" : s === "failed" ? "#F8D7DA" : "var(--surface-container-highest)";
                           const statusColor = s === "sent" ? "#155724" : s === "partial" ? "#856404" : s === "sending" ? "#0c5460" : s === "failed" ? "#721C24" : "var(--on-surface-variant)";
-                          const statusLabel = s === "sent" ? "발송완료" : s === "partial" ? "일부발송" : s === "sending" ? "발송중..." : s === "failed" ? "실패" : s === "draft" ? "임시저장" : s;
+                          const statusLabel = HISTORY_STATUS_LABELS[s] ?? s;
                           const canResend   = (s === "partial" || s === "failed" || s === "sending") && !!issue.html_content;
                           const unsent      = unsentMap[issue.id] ?? [];
                           const checked     = checkedEmails[issue.id] ?? new Set<string>();

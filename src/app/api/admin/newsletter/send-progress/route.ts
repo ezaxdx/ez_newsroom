@@ -26,6 +26,11 @@ export async function GET() {
     .maybeSingle();
 
   if (!issue) return NextResponse.json({ ok: true, progress: null });
+  // Scheduled rounds have their own progress panel and never need the manual next-round button.
+  const { data: schedule, error: scheduleError } = await supabase.from("newsletter_schedules")
+    .select("id").eq("issue_id", issue.id).in("status", ["scheduled", "running", "attention"]).limit(1);
+  if (scheduleError) return NextResponse.json({ error: "예약 상태 확인 실패" }, { status: 503 });
+  if (schedule?.length) return NextResponse.json({ ok: true, progress: null });
 
   const [{ data: successLogs }, { data: subscribers }] = await Promise.all([
     supabase.from("newsletter_send_logs").select("email").eq("issue_id", issue.id).eq("status", "success"),
