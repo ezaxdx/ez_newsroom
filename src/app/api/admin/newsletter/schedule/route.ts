@@ -17,7 +17,8 @@ export async function POST(req: NextRequest) {
 }
 export async function DELETE(req: NextRequest) {
   const unauth = await requireAdmin(); if (unauth) return unauth;
-  const { id } = await req.json().catch(() => ({}));
+  const body = await req.json().catch(() => null);
+  const id = body?.id;
   if (typeof id !== "string") return NextResponse.json({ error: "예약 ID를 확인해주세요." }, { status: 400 });
   const { error } = await createAdminClient().rpc("cancel_newsletter_schedule", { p_id: id });
   return NextResponse.json(error ? { error: error.message } : { ok: true }, { status: error ? 409 : 200 });
