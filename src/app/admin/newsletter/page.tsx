@@ -35,6 +35,7 @@ type Issue = {
   sent_at: string | null;
   created_at: string;
   opened_count: number;
+  newsletter_schedules?: { scheduled_at: string; status: string } | { scheduled_at: string; status: string }[] | null;
 };
 
 type SendLog = { id: string; email: string; status: string; error_message: string | null; sent_at: string };
@@ -2655,6 +2656,7 @@ export default function NewsletterPage() {
                           const statusBg    = s === "sent" ? "#D4EDDA" : s === "partial" ? "#FFF3CD" : s === "sending" ? "#D1ECF1" : s === "failed" ? "#F8D7DA" : "var(--surface-container-highest)";
                           const statusColor = s === "sent" ? "#155724" : s === "partial" ? "#856404" : s === "sending" ? "#0c5460" : s === "failed" ? "#721C24" : "var(--on-surface-variant)";
                           const statusLabel = HISTORY_STATUS_LABELS[s] ?? s;
+                          const reservation = Array.isArray(issue.newsletter_schedules) ? issue.newsletter_schedules[0] : issue.newsletter_schedules;
                           const canResend   = (s === "partial" || s === "failed" || s === "sending") && !!issue.html_content;
                           const unsent      = unsentMap[issue.id] ?? [];
                           const checked     = checkedEmails[issue.id] ?? new Set<string>();
@@ -2665,7 +2667,12 @@ export default function NewsletterPage() {
                           return (
                           <React.Fragment key={issue.id}>
                           <tr style={{ borderTop: "1px solid var(--surface-container-highest)" }}>
-                            <td style={tdStyle}>Vol.{issue.vol_number}</td>
+                            <td style={tdStyle}>Vol.{issue.vol_number}
+                              {reservation && <div style={{ marginTop: 4, fontSize: 11, color: "var(--primary)", fontWeight: 600 }}
+                                title={`예약 시각: ${new Date(reservation.scheduled_at).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })} (한국시간)`}>
+                                {reservation.status === "cancelled" ? "예약 취소·중지" : "예약 발송"}
+                              </div>}
+                            </td>
                             <td style={tdStyle}>
                               {issue.sent_at
                                 ? new Date(issue.sent_at).toLocaleDateString("ko-KR")

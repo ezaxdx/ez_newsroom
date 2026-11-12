@@ -23,7 +23,7 @@ async function checkMissedRun(
   const [logsResult, batchResult] = await Promise.all([
     supabase.from("curation_logs").select("run_at, run_mode, details, errors")
       .eq("run_mode", "live").gte("run_at", edition).order("run_at", { ascending: false }),
-    supabase.from("curation_batches").select("id, status, attempts, retry_blocked_reason, dispatch_error")
+    supabase.from("curation_batches").select("id, status, collection_attempts, processing_attempts, phase:snapshot->>phase, retry_blocked_reason, dispatch_error")
       .eq("window_end", edition).limit(1),
   ]);
   // A failed query is not evidence of a missing run.
@@ -39,10 +39,12 @@ async function checkMissedRun(
   if (batch?.status === "done" || logs.some(l =>
     ((l.details as { status?: string } | null)?.status ?? "done") === "done")) return;
 
-  const state = batch?.retry_blocked_reason ? "blocked" : (batch?.attempts ?? 0) >= 8 ? "limit"
+  const processing = batch?.phase === "selected";
+  const attempts = processing ? batch?.processing_attempts : batch?.collection_attempts;
+  const state = batch?.retry_blocked_reason ? "blocked" : (attempts ?? 0) >= 8 ? "limit"
     : batch || logs.length ? "incomplete" : "missing";
   const cause = state === "blocked" ? "DB 오류로 자동 재시도를 중지했습니다."
-    : state === "limit" ? "해당 회차의 실행 상한(8회)에 도달했습니다."
+    : state === "limit" ? `${processing ? "기사 처리" : "목록 수집"} 단계의 실행 상한(8회)에 도달했습니다.`
     : state === "incomplete" ? "작업 접수 또는 시작 기록은 있지만 완료 기록이 없습니다."
     : "이 회차의 작업 접수·실행 기록이 없습니다. 시작 요청 누락 또는 접수 전 실패 가능성이 있습니다.";
   const action = state === "blocked" ? "발행 DB 오류를 수정한 뒤 해당 회차의 재시도 중지 상태를 해제해야 합니다."
@@ -51,6 +53,7 @@ async function checkMissedRun(
     : "Vercel 크론 호출 기록과 curate-v2 접수 응답·인증 설정을 확인해 주세요.";
   const errors = logs[0]?.errors as { error?: string }[] | null;
   const error = batch?.retry_blocked_reason ?? batch?.dispatch_error ?? errors?.[0]?.error;
+  const queue = (logs[0]?.details as { queue?: { prepared?: number; pending?: number; failed?: number } } | null)?.queue;
   const target = new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", dateStyle: "full", timeStyle: "short" }).format(lastRun);
   const key = edition + ":" + state;
   const claim = await supabase.rpc("claim_curation_notification", { p_key: key });
@@ -59,6 +62,8 @@ async function checkMissedRun(
   const sent = await sendDiscordAlert({
     title: "큐레이션 자동 실행 누락 감지",
     description: ["대상 회차: " + target + " (한국시간)", cause,
+      batch ? `목록 수집 ${batch.collection_attempts}/8회 · 기사 처리 ${batch.processing_attempts}/8회` : "",
+      queue ? `최종 발행 전: 작성 완료 ${queue.prepared ?? 0}건 / 미처리 ${queue.pending ?? 0}건 / 개별 실패 ${queue.failed ?? 0}건` : "",
       error ? "기록된 오류: " + String(error).slice(0, 600) : "",
       "조치: " + action,
       "화·목 발행 회차를 매일 점검한 결과입니다. 같은 회차·상태는 중복 전송하지 않습니다. 수동 등록 기사 유무와는 별개입니다."

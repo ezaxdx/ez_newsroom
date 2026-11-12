@@ -324,7 +324,11 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const taskIdentity = (t: Task) => JSON.stringify([t.key, t.via, t.query]);
   const validTasks = new Set(tasks.map(taskIdentity));
   const taskResults: { t: Task; r: FetchResult; attempts: number }[] = (batch?.snapshot?.collection ?? []).filter(x=>validTasks.has(taskIdentity(x.t)));
-  const collected = new Set(taskResults.filter(x=>!x.r.error || x.r.items.length>0 || x.attempts>=3).map(({t})=>taskIdentity(t)));
+  // A successful alternate engine for the same query is enough to continue.
+  // Single-engine failures still get at most three attempts, across saved invocations.
+  const shouldRetry = (x: typeof taskResults[number]) => !!x.r.error && x.r.items.length===0 && x.attempts<3
+    && !taskResults.some(other=>other.t.key===x.t.key && other.t.query===x.t.query && other.t.via!==x.t.via && other.r.items.length>0);
+  const collected = new Set(taskResults.filter(x=>!shouldRetry(x)).map(({t})=>taskIdentity(t)));
   const snapshotCollection = async (resolved?: Map<string, string | null>) => {
     if (!batch) return;
     const snapshot = { phase: 'collecting' as const, stats: [], funnel: {}, collection: taskResults.map(({t,r,attempts}) => ({ t: { ...t, run: undefined }, r, attempts })), resolved: resolved ? [...resolved.entries()] : batch.snapshot?.resolved };
@@ -332,10 +336,15 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     batch.snapshot = snapshot;
   };
   const finishCollectionLater = async () => {
+    const pendingSearches = tasks.filter(t=>{
+      const result=taskResults.find(x=>taskIdentity(x.t)===taskIdentity(t));
+      return !result || shouldRetry(result);
+    }).length;
+    const fetched = taskResults.reduce((n,x)=>n+x.r.items.length,0);
     if (logId) await supabase.from('curation_logs').update({ duration_ms: Date.now()-runStart,
-      fetched: taskResults.reduce((n,x)=>n+x.r.items.length,0), errors: taskResults.filter(x=>x.r.error).map(x=>({source:x.t.src.name,error:x.r.error})), details: { trigger, status: 'partial', batch_id: batch?.id, chain: opts.chain ?? 0, phase: 'collecting' } }).eq('id',logId);
+      fetched, errors: taskResults.filter(x=>x.r.error).map(x=>({source:x.t.src.name,error:x.r.error})), details: { trigger, status: 'partial', batch_id: batch?.id, chain: opts.chain ?? 0, phase: 'collecting', pending_searches: pendingSearches } }).eq('id',logId);
     if (batch) await supabase.from('curation_batches').update({ status: 'partial' }).eq('id',batch.id).eq('lease',batch.lease);
-    return { ok: true, status: 'partial', batch_id: batch?.id, deferred: 1, progress: taskResults.length, window_end: windowEnd } as any;
+    return { ok: true, status: 'partial', phase: 'collecting', collection_pending: pendingSearches, fetched, batch_id: batch?.id, deferred: Math.max(1,pendingSearches), progress: taskResults.length, window_end: windowEnd } as any;
   };
   for (let start=0; start<tasks.length; start+=6) {
     const wave = tasks.slice(start,start+6).filter(t=>!collected.has(taskIdentity(t)));
@@ -352,7 +361,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
     }
     await snapshotCollection();
   }
-  if (batch && taskResults.some(x=>x.r.error && x.r.items.length===0 && x.attempts<3)) return await finishCollectionLater();
+  if (batch && taskResults.some(shouldRetry)) return await finishCollectionLater();
   const errorsBySource = new Map<string, string[]>();
   for (const { t, r } of taskResults) {
     const st = stats.get(t.key)!;
@@ -933,7 +942,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
       const alertedRecently = s.last_alerted_at ? new Date(s.last_alerted_at).getTime() > dayAgo : false;
       let alerted = false;
       if (!opts.onlySource) {
-        if (st.status === "error" && !alertedRecently) { alerts.push({ title: `수집 소스 응답 오류 — ${s.source_name}`, description: st.error ?? "응답 오류", level: "error", fields: [{ name: "주소", value: s.url }] }); alerted = true; }
+        if (st.status === "error" && !alertedRecently) { alerts.push({ title: `수집 소스 응답 오류 — ${s.source_name}`, description: `${st.error ?? "응답 오류"}\n이 소스는 후보 0건입니다. 전체 후보 ${funnel.raw ?? 0}건을 확보했으며 ${batchStatus === 'done' ? `최종 발행 ${results.published}건을 완료했습니다.` : '기사 처리 중으로, 아직 최종 발행 전입니다.'}\n조치: 이 소스만 계속 실패하면 수집 소스의 검색 엔진·주소를 확인해주세요.`, level: "error", fields: [{ name: "검색어·주소", value: s.url }] }); alerted = true; }
         else if (st.status === "empty" && zeroStreak >= 3 && !alertedRecently) { alerts.push({ title: `수집 소스 ${zeroStreak}회 연속 0건 — ${s.source_name}`, description: "응답은 정상인데 기사가 한 건도 안 잡힙니다. 주소·구조 변경 여부를 확인하세요.", level: "warning", fields: [{ name: "주소", value: s.url }] }); alerted = true; }
       }
       await supabase.from("rss_sources").update({
@@ -941,6 +950,9 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
         last_error: st.error ?? null, ...(alerted ? { last_alerted_at: new Date().toISOString() } : {}),
       }).eq("id", s.id);
     });
+    const fallbackSources = [...stats.values()].filter(s=>s.status==='ok' && s.error && s.fetched>0);
+    if (fallbackSources.length) alerts.push({ title: '일부 검색 오류 — 대체 소스로 수집 계속', level: 'warning',
+      description: `${fallbackSources.map(s=>`${s.name}: ${s.error} (다른 엔진에서 후보 ${s.fetched}건 확보)`).join('\n')}\n${batchStatus==='done' ? `최종 발행 ${results.published}건 완료.` : '확보한 후보를 처리 중이며 아직 최종 발행 전입니다.'}\n조치: 즉시 재실행할 필요는 없습니다. 최종 발행 완료 알림을 확인해주세요.` });
     // 오래된 대기열(30일 이상 미발행) 정리 — v1과 동일 (created_at 기준, 상한 200)
     const cutoff = new Date(Date.now() - 30 * 86400000).toISOString();
     const { data: cleanup } = await supabase.from("news").select("id, title, created_at").eq("is_published", false).lt("created_at", cutoff).limit(200);

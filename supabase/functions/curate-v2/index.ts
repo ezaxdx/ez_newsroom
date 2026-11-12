@@ -76,7 +76,10 @@ Deno.serve(async (req) => {
 
   // 후보 수가 그대로여도 원문/AI 결과를 저장했을 수 있으므로 단계 진행을 허용한다.
   // 횟수·시간·DB의 회차별 실행 상한과 후보별 재시도 상한으로 반복을 제한한다.
-  const r = result as { ok?: boolean; skipped?: boolean; deferred?: number; progress?: number; window_end?: number; batch_id?: string; status?: string } | undefined;
+  const r = result as { ok?: boolean; skipped?: boolean; deferred?: number; phase?: string; collection_pending?: number; progress?: number; fetched?: number; window_end?: number; batch_id?: string; status?: string; queue?: { prepared?: number; pending?: number; failed?: number } } | undefined;
+  const progressNote = r?.phase === "collecting"
+    ? `목록 수집 중이며 아직 최종 발행 전입니다. 확보 후보 ${r.fetched ?? 0}건 / 미완료 검색 ${r.collection_pending ?? 0}개. 수집 결과는 보존됩니다.`
+    : `아직 최종 발행 전입니다. 작성 완료 ${r?.queue?.prepared ?? 0}건 / 미처리 ${r?.queue?.pending ?? r?.deferred ?? 0}건 / 개별 실패 ${r?.queue?.failed ?? 0}건. 저장된 작업은 보존됩니다.`;
   let willContinue = false;
   if (live && r?.ok && !r.skipped && (r.deferred ?? 0) > 0) {
 
@@ -99,20 +102,21 @@ Deno.serve(async (req) => {
         continuation = { status: 'accepted', batch_id: accepted.batch_id };
       } catch (e) {
         continuation = { status: 'failed', error: (e as Error).message };
-        await sendAlert(webhook, { title: "큐레이션 재개 요청 실패", description: `${(e as Error).message} — 미처리 후보는 DB에 보존되어 있습니다.`, level: "error" });
+        await sendAlert(webhook, { title: "큐레이션 재개 요청 실패", description: `${(e as Error).message}\n${progressNote}\n조치: 단계별 실행 상한이면 반복 실패 원인을 확인한 뒤 저장된 회차를 재개해야 합니다. 그 외 일시 오류는 자동 복구가 남은 한도에서 재시도합니다.`, level: "error" });
       }
       const { data: logs } = await supabase.from('curation_logs').select('id, details').eq('details->>batch_id', r.batch_id).eq('details->>chain', String(chain)).order('run_at', { ascending: false }).limit(1);
       if (logs?.[0]) await supabase.from('curation_logs').update({ details: { ...logs[0].details, continuation } }).eq('id', logs[0].id);
     } else {
       // 후보는 보존되며, DB 복구 작업 또는 수동 실행이 같은 수집 창에서 재개한다.
-      await sendAlert(webhook, { title: "큐레이션 이어서 실행 중단", description: `시간 초과로 ${r.deferred}건이 남았지만 이어서 처리하지 않았습니다: ${stop.join(", ")}`, level: "warning" });
+      await sendAlert(webhook, { title: "큐레이션 연속 실행 일시 중단", description: `사유: ${stop.join(", ")}\n${progressNote}\n조치: 같은 수집 창 안에서 자동 복구가 단계별 남은 한도로 재개합니다. 완료 알림이 없으면 실행 로그를 확인해주세요.`, level: "warning" });
     }
   }
 
   // 모든 회차가 끝났을 때(이어서 실행이 더 없을 때) 카테고리별 발행·대기 건수를 한 번 안내
-  if (live && !willContinue && r?.ok && !r.skipped) {
+  if (live && !willContinue && r?.ok && !r.skipped && r.status === "done") {
     const summary = sendCompletionSummary(supabase, webhook, {
       chainStartedMs: Number(body.chain_started) || reqStart, trigger: typeof body.trigger === "string" ? body.trigger : undefined, chain, deferred: r.deferred ?? 0,
+      batchId: r.batch_id,
       window: (result as { window?: { start: string; end: string } } | undefined)?.window,
     });
     // @ts-ignore Supabase Edge Runtime 전역

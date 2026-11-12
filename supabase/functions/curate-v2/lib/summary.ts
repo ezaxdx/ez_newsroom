@@ -17,20 +17,33 @@ export async function sendCompletionSummary(
   // deno-lint-ignore no-explicit-any
   supabase: any,
   webhook: string | undefined,
-  opts: { chainStartedMs: number; trigger?: string; chain: number; deferred: number; window?: { start: string; end: string } },
+  opts: { chainStartedMs: number; batchId?: string; trigger?: string; chain: number; deferred: number; window?: { start: string; end: string } },
 ): Promise<void> {
   try {
-    const since = new Date(opts.chainStartedMs - 60_000).toISOString();
-    const { data } = await supabase.from("curation_logs").select("details, failed").eq("run_mode", "live").gte("run_at", since);
     const counts: Counts = {};
     let failed = 0;
-    for (const row of data ?? []) {
-      if ((row.details?.status ?? "done") !== "done") continue;
-      failed += Number(row.failed) || 0;
-      for (const d of (row.details?.decisions ?? []) as { decision?: string; category?: string }[]) {
-        if (d.decision !== "publish" && d.decision !== "stage") continue;
-        const c = String(d.category ?? "기타").toUpperCase();
-        (counts[c] ??= { publish: 0, stage: 0 })[d.decision]++;
+    if (opts.batchId) {
+      // Count committed work, including articles prepared in earlier recovery invocations.
+      const { data, error } = await supabase.from("curation_work").select("state, category:article->>category").eq("batch_id", opts.batchId);
+      if (error) throw new Error(error.message);
+      for (const row of data ?? []) {
+        if (row.state === "failed") failed++;
+        if (row.state !== "published" && row.state !== "staged") continue;
+        const c = String(row.category ?? "기타").toUpperCase();
+        (counts[c] ??= { publish: 0, stage: 0 })[row.state === "published" ? "publish" : "stage"]++;
+      }
+    } else {
+      const since = new Date(opts.chainStartedMs - 60_000).toISOString();
+      const { data, error } = await supabase.from("curation_logs").select("details, failed").eq("run_mode", "live").gte("run_at", since);
+      if (error) throw new Error(error.message);
+      for (const row of data ?? []) {
+        if ((row.details?.status ?? "done") !== "done") continue;
+        failed += Number(row.failed) || 0;
+        for (const d of (row.details?.decisions ?? []) as { decision?: string; category?: string }[]) {
+          if (d.decision !== "publish" && d.decision !== "stage") continue;
+          const c = String(d.category ?? "기타").toUpperCase();
+          (counts[c] ??= { publish: 0, stage: 0 })[d.decision]++;
+        }
       }
     }
     const pub = Object.values(counts).reduce((a, c) => a + c.publish, 0);

@@ -11,7 +11,7 @@ export async function GET() {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("newsletter_issues")
-    .select("*")
+    .select("*, newsletter_schedules(scheduled_at,status)")
     .order("created_at", { ascending: false });
 
   if (error) {
