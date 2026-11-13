@@ -33,7 +33,7 @@ export async function selectNews(supabase: SupabaseClient, lastRunISO: string): 
     const { data: liveRaw } = await supabase.from("news")
       .select("id, title, summary_short, image_url, original_url")
       .eq("is_published", true).gte("published_at", lastRunISO).or(orFilter)
-      .order("display_order", { ascending: true }).limit(2);
+      .order("display_order", { ascending: true }).order("id", { ascending: true }).limit(2);
     const live = (liveRaw ?? []) as RawNews[];
     if (live.length >= 1) return live.map(toNewsCard);   // 1건이어도 그대로 — 2주 전 기사로 억지로 채우지 않음
     const { data: fallbackRaw } = await supabase.from("news")

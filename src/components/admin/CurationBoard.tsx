@@ -13,6 +13,7 @@ import { calcLastScheduledRun } from "@/lib/schedule";
 import { HelpTriggerConnected } from "@/components/admin/HelpPanel";
 import CategoryEditor, { CategoryChangeDialog, CATEGORY_OPTIONS } from "@/components/admin/CategoryEditor";
 import { useTabParam } from "@/lib/useTabParam";
+import { storeCurationDraft,readCurationDraft,clearCurationDraft,assertDraftRestorable,sendCurationSave,type CurationSavePayload,type SaveItem } from '@/lib/curation-save';
 
 type Tab = "live" | "staging" | "archive";
 
@@ -52,6 +53,9 @@ type Props = {
 
 const ARCHIVE_PAGE = 30;
 type ArchiveList = { ids: string[]; fetched: number; total: number; loading: boolean; error: string | null; loaded: boolean };
+type OrderHistory = { id: string; created_at: string; category: string; reason: string | null; note: string | null;
+  automatic_order: {title:string}[]; before_order: {title:string}[]; after_order: {title:string}[] };
+const ORDER_REASONS: Record<string,string> = {business:"회사 사업 관련성",timing:"시의성·이번 시점의 중요도",readers:"임직원에게 읽힐 가치",balance:"주제·행사 균형",personal:"이번만 개인 취향"};
 
 
 function isLive(item: NewsItem, lastRunMs: number) {
@@ -82,6 +86,14 @@ export default function CurationBoard({
   const [tab, setTab] = useTabParam<Tab>("tab", "live");
   const [deletedIds, setDeletedIds] = useState<string[]>([]);
   const [republishIds, setRepublishIds] = useState<string[]>([]);
+  const [orderReason, setOrderReason] = useState("");
+  const [orderNote, setOrderNote] = useState("");
+  const [orderNotice, setOrderNotice] = useState("");
+  const [orderHistory, setOrderHistory] = useState<OrderHistory[]>([]);
+  const [historyBusy, setHistoryBusy] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const historyRef = useRef<HTMLDetailsElement>(null);
+  const saveAttemptRef = useRef<{fingerprint:string;requestId:string}|null>(null);
   // 대기열 일괄 처리용 선택 상태
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
@@ -150,9 +162,10 @@ export default function CurationBoard({
   ];
 
   // ── 드래그 (메인 표시 중만) ──
-  const handleDragStart = (idx: number) => { dragIdx.current = idx; };
+  const handleDragStart = (idx: number) => { if(!saving)dragIdx.current = idx; };
   const handleDragEnter = (idx: number) => { dragOverIdx.current = idx; };
   const handleDragEnd = () => {
+    if(saving)return;
     const from = dragIdx.current;
     const to = dragOverIdx.current;
     if (from === null || to === null || from === to) return;
@@ -186,12 +199,14 @@ export default function CurationBoard({
   };
 
   const togglePublish = (id: string) => {
+    if(saving)return;
     setItems((prev) =>
       prev.map((item) => item.id === id ? { ...item, is_published: !item.is_published } : item)
     );
   };
 
   const moveItem = (id: string, dir: -1 | 1) => {
+    if(saving)return;
     setItems((prev) => {
       // 화면에 보이는 목록 기준으로만 이동 — 필터가 걸린 상태에서 화면에 없는 기사와
       // 순서가 바뀌어 엉뚱한 기사의 display_order가 저장되는 것을 방지
@@ -218,6 +233,7 @@ export default function CurationBoard({
   };
 
   const remove = (id: string) => {
+    if(saving)return;
     if (!confirm("이 기사를 삭제할까요?")) return;
     setItems((prev) => prev.filter((i) => i.id !== id));
     setDeletedIds((prev) => [...prev, id]);
@@ -354,12 +370,14 @@ export default function CurationBoard({
     });
   };
   const bulkPublish = () => {
+    if(saving)return;
     const ids = selectedIds;
     if (ids.size === 0) return;
     setItems((prev) => prev.map((i) => ids.has(i.id) ? { ...i, is_published: true, published_at: new Date().toISOString() } : i));
     setSelectedIds(new Set());
   };
   const bulkDelete = () => {
+    if(saving)return;
     const ids = [...selectedIds];
     if (ids.length === 0) return;
     if (!confirm(`선택한 ${ids.length}건을 삭제할까요?`)) return;
@@ -370,6 +388,7 @@ export default function CurationBoard({
 
   // 아카이브 → 메인 재발행
   const republish = (id: string) => {
+    if(saving)return;
     setItems((prev) =>
       prev.map((item) =>
         item.id === id
@@ -382,6 +401,7 @@ export default function CurationBoard({
 
   const handleSave = async () => {
     setSaving(true);
+    let backedUp=false;
     try {
       // 실제로 바뀐 항목만 전송 — 매번 화면에 있는 뉴스 전체를 다시 쓰면 항목 수만큼 느려짐
       const initialById = baselineRef.current;
@@ -392,21 +412,49 @@ export default function CurationBoard({
           || before.display_order !== item.display_order
           || before.level !== item.level;
       });
-      const res = await fetch("/api/admin/save-curation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ items: changedItems, deletedIds, republishIds }),
-      });
-      if (!res.ok) throw new Error("저장 실패");
+      const core=(i:NewsItem):SaveItem=>({id:i.id,is_published:i.is_published,display_order:i.display_order,level:i.level});
+      const payload:CurationSavePayload={items:changedItems.map(core),deletedIds,republishIds,orderReason,orderNote};
+      const fingerprint=JSON.stringify(payload);
+      if(saveAttemptRef.current?.fingerprint!==fingerprint)saveAttemptRef.current={fingerprint,requestId:crypto.randomUUID()};
+      const requestId=saveAttemptRef.current.requestId;
+      try {backedUp=storeCurationDraft(sessionStorage,{version:1,windowStart:lastRunMs,requestId,payload,
+        baseline:changedItems.map(i=>initialById.get(i.id)).filter((i):i is NewsItem=>!!i).map(core)});}catch{/* Storage may be unavailable. */}
+      const result=await sendCurationSave(payload,requestId,()=>setOrderNotice('일시적인 저장 오류로 한 번 다시 시도하고 있습니다.'));
       setDeletedIds([]);
       setRepublishIds([]);
+      setOrderReason("");setOrderNote("");
+      saveAttemptRef.current=null;
+      try {clearCurationDraft(sessionStorage);}catch{/* Storage may be unavailable. */}
+      setOrderNotice(result.order_history_recorded ? `저장했습니다. ${result.order_history_recorded}개 카테고리의 순서 변경을 기록했습니다.` : "저장했습니다.");
+      if (historyRef.current?.open) void loadOrderHistory();
       router.refresh(); // 홈 페이지 캐시 무효화 + 어드민 데이터 갱신
     } catch (e) {
-      alert("저장 중 오류가 발생했습니다.");
+      setOrderNotice(`저장하지 못했습니다. 화면의 편집 내용은 유지됩니다.${backedUp?' 새로고침 후에는 아래 ‘저장 오류 복구’에서 임시 편집안을 불러올 수 있습니다.':' 이 브라우저에서 임시 보관하지 못했으므로 화면을 유지한 채 다시 저장해주세요.'}`);
+      alert(e instanceof Error ? e.message : "저장 중 오류가 발생했습니다.");
       console.error(e);
     } finally {
       setSaving(false);
     }
+  };
+
+  const restoreDraft = () => {
+    try {
+      const draft=readCurationDraft(sessionStorage);
+      if(!draft){setOrderNotice('이 탭에 임시 보관된 편집안이 없습니다.');return;}
+      assertDraftRestorable(draft,lastRunMs,baselineRef.current.values());
+      const changes=new Map(draft.payload.items.map(i=>[i.id,i]));const removed=new Set(draft.payload.deletedIds);
+      setItems([...baselineRef.current.values()].filter(i=>!removed.has(i.id)).map(i=>({...i,...changes.get(i.id)})));
+      setDeletedIds(draft.payload.deletedIds);setRepublishIds(draft.payload.republishIds);setOrderReason(draft.payload.orderReason);setOrderNote(draft.payload.orderNote);
+      saveAttemptRef.current={fingerprint:JSON.stringify(draft.payload),requestId:draft.requestId};
+      setOrderNotice('임시 편집안을 화면에 복구했습니다. 확인 후 변경사항 저장을 눌러주세요.');
+    }catch(e){setOrderNotice(e instanceof Error?e.message:'임시 편집안 복구 실패');}
+  };
+
+  const loadOrderHistory = async () => {
+    setHistoryBusy(true);setHistoryError("");
+    try {const r=await fetch("/api/admin/save-curation");const j=await r.json();if(!r.ok)throw new Error(j.error);setOrderHistory(j.data??[]);}
+    catch(e){setHistoryError(e instanceof Error?e.message:"변경 기록 조회 실패");}
+    finally{setHistoryBusy(false);}
   };
 
   const handleRunCuration = async () => {
@@ -531,7 +579,8 @@ export default function CurationBoard({
     finally { setArchiving(false); }
   };
 
-  const hasPendingChanges = deletedIds.length > 0 || republishIds.length > 0;
+  const orderChanged = live.some(i=>baselineRef.current.get(i.id)?.display_order!==i.display_order);
+  const hasPendingChanges = deletedIds.length > 0 || republishIds.length > 0 || orderChanged;
 
   const editorList = editorIds.map(id => itemsById.get(id)).filter((row): row is NewsItem => !!row);
   const selectedIndex = editorList.findIndex(row => row.id === editingItem?.id);
@@ -591,6 +640,19 @@ export default function CurationBoard({
         </div>
       </div>
 
+      {orderChanged && <div className="mb-4 flex flex-wrap items-center gap-2 text-sm">
+        <label htmlFor="order-reason">순서 변경 이유 (선택·이번 저장에 적용)</label>
+        <select id="order-reason" disabled={saving} value={orderReason} onChange={e=>setOrderReason(e.target.value)} className="rounded border px-2 py-1"
+          style={{background:"var(--surface-container-lowest)",color:"var(--on-surface)"}}>
+          <option value="">이유 없이 기록</option>{Object.entries(ORDER_REASONS).map(([k,v])=><option key={k} value={k}>{v}</option>)}
+        </select>
+        <input aria-label="순서 변경 이유 메모 (선택)" disabled={saving} value={orderNote} onChange={e=>setOrderNote(e.target.value)} maxLength={500}
+          placeholder="예: 연말에 직원들이 시장 전망을 읽으면 좋겠어서" className="rounded border px-2 py-1 grow min-w-0"
+          style={{background:"var(--surface-container-lowest)",color:"var(--on-surface)"}} />
+        <span className="text-xs" style={{color:"var(--on-surface-variant)"}}>개인 취향은 다음 자동 추천에 참고하지 않습니다.</span>
+      </div>}
+      {orderNotice && <p role="status" className="text-sm mb-3" style={{color:"var(--on-surface-variant)"}}>{orderNotice}</p>}
+
       {temporaryArchiveEnabled && (
         <div className="mb-5 p-3 rounded-lg text-sm" style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-high)" }}>
           <p className="m-0 mb-2 text-xs" style={{ color: "var(--on-surface-variant)" }}>자동 발행 실패 시 수동 발행을 준비하는 임시 기능입니다. 최근 예약 시각 이전 기사만 아카이브로 넘깁니다.</p>
@@ -637,6 +699,26 @@ export default function CurationBoard({
           })}
         </div>
       </div>
+
+      <details ref={historyRef} className="mb-5 text-sm" onToggle={e=>{if(e.currentTarget.open)void loadOrderHistory();}}>
+        <summary className="cursor-pointer">순서 변경 기록 · 최근 10건</summary>
+        <div className="mt-3 space-y-3">
+          {historyBusy && <p>불러오는 중...</p>}{historyError && <p role="alert">{historyError}</p>}
+          {!historyBusy && !historyError && orderHistory.length===0 && <p>저장된 순서 변경 기록이 없습니다.</p>}
+          {orderHistory.map(h=><div key={h.id} className="border-t pt-3">
+            <p>{formatKSTDateTime(Date.parse(h.created_at))} · {h.category} · {ORDER_REASONS[h.reason??""]??"이유 미입력"}</p>
+            <p>자동 추천: {h.automatic_order.slice(0,2).map(x=>x.title).join(" → ")||"추천 기록 없음"}</p>
+            <p>수정 전: {h.before_order.slice(0,2).map(x=>x.title).join(" → ")||"없음"}</p>
+            <p>수정 후: {h.after_order.slice(0,2).map(x=>x.title).join(" → ")||"없음"}</p>
+            {h.note && <p>{h.note}</p>}
+          </div>)}
+        </div>
+      </details>
+      <details className="mb-5 text-sm">
+        <summary className="cursor-pointer">저장 오류 복구</summary>
+        <p className="mt-2">저장 시 이 탭에 임시 보관한 편집안을 불러옵니다. 같은 회차에서만 복구할 수 있습니다.</p>
+        <button type="button" disabled={saving} onClick={restoreDraft} className="mt-2 rounded border px-3 py-2 disabled:opacity-50">임시 편집안 불러오기</button>
+      </details>
 
       {/* 큐레이션 실행 결과 */}
       {runResult && (

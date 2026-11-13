@@ -8,6 +8,7 @@ export interface WorkRow {
 }
 export interface Batch {
   id: string; lease: string; window_start: string; window_end: string; expires_at: string;
+  processing_attempts?: number;
   snapshot: { phase?: "collecting" | "selected"; collection?: any[]; resolved?: [string, string | null][]; stats: any[]; funnel: Record<string, number> } | null;
 }
 export function nextWindow(days: number[], hour: number, end: number): number {

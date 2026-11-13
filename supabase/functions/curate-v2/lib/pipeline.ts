@@ -11,6 +11,7 @@ import type { CatSetting, FitAnchor } from "./ai.ts";
 import { buildHintBlock, canonicalDomain, FIT_ANCHORS, generateArticle, judgeFit, judgeSameStory } from "./ai.ts";
 import { sendAlert } from "./alert.ts";
 import { selectCategorySlots, claimBatch, readWork, saveWork, queueCounts, retryWork, type Batch, type WorkRow } from "./queue.ts";
+import { EDITORIAL_START, rankEditorial, type EditorialExample } from './editorial.ts';
 
 /* ───────── 타입 ───────── */
 export interface RunOptions {
@@ -713,6 +714,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const maxAutoPublish: number = Number.isFinite(Number(thresholds.max_auto_publish)) && Number(thresholds.max_auto_publish) > 0 ? Number(thresholds.max_auto_publish) : 20;
   let cappedCount = 0;
   let allocation: Record<string, unknown> | null = null;
+  let editorial: Record<string, unknown> | null = null;
   const aiTargets = opts.dry && opts.maxAi != null ? readyList.slice(0, opts.maxAi) : readyList;
   let aiCalls = 0;
   // 4a. 적합성 판정 — 짧은 호출이라 한꺼번에(동시 8건). 싣지 않을 기사는 여기서 걸러 글 작성(가장 오래 걸리는 호출)을 건너뜀.
@@ -899,6 +901,32 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
         published_by_category: eligible.filter(r => chosen.has(r.url_key)).reduce((counts: Record<string, number>, r) => { counts[r.article.category] = (counts[r.article.category] ?? 0) + 1; return counts; }, {}) };
       await saveWork(supabase, batch, eligible);
       log(`[발행 배분] 카테고리별 최대 4건 우선, 일반 기사 ${chosen.size}/${maxAutoPublish}건 선정`);
+      // Rank only the new edition before its atomic publication. Never rewrite an existing/manual order.
+      if (Date.parse(batch.window_end)>=EDITORIAL_START) {
+        const ready=[...work.values()].filter(r=>r.state==='publish' && r.article);
+        if (ready.some(r=>r.article.quality_criteria?.editorial?.window_end!==batch.window_end)) {
+          // Give editorial selection a fresh runtime instead of competing with article writing.
+          if (remaining()<30000 && (batch.processing_attempts??8)<8) {
+            if (logId) await supabase.from('curation_logs').update({duration_ms:Date.now()-runStart,
+              details:{trigger,status:'partial',phase:'editorial',batch_id:batch.id,chain:opts.chain??0,
+                queue:queueCounts([...work.values()]),allocation},published:0,staged:0}).eq('id',logId);
+            await supabase.from('curation_batches').update({status:'partial'}).eq('id',batch.id).eq('lease',batch.lease);
+            return {ok:true,status:'partial',phase:'editorial',batch_id:batch.id,deferred:1,progress:ready.length,
+              queue:queueCounts([...work.values()]),window_end:windowEnd};
+          }
+          const {data:history,error:historyError}=await supabase.from('curation_order_history')
+            .select('category,reason,note,before_order,after_order').or('reason.is.null,reason.neq.personal')
+            .order('created_at',{ascending:false}).limit(6);
+          if (historyError) console.warn('[편집 사례 조회 실패]',historyError.message);
+          const compact=(value:unknown)=>Array.isArray(value)?value.slice(0,2).map(x=>({title:String(x?.title??''),summary:String(x?.summary??'').slice(0,180),event_id:x?.related_event_id??null})):[];
+          const examples: EditorialExample[]=(history??[]).map((h: EditorialExample)=>({category:h.category,reason:h.reason,note:h.note,
+            before_order:compact(h.before_order),after_order:compact(h.after_order)}));
+          editorial=await rankEditorial(ready,{apiKey,windowEnd:batch.window_end,examples,companyContext:settings?.company_context,
+            timeoutMs:Math.max(0,Math.min(20000,remaining()-10000))});
+          await saveWork(supabase,batch,ready);
+        } else editorial={mode:ready.some(r=>r.article.quality_criteria?.editorial?.mode==='fallback')?'fallback':'saved',
+          reason:'저장된 추천 순서를 재사용했습니다.',categories:new Set(ready.map(r=>r.article.category)).size};
+      }
     }
 
     const { data, error } = await supabase.rpc('finish_curation_batch', { p_batch: batch.id, p_lease: batch.lease });
@@ -926,6 +954,8 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const alerts: { title: string; description: string; level: "error" | "warning"; fields?: { name: string; value: string }[] }[] = [];
 
   if (live) {
+    if (editorial?.mode==='fallback') alerts.push({title:'기사 순서 기본 추천 적용',level:'warning',
+      description:`맞춤 순서 판단을 사용하지 못해 적합성·품질과 이즈픽/일반 기사 균형으로 정렬했습니다. ${String(editorial.reason??'').slice(0,300)}\n최종 발행 ${results.published}건. 큐레이션 보드에서 순서를 확인하고 필요하면 수정해주세요.`});
     if (batchStatus === 'done' && results.published === 0) alerts.push({ title: '큐레이션 발행 기사 0건', description: '기존 피드를 유지합니다. 검토 대기·제외·실패 내역을 확인해 주세요.', level: 'warning' });
     // 건너뛴·폐기한 URL 기록 (재처리 방지)
     if (seenOut.length) {
@@ -985,7 +1015,7 @@ async function runCurationInner(deps: Deps, opts: RunOptions, logId: string | nu
   const logErrors = [...runErrors, ...levelDefaulted.map((e) => ({ source: e.source, error: `레벨 판정 실패(응답: ${e.raw}) → Intermediate 저장: ${e.title.slice(0, 60)}` })), ...sourceStats.filter((s) => s.status === "error").map((s) => ({ source: s.name, error: s.error ?? "수집 오류" })), ...(budgetExceeded ? [{ source: "(시스템)", error: "시간예산 초과로 일부 후보를 다음 실행으로 넘김" }] : [])];
   const fetched = [...stats.values()].reduce((s, x) => s + x.fetched, 0);
   const details = {
-    trigger, status: batchStatus, batch_id: batch?.id, allocation, queue, chain: opts.chain ?? 0, timings,
+    trigger, status: batchStatus, batch_id: batch?.id, allocation, editorial, queue, chain: opts.chain ?? 0, timings,
     window: { start: new Date(windowStart).toISOString(), end: new Date(windowEnd).toISOString() },
     funnel, picks: picks.map((p) => ({ name: p.name, terms: p.queryTerms })), decisions,
     selected: selected.map((c) => ({ title: c.title, source: primaryOf(c).name, vias: [...c.vias], pick: c.event?.name ?? null, cats: categoriesFor(c), coverage: c.coverage, hasText: !!c.text })),
