@@ -291,7 +291,7 @@ export default function EventsClient({ events, scoring }: Props) {
                 <p style={{ margin: "0 0 1px", fontSize: "0.65rem", fontWeight: 600,
                   letterSpacing: "0.07em", textTransform: "uppercase",
                   color: "var(--on-surface-variant)" }}>
-                  EZPMP Picks
+                  추천 행사
                 </p>
                 <p style={{ margin: 0, fontSize: "0.92rem", fontWeight: 700,
                   color: "var(--on-surface)" }}>
@@ -503,14 +503,14 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
     >
       {/* 추천 배지 */}
       <span style={{
-        minWidth: 28, height: 28, borderRadius: 8,
+        minWidth: 28, height: 28, padding: "0 7px", borderRadius: 8, whiteSpace: "nowrap",
         background: accent, color: "#fff",
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "0.75rem", fontWeight: 700, flexShrink: 0,
+        fontSize: "0.65rem", fontWeight: 500, flexShrink: 0,
       }}
-        title={e.is_ezpmp_pick ? "EZPMP 픽" : "자동 추천"}
+        title={e.is_ezpmp_pick ? "관리자가 지정한 이즈픽" : "행사 관련도 점수에 따른 자동 추천"}
       >
-        ★
+        {e.is_ezpmp_pick ? "★ 이즈픽" : "자동 추천"}
       </span>
 
       {/* 내용 */}

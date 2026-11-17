@@ -11,6 +11,7 @@ export type CalendarEvent = {
   end_date: string | null;
   website?: string | null;
   is_pick?: boolean;
+  is_ezpmp_pick?: boolean;
 };
 
 const DAYS_KO = ["일", "월", "화", "수", "목", "금", "토"];
@@ -76,11 +77,11 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
   // Dates that have at least one event (for dot markers)
   const eventDates = useMemo(() => new Set(eventsByDate.keys()), [eventsByDate]);
 
-  // 픽 행사가 있는 날짜 (앰버 점 표시)
+  // 직접 지정한 이즈픽만 앰버 점으로 표시
   const pickDates = useMemo(() => {
     const set = new Set<string>();
     for (const [date, evs] of eventsByDate) {
-      if (evs.some((e) => e.is_pick)) set.add(date);
+      if (evs.some((e) => e.is_ezpmp_pick)) set.add(date);
     }
     return set;
   }, [eventsByDate]);
@@ -188,7 +189,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
           flexShrink: 0,
         }}
       >
-        <span>EZPMP 픽</span>
+        <span>추천 행사</span>
         <span style={{ fontSize: "0.58rem" }}>{monthLabel}</span>
       </div>
 
@@ -411,6 +412,12 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
 
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
+                {e.is_pick && <span style={{
+                  display: "inline-block", marginBottom: 3, padding: "1px 5px", borderRadius: 4,
+                  fontSize: "0.6rem", fontWeight: 500,
+                  color: e.is_ezpmp_pick ? "#b45309" : "#2563eb",
+                  background: e.is_ezpmp_pick ? "#f59e0b18" : "#2563eb12",
+                }}>{e.is_ezpmp_pick ? "★ 이즈픽" : "자동 추천"}</span>}
                 <p
                   style={{
                     margin: "0 0 2px",
@@ -424,7 +431,6 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                     overflow: "hidden",
                   }}
                 >
-                  {e.is_pick && <span style={{ color: "#f59e0b", marginRight: 3 }}>★</span>}
                   {e.event_name}
                 </p>
                 <p

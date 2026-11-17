@@ -179,6 +179,7 @@ async function fetchUpcomingEvents(): Promise<CalendarEvent[]> {
       end_date:   e.end_date,
       website:    e.website ?? null,
       is_pick:    pickIds.has(e.id),
+      is_ezpmp_pick: e.is_ezpmp_pick === true,
     }));
   } catch {
     return [];
