@@ -412,12 +412,11 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
 
               {/* Info */}
               <div style={{ flex: 1, minWidth: 0 }}>
-                {e.is_pick && <span style={{
+                {e.is_pick && !e.is_ezpmp_pick && <span style={{
                   display: "inline-block", marginBottom: 3, padding: "1px 5px", borderRadius: 4,
                   fontSize: "0.6rem", fontWeight: 500,
-                  color: e.is_ezpmp_pick ? "#b45309" : "#2563eb",
-                  background: e.is_ezpmp_pick ? "#f59e0b18" : "#2563eb12",
-                }}>{e.is_ezpmp_pick ? "★ 이즈픽" : "자동 추천"}</span>}
+                  color: "#2563eb", background: "#2563eb12",
+                }}>자동 추천</span>}
                 <p
                   style={{
                     margin: "0 0 2px",
@@ -431,6 +430,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                     overflow: "hidden",
                   }}
                 >
+                  {e.is_ezpmp_pick && <span title="이즈픽" aria-label="이즈픽" style={{ color: "#f59e0b", marginRight: 3 }}>★</span>}
                   {e.event_name}
                 </p>
                 <p

@@ -503,14 +503,14 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
     >
       {/* 추천 배지 */}
       <span style={{
-        minWidth: 28, height: 28, padding: "0 7px", borderRadius: 8, whiteSpace: "nowrap",
+        minWidth: 28, height: 28, padding: e.is_ezpmp_pick ? 0 : "0 7px", borderRadius: 8, whiteSpace: "nowrap",
         background: accent, color: "#fff",
         display: "flex", alignItems: "center", justifyContent: "center",
-        fontSize: "0.65rem", fontWeight: 500, flexShrink: 0,
+        fontSize: e.is_ezpmp_pick ? "0.75rem" : "0.65rem", fontWeight: e.is_ezpmp_pick ? 700 : 500, flexShrink: 0,
       }}
         title={e.is_ezpmp_pick ? "관리자가 지정한 이즈픽" : "행사 관련도 점수에 따른 자동 추천"}
       >
-        {e.is_ezpmp_pick ? "★ 이즈픽" : "자동 추천"}
+        {e.is_ezpmp_pick ? "★" : "자동 추천"}
       </span>
 
       {/* 내용 */}
