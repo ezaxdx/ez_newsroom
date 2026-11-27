@@ -3,6 +3,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { verifyCronAuth } from "@/lib/verify-cron";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { sendDiscordAlert } from "@/lib/discord-alert";
+import { SITE_URL, NEWSLETTER_NAME } from "@/lib/config";
+import { getSenderEmail } from "@/lib/server-config";
 export const maxDuration = 60;
 export async function GET(req: NextRequest) {
   const db = createAdminClient();
@@ -31,9 +33,9 @@ export async function GET(req: NextRequest) {
 
     let processed = 0;
     if (eligible.length) {
-      const result = await sendNewsletterViaGmail({ fromName: "EZ Letter", fromEmail: process.env.GMAIL_USER ?? "ez.micedx1@gmail.com", subject: job.subject,
+      const result = await sendNewsletterViaGmail({ fromName: NEWSLETTER_NAME, fromEmail: getSenderEmail(), subject: job.subject,
         html: issue.html_content, recipients: eligible, issueId: job.issue_id,
-        siteUrl: process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app", timeBudgetMs: 35000,
+        siteUrl: SITE_URL, timeBudgetMs: 35000,
         beforeBatch: async () => {
           const { data, error } = await db.from("newsletter_schedules").select("cancel_requested,status,lease").eq("id", job.id).single();
           if (error) throw new Error(error.message);

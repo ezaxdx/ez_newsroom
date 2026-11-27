@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAdmin } from "@/lib/admin-auth";
+import { geminiGenerateUrl } from "@/lib/gemini";
 
 export const maxDuration = 30;
 
@@ -83,7 +84,7 @@ JSON으로만 응답하세요 (마크다운 없이):
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      geminiGenerateUrl(apiKey),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

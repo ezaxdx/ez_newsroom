@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_EDITORIAL_PROMPT, fillEditorialPrompt } from "@/lib/editorial-prompt";
+import { geminiGenerateUrl } from "@/lib/gemini";
 
 export const maxDuration = 30;
 
@@ -54,7 +55,7 @@ export async function POST(req: NextRequest) {
   const { data: cfg } = await createAdminClient().from("newsletter_cron_settings").select("editorial_prompt").single();
   const prompt = fillEditorialPrompt((cfg?.editorial_prompt as string | null)?.trim() || DEFAULT_EDITORIAL_PROMPT, { month, day, weekday, news: newsTitles, events: eventNames });
   const geminiRes = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+    geminiGenerateUrl(apiKey),
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },

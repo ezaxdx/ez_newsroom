@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 import { fetchRemoteImage } from "@/lib/fetch-remote-image";
+import { newsletterSubject } from "@/lib/config";
 
 export type NewsCard = {
   id: string;
@@ -349,7 +350,7 @@ export async function generateNewsletterHTML(data: NewsletterData): Promise<stri
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
-<title>[EZ Letter] Vol.${String(vol).padStart(2,"0")} · ${send_date}</title>
+<title>${newsletterSubject(vol, send_date)}</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap');
 @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');

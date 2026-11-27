@@ -8,6 +8,7 @@ import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import { useTabParam } from "@/lib/useTabParam";
 import { extractContacts, type ParsedContact } from "@/lib/subscriber-excel";
 import { DEFAULT_EDITORIAL_PROMPT } from "@/lib/editorial-prompt";
+import { SITE_URL, newsletterSubject } from "@/lib/config";
 
 // 오픈 트래킹 픽셀은 2026-07-30 발송분부터 심어짐 — 그 이전 호는 오픈수가 0이어도 "안 열어봄"이 아니라 "측정 자체가 안 됨"
 const OPEN_TRACKING_SINCE = new Date("2026-07-30T00:00:00+09:00");
@@ -1536,7 +1537,7 @@ export default function NewsletterPage() {
                 type="text"
                 value={subjectOverride}
                 onChange={(e) => setSubjectOverride(e.target.value)}
-                placeholder={previewMeta ? `[EZ Letter] Vol.${String(previewMeta.vol_number).padStart(2, "0")} · ${previewMeta.send_date}` : "[EZ Letter] Vol.NN · 발송일"}
+                placeholder={previewMeta ? newsletterSubject(previewMeta.vol_number, previewMeta.send_date) : newsletterSubject("N", "발송일")}
                 style={{
                   width: "100%", padding: "8px 12px", borderRadius: 6,
                   border: "1px solid var(--surface-container-highest)",
@@ -1599,7 +1600,7 @@ export default function NewsletterPage() {
               {previewHtml && (
                 <button
                   onClick={async () => {
-                    const prodUrl = "https://ez-newsroom.vercel.app";
+                    const prodUrl = SITE_URL;
                     const fixed = previewHtml.replace(/https?:\/\/localhost:\d+/g, prodUrl);
                     const blob = new Blob([fixed], { type: "text/html;charset=utf-8" });
                     const a = document.createElement("a");
@@ -1660,7 +1661,7 @@ export default function NewsletterPage() {
                 );
               })()}
 
-              <NewsletterSchedule html={previewHtml} vol={previewMeta?.vol_number} subject={subjectOverride.trim() || `[EZ Letter] Vol.${previewMeta?.vol_number} · ${previewMeta?.send_date}`} editorial={editorialText} featured={previewMeta?.featured_ids} disabled={sending || !!sendProgress} />
+              <NewsletterSchedule html={previewHtml} vol={previewMeta?.vol_number} subject={subjectOverride.trim() || (previewMeta ? newsletterSubject(previewMeta.vol_number, previewMeta.send_date) : "")} editorial={editorialText} featured={previewMeta?.featured_ids} disabled={sending || !!sendProgress} />
 
               {activeCount !== null && (
                 <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>
@@ -1852,7 +1853,7 @@ export default function NewsletterPage() {
                 </p>
                 <SectionInfoModal title="이미지 커스터마이징 안내">
                   <p style={{ margin: "0 0 10px" }}>
-                    <b>제목</b> — 발송 이메일의 제목(subject). 비워두면 기본 제목([EZ Letter] Vol.NN · 발송일) 그대로 발송됩니다.
+                    <b>제목</b> — 발송 이메일의 제목(subject). 비워두면 기본 제목([EZ Letter] Vol.N · 발송일) 그대로 발송됩니다.
                   </p>
                   <p style={{ margin: "0 0 4px" }}>
                     <b>헤더 이미지</b> — 뉴스레터 맨 위에 나오는 배경 이미지 전체. 로고·태그라인 등이 전부 이 이미지 한 장 안에 포함돼 있어서, 로고만 따로 바꾸는 기능은 없고 이미지 전체를 새로 만들어 교체해야 함.

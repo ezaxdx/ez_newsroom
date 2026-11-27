@@ -4,6 +4,8 @@
  * 생성 후 DB에 캐시 저장
  */
 
+import { geminiGenerateUrl } from "@/lib/gemini";
+
 type EventInput = {
   id: string;
   event_name: string;
@@ -55,7 +57,7 @@ JSON 배열로만 출력 (다른 설명 없이): ["소개1", "소개2", ...]`;
 
   try {
     const geminiRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      geminiGenerateUrl(apiKey),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },

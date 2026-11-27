@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
+import { SITE_URL, NEWSLETTER_NAME, newsletterSubject } from "@/lib/config";
+import { getSenderEmail } from "@/lib/server-config";
 
 export const maxDuration = 60;
 
@@ -105,9 +107,9 @@ export async function POST(req: NextRequest) {
 
   const todayKST = new Date(new Date().getTime() + 9 * 60 * 60 * 1000);
   const send_date = `${todayKST.getUTCFullYear()}.${String(todayKST.getUTCMonth() + 1).padStart(2, "0")}.${String(todayKST.getUTCDate()).padStart(2, "0")}`;
-  const subject = `[EZ Letter] Vol.${issue.vol_number} · ${send_date}`;
+  const subject = newsletterSubject(issue.vol_number, send_date);
 
-  const fromEmail = process.env.GMAIL_FROM_EMAIL ?? "ez.micedx1@gmail.com";
+  const fromEmail = getSenderEmail();
   // newsletter_issues.total_sent 은 수동 수정될 수 있으므로 실제 로그 기준으로 초기화
   const { data: existingSuccessLogs } = await supabase
     .from("newsletter_send_logs").select("email").eq("issue_id", issue_id).eq("status", "success");
@@ -117,10 +119,10 @@ export async function POST(req: NextRequest) {
   const { data: subs } = await supabase
     .from("newsletter_subscribers").select("id, email").in("email", emails);
   const recipients = (subs ?? []).map(s => ({ id: s.id as string, email: s.email as string }));
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+  const siteUrl = SITE_URL;
 
   await sendNewsletterViaGmail({
-    fromName: "EZ Letter",
+    fromName: NEWSLETTER_NAME,
     fromEmail,
     subject,
     html: issue.html_content!,

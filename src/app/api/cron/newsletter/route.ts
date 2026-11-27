@@ -7,6 +7,8 @@ import { loadScoringContext } from "@/lib/event-score-context";
 import { liveRangeStart, selectNews, selectEvents } from "@/lib/newsletter-content";
 import { verifyCronAuth } from "@/lib/verify-cron";
 import { sendDiscordAlert } from "@/lib/discord-alert";
+import { SITE_URL, NEWSLETTER_NAME, newsletterSubject } from "@/lib/config";
+import { getSenderEmail } from "@/lib/server-config";
 
 export const maxDuration = 60;
 
@@ -96,7 +98,7 @@ export async function GET(req: NextRequest) {
   const vol_number = (maxVolData?.[0]?.vol_number ?? 0) + 1;
   const [ky, km, kd] = todayKSTStr.split("-");
   const send_date = `${ky}.${km}.${kd}`;
-  const site_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+  const site_url = SITE_URL;
 
   const html = await generateNewsletterHTML({
     vol_number, send_date, editorial_text: settings.default_editorial ?? "",
@@ -116,14 +118,14 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: issueErr?.message ?? "이슈 생성 실패" }, { status: 500 });
   }
 
-  const subject = `[EZ Letter] Vol.${vol_number} · ${send_date}`;
-  const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  const subject = newsletterSubject(vol_number, send_date);
+  const fromEmail = getSenderEmail();
   let total_sent = 0, total_failed = 0;
   let processed = 0;
 
   try {
     const res = await sendNewsletterViaGmail({
-      fromName: "EZ Letter", fromEmail, subject, html,
+      fromName: NEWSLETTER_NAME, fromEmail, subject, html,
       recipients: subscribers.map((s) => ({ id: s.id as string, email: s.email as string })),
       siteUrl: site_url, issueId: issue.id, timeBudgetMs: TIME_BUDGET_MS,
       onBatchComplete: async (batch) => {

@@ -6,6 +6,7 @@ import { google } from "googleapis";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { decryptToken } from "@/lib/token-crypto";
 import { sendDiscordAlert } from "@/lib/discord-alert";
+import { getSenderEmail } from "@/lib/server-config";
 
 export async function getGmailClient() {
   const clientId = process.env.GMAIL_CLIENT_ID;
@@ -80,7 +81,7 @@ export function makeRawMessage(params: {
   unsubscribeUrl?: string;
 }): string {
   const boundary = `boundary_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const adminEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  const adminEmail = getSenderEmail();
   const unsubMailto = `mailto:${adminEmail}?subject=%EB%AC%B8%EC%9D%98%ED%95%98%EA%B8%B0`;
   // 메일 클라이언트가 헤더에 있는 링크를 스캔 단계에서 미리 열어보는 경우가 있어(보안 스캐너 프리페치),
   // GET만으로 즉시 수신거부되지 않고 확인 페이지를 거치도록 설계함 — 그래서 List-Unsubscribe-Post(원클릭)는 넣지 않음

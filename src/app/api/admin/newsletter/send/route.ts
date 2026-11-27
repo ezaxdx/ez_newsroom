@@ -8,6 +8,8 @@ import { sendNewsletterViaGmail } from "@/lib/gmail-sender";
 import { fillEventDescriptions } from "@/lib/generate-event-descriptions";
 import { calcLastScheduledRun } from "@/lib/schedule";
 import { sendDiscordAlert } from "@/lib/discord-alert";
+import { SITE_URL, NEWSLETTER_NAME, newsletterSubject } from "@/lib/config";
+import { getSenderEmail } from "@/lib/server-config";
 
 async function alertImageFallbacks(html: string, vol_number: number) {
   const matches = html.match(/<!--IMG_FALLBACK:([^>]*)-->/g);
@@ -68,10 +70,10 @@ export async function POST(req: NextRequest) {
 
     const vol_number = body.cached_vol ?? 1;
     const send_date  = body.cached_send_date ?? new Date().toISOString().split("T")[0];
-    const subject    = subject_override || `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+    const subject    = subject_override || newsletterSubject(vol_number, send_date);
 
     // 미리보기 HTML 후처리: localhost → prod URL (프록시 유지 — 이메일 클라이언트 호환성)
-    const prodUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+    const prodUrl = SITE_URL;
     const sendHtml = body.cached_html
       .replace(/https?:\/\/localhost:\d+/g, prodUrl);
 
@@ -122,7 +124,7 @@ export async function POST(req: NextRequest) {
     const recipients = remaining.slice(0, BATCH_LIMIT).map(email => ({ email, id: idByEmail.get(email)! }));
 
     // newsletter_issues.total_sent 는 수동 수정될 수 있으므로 실제 로그 기준으로 초기화
-    const fromEmail = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+    const fromEmail = getSenderEmail();
     const prevSent = alreadySent.size;
     let total_sent = prevSent, total_failed = 0;
 
@@ -134,7 +136,7 @@ export async function POST(req: NextRequest) {
     let processed = recipients.length;
     try {
       const sendRes = await sendNewsletterViaGmail({
-        fromName: "EZ Letter", fromEmail, subject, html: sendHtml, recipients, siteUrl: prodUrl, issueId,
+        fromName: NEWSLETTER_NAME, fromEmail, subject, html: sendHtml, recipients, siteUrl: prodUrl, issueId,
         timeBudgetMs: TIME_BUDGET_MS,
         onBatchComplete: async (batchResults) => {
           const batchSent = batchResults.filter(r => r.status === "success").length;
@@ -176,7 +178,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── 콘텐츠 생성 (미리보기 or 캐시 없는 발송) ────────────
-  const prod_url = process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app";
+  const prod_url = SITE_URL;
   function getPreviewBase(): string {
     const originHeader = req.headers.get("origin");
     if (originHeader) return originHeader;
@@ -264,7 +266,7 @@ export async function POST(req: NextRequest) {
   if (!subscribers || subscribers.length === 0)
     return NextResponse.json({ error: "활성 수신자가 없습니다." }, { status: 400 });
 
-  const subject      = subject_override || `[EZ Letter] Vol.${vol_number} · ${send_date}`;
+  const subject      = subject_override || newsletterSubject(vol_number, send_date);
   const allRecipients2 = subscribers.map(s => s.email);
   const idByEmail2 = new Map(subscribers.map(s => [s.email, s.id as string]));
 
@@ -318,13 +320,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, vol_number, status: "sent", issue_id: issueId2, target_count: allRecipients2.length, total_sent: alreadySent2.size, total_failed: 0, remaining_count: 0 });
   }
 
-  const fromEmail2 = process.env.GMAIL_USER ?? "ez.micedx1@gmail.com";
+  const fromEmail2 = getSenderEmail();
   let total_sent2 = alreadySent2.size, total_failed2 = 0;
 
   let processed2 = recipients2.length;
   try {
     const sendRes2 = await sendNewsletterViaGmail({
-      fromName: "EZ Letter", fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2, siteUrl: prod_url, issueId: issueId2,
+      fromName: NEWSLETTER_NAME, fromEmail: fromEmail2, subject, html: htmlToSend2, recipients: recipients2, siteUrl: prod_url, issueId: issueId2,
       timeBudgetMs: TIME_BUDGET_MS,
       onBatchComplete: async (batchResults) => {
         const batchSent = batchResults.filter(r => r.status === "success").length;

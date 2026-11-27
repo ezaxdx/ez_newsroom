@@ -2,6 +2,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { HelpProvider, HelpTriggerConnected, HelpPanelConnected, Section, Item, Indent, Def } from "@/components/admin/HelpPanel";
 import SectionInfoModal from "@/components/admin/SectionInfoModal";
 import DateRangePicker from "./DateRangePicker";
+import { SITE_URL } from "@/lib/config";
 
 /* ── 빈 데이터 기본값 ── */
 const EMPTY = {
@@ -57,7 +58,7 @@ function isPreviewHost(host: string, siteHost: string): boolean {
 }
 
 function getSiteHost(): string {
-  try { return new URL(process.env.NEXT_PUBLIC_SITE_URL ?? "https://ez-newsroom.vercel.app").hostname; }
+  try { return new URL(SITE_URL).hostname; }
   catch { return ""; }
 }
 

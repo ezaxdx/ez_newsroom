@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { geminiGenerateUrl } from "@/lib/gemini";
 
 const DEFAULT_PERSONA_PROMPTS: Record<string, string> = {
   AI: "당신은 AI·디지털 전환 전문 에디터입니다. MICE·관광 산업 종사자가 즉시 활용할 수 있는 실용적 시각으로 AI 기술 뉴스를 분석합니다.",
@@ -174,7 +175,7 @@ ${articleText}`;
 
   try {
     const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      geminiGenerateUrl(apiKey),
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
