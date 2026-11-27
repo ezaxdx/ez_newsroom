@@ -58,7 +58,7 @@ const LEVEL_META: Record<string, {
 }> = {
   Beginner: {
     label: "Beginner",
-    color: "#16a34a",
+    color: "var(--color-success)",
     bg: "#f0fdf4",
     audience: "업계 입문자 · 비전공자",
     tone: "쉬운 언어, 짧은 문장, 비유 활용",
@@ -70,7 +70,7 @@ const LEVEL_META: Record<string, {
   },
   Intermediate: {
     label: "Intermediate",
-    color: "#2563eb",
+    color: "var(--color-info)",
     bg: "#eff6ff",
     audience: "실무 담당자 · 기본 지식 보유자",
     tone: "업계 용어 사용 가능, 실용적 관점",
@@ -82,7 +82,7 @@ const LEVEL_META: Record<string, {
   },
   Advanced: {
     label: "Advanced",
-    color: "#9333ea",
+    color: "var(--color-chart-1)",
     bg: "#faf5ff",
     audience: "전략·기획자 · 의사결정자",
     tone: "심층 분석, 거시적 시각, 논리적 구조",
@@ -486,14 +486,14 @@ export default function NewArticlePage() {
 
             {aiError && (
               <p className="m-0 text-xs px-3 py-2 rounded-md"
-                style={{ background: "#fee2e2", color: "#dc2626" }}>
+                style={{ background: "var(--color-danger-bg)", color: "var(--color-danger)" }}>
                 {aiError}
               </p>
             )}
 
             {aiGenerated && (
               <p className="m-0 text-xs flex items-center gap-1.5"
-                style={{ color: "#16a34a" }}>
+                style={{ color: "var(--color-success)" }}>
                 <CheckCircle2 size={13} /> AI 생성 완료 ({fields.level} 수준) — 아래에서 내용을 검토·수정하세요.
               </p>
             )}
@@ -547,7 +547,7 @@ export default function NewArticlePage() {
             </button>
 
             {saveError && (
-              <p className="m-0 text-xs" style={{ color: "#dc2626" }}>{saveError}</p>
+              <p className="m-0 text-xs" style={{ color: "var(--color-danger)" }}>{saveError}</p>
             )}
           </div>
         )}

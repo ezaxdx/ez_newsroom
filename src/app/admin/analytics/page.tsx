@@ -342,7 +342,7 @@ function FunnelBlock({ title, steps }: { title: string; steps: FunnelStep[] }) {
       {steps.map((step, idx) => (
         <div key={step.label} className="flex items-center gap-4">
           <div className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 text-[0.65rem] font-bold"
-            style={{ background: "var(--primary)", color: "#fff" }}>
+            style={{ background: "var(--primary)", color: "var(--color-on-fill)" }}>
             {idx + 1}
           </div>
           <div className="flex-1 min-w-0">

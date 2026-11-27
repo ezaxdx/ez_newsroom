@@ -194,8 +194,8 @@ export default function CurationBoard({
   // ── actions ──
   const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
     Beginner:     { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-    Intermediate: { bg: "rgba(26,28,29,0.75)",             color: "#fff" },
-    Advanced:     { bg: "var(--primary)",                  color: "#fff" },
+    Intermediate: { bg: "rgba(26,28,29,0.75)",             color: "var(--color-on-fill)" },
+    Advanced:     { bg: "var(--primary)",                  color: "var(--color-on-fill)" },
   };
 
   const togglePublish = (id: string) => {
@@ -633,7 +633,7 @@ export default function CurationBoard({
             onClick={handleSave}
             disabled={saving || archiving}
             className="h-9 px-5 rounded-md text-sm font-semibold disabled:opacity-50 transition-opacity hover:opacity-80 whitespace-nowrap"
-            style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+            style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}
           >
             {saving ? "저장 중..." : hasPendingChanges ? "변경사항 저장 •" : "변경사항 저장"}
           </button>
@@ -750,7 +750,7 @@ export default function CurationBoard({
                 background: tab === key
                   ? key === "live" ? "var(--primary)" : "var(--surface-container-highest)"
                   : "transparent",
-                color: tab === key && key === "live" ? "#fff" : "var(--on-surface-variant)",
+                color: tab === key && key === "live" ? "var(--color-on-fill)" : "var(--on-surface-variant)",
               }}
             >
               {count}
@@ -762,7 +762,7 @@ export default function CurationBoard({
       {/* 메인 표시 중 안내 */}
       {tab === "live" && (
         <div className="mb-4 px-3 py-2 rounded-md text-xs flex items-center gap-2"
-          style={{ background: "rgba(var(--primary-rgb, 26,115,232),0.07)", color: "var(--primary)" }}>
+          style={{ background: "color-mix(in srgb, var(--color-info) 7%, transparent)", color: "var(--primary)" }}>
           <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ background: "var(--primary)" }} />
           {scheduleEnabled && scheduleDays.length > 0
             ? `가장 최근 ${formatScheduleDays(scheduleDays)} 큐레이션(${formatKSTDateTime(lastRunMs)}) 이후 기사가 표시됩니다 · 현재 ${live.length}건 노출 중`
@@ -792,7 +792,7 @@ export default function CurationBoard({
             className="px-3 py-1 rounded-full text-[0.7rem] font-semibold tracking-wide uppercase transition-colors"
             style={{
               background: filterCat === cat ? "var(--primary)" : "var(--surface-container-highest)",
-              color: filterCat === cat ? "#fff" : "var(--on-surface-variant)",
+              color: filterCat === cat ? "var(--color-on-fill)" : "var(--on-surface-variant)",
               border: "none",
               cursor: "pointer",
             }}
@@ -823,7 +823,7 @@ export default function CurationBoard({
             onClick={bulkPublish}
             disabled={selectedIds.size === 0}
             className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold disabled:opacity-40 transition-opacity hover:opacity-80"
-            style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: selectedIds.size ? "pointer" : "default" }}
+            style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: selectedIds.size ? "pointer" : "default" }}
           >
             <Eye size={13} /> 선택 발행
           </button>
@@ -831,7 +831,7 @@ export default function CurationBoard({
             onClick={bulkDelete}
             disabled={selectedIds.size === 0}
             className="flex items-center gap-1.5 h-8 px-3 rounded-md text-xs font-semibold disabled:opacity-40 transition-opacity hover:opacity-80"
-            style={{ background: "var(--surface-container-highest)", color: "#dc2626", border: "none", cursor: selectedIds.size ? "pointer" : "default" }}
+            style={{ background: "var(--surface-container-highest)", color: "var(--color-danger)", border: "none", cursor: selectedIds.size ? "pointer" : "default" }}
           >
             <Trash2 size={13} /> 선택 삭제
           </button>
@@ -961,7 +961,7 @@ export default function CurationBoard({
             </div>
           ))}
           {archiveState?.error && (
-            <p className="text-xs m-0" style={{ color: "#b91c1c" }}>
+            <p className="text-xs m-0" style={{ color: "var(--color-danger-fg)" }}>
               {archiveState.error} <button onClick={() => void loadArchive(filterCat)} style={{ background: "none", border: "none", color: "var(--primary)", cursor: "pointer", textDecoration: "underline", fontSize: "inherit" }}>다시 시도</button>
             </p>
           )}
@@ -1030,13 +1030,13 @@ function RejectFitModal({ item, busy, error, onCancel, onConfirm }: {
             className="w-full text-sm mb-3"
             style={{ padding: "8px 10px", borderRadius: 6, border: "1px solid var(--surface-container-high)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
         )}
-        {error && <p className="text-xs m-0 mb-2" style={{ color: "#b91c1c" }}>{error}</p>}
+        {error && <p className="text-xs m-0 mb-2" style={{ color: "var(--color-danger-fg)" }}>{error}</p>}
         <div className="flex justify-end gap-2">
           <button onClick={onCancel} className="px-3 py-1.5 rounded-md text-xs font-semibold"
             style={{ background: "var(--surface-container-highest)", color: "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>취소</button>
           <button onClick={() => onConfirm(finalReason)} disabled={busy || !finalReason}
             className="flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-semibold"
-            style={{ background: "#dc2626", color: "#fff", border: "none", cursor: busy || !finalReason ? "default" : "pointer", opacity: busy || !finalReason ? 0.6 : 1 }}>
+            style={{ background: "var(--color-danger)", color: "var(--color-on-fill)", border: "none", cursor: busy || !finalReason ? "default" : "pointer", opacity: busy || !finalReason ? 0.6 : 1 }}>
             {busy && <Loader2 size={12} className="animate-spin" />} 부적합으로 표시
           </button>
         </div>
@@ -1118,7 +1118,7 @@ function EditArticlePanel({ item, focus, categoryOptions, saving, error, notice,
       </fieldset>
     </div>
     <footer className="p-4 border-t shrink-0 flex flex-wrap items-center justify-between gap-3" style={{ borderColor: "var(--surface-container-high)", background: "var(--surface-container-lowest)" }}>
-      <span role={error ? "alert" : "status"} className="text-xs" style={{ color: error ? "#b91c1c" : "var(--on-surface-variant)" }}>{error || (dirty ? "저장하지 않은 변경사항" : notice || "수정사항 없음")}</span>
+      <span role={error ? "alert" : "status"} className="text-xs" style={{ color: error ? "var(--color-danger-fg)" : "var(--on-surface-variant)" }}>{error || (dirty ? "저장하지 않은 변경사항" : notice || "수정사항 없음")}</span>
       <div className="flex gap-2 flex-wrap">
         <button type="button" disabled={saving || !onPrevious} onClick={onPrevious} className="px-3 py-2 rounded text-sm disabled:opacity-40" style={{ background: "var(--surface-container-highest)" }}>이전</button>
         <button type="button" disabled={saving || !onNext} onClick={onNext} className="px-3 py-2 rounded text-sm disabled:opacity-40" style={{ background: "var(--surface-container-highest)" }}>다음</button>
@@ -1168,7 +1168,7 @@ function ArticleCard({
       onDragOver={isDraggable ? (e) => e.preventDefault() : undefined}
       className="flex flex-wrap items-start gap-3 p-4 rounded-lg transition-shadow"
       style={{
-        background: isTopNews ? "rgba(var(--primary-rgb, 26,115,232),0.04)" : "var(--surface-container-lowest)",
+        background: isTopNews ? "color-mix(in srgb, var(--color-info) 4%, transparent)" : "var(--surface-container-lowest)",
         boxShadow: isTopNews ? "0 0 0 1.5px var(--primary)" : "0 1px 3px rgba(26,28,29,0.04)",
         cursor: isDraggable ? "grab" : "default",
       }}
@@ -1197,7 +1197,7 @@ function ArticleCard({
           {isTopNews && (
             <span
               className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
-              style={{ background: "var(--primary)", color: "#fff" }}
+              style={{ background: "var(--primary)", color: "var(--color-on-fill)" }}
             >
               <TrendingUp size={9} /> TOP
             </span>
@@ -1225,7 +1225,7 @@ function ArticleCard({
                   : item.quality_score >= qualityThresholds.staging
                   ? "rgba(26,28,29,0.15)"
                   : "var(--surface-container-highest)",
-                color: item.quality_score >= qualityThresholds.auto_publish ? "#fff" : "var(--on-surface-variant)",
+                color: item.quality_score >= qualityThresholds.auto_publish ? "var(--color-on-fill)" : "var(--on-surface-variant)",
                 cursor: item.quality_criteria ? "help" : "default",
               }}
               title={item.quality_criteria
@@ -1240,7 +1240,7 @@ function ArticleCard({
               title={item.fit_reason ? `AI 판정 근거: ${item.fit_reason}\n(7점 이상 자동 발행 / 5~6점 대기열 / 4점 이하 폐기)` : "회사(MICE·관광) 적합성 — 낮을수록 우리 관심사와 거리가 멂"}
               style={{
                 background: item.quality_criteria.fit >= 7 ? "rgba(22,163,74,0.15)" : "rgba(220,38,38,0.12)",
-                color: item.quality_criteria.fit >= 7 ? "#16a34a" : "#dc2626",
+                color: item.quality_criteria.fit >= 7 ? "var(--color-success)" : "var(--color-danger)",
               }}>
               적합 {item.quality_criteria.fit}
             </span>
@@ -1248,7 +1248,7 @@ function ArticleCard({
           {tab === "staging" && item.created_at &&
             observedAt - new Date(item.created_at).getTime() < 48 * 60 * 60 * 1000 && (
             <span className="px-2 py-0.5 rounded-full text-[0.62rem] font-bold tracking-wide uppercase"
-              style={{ background: "#16a34a", color: "#fff" }}>
+              style={{ background: "var(--color-success)", color: "var(--color-on-fill)" }}>
               NEW
             </span>
           )}
@@ -1333,7 +1333,7 @@ function ArticleCard({
             <button title={liked ? "좋은 기사로 학습됨" : "좋은 기사 — 이런 기사를 더 뽑도록 학습"} onClick={() => onMarkGood(item)}
               className="p-1.5 rounded hover:bg-[--surface-container-high] transition-colors"
               style={{ background: liked ? "rgba(22,163,74,0.12)" : "transparent", border: "none", cursor: liked ? "default" : "pointer" }}>
-              <ThumbsUp size={14} style={{ color: liked ? "#16a34a" : "var(--on-surface-variant)" }} />
+              <ThumbsUp size={14} style={{ color: liked ? "var(--color-success)" : "var(--on-surface-variant)" }} />
             </button>
             <button title="부적합 — 사유와 함께 학습하고 삭제 (다시 수집 안 됨)" onClick={() => onReject(item)}
               className="p-1.5 rounded hover:bg-[--surface-container-high] transition-colors"
@@ -1346,7 +1346,7 @@ function ArticleCard({
         <button title="삭제 (중복·오류용 — 학습되지 않음)" onClick={() => onRemove(item.id)}
           className="p-1.5 rounded hover:bg-red-50 transition-colors"
           style={{ background: "transparent", border: "none", cursor: "pointer" }}>
-          <Trash2 size={14} style={{ color: "#dc2626" }} />
+          <Trash2 size={14} style={{ color: "var(--color-danger)" }} />
         </button>
       </div>
     </div>

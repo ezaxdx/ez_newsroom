@@ -190,7 +190,7 @@ export default async function AdminPage() {
                                 {log.details.continuation.status === 'accepted' ? '이어서 처리 접수됨' : `재개 실패: ${log.details.continuation.error}`}
                               </div>}
                               {status === "running" && !stale && <span style={{ color: "var(--primary)" }}> · 실행 중</span>}
-                              {(status === "failed" || stale) && <span style={{ color: "var(--error)" }}> · 중단됨</span>}
+                              {(status === "failed" || stale) && <span style={{ color: "var(--color-danger)" }}> · 중단됨</span>}
                             </>
                           );
                         })()}
@@ -199,10 +199,10 @@ export default async function AdminPage() {
                       <td className="px-3 py-2 font-semibold" style={{ color: log.published > 0 ? "var(--primary)" : undefined }}>{log.published ?? "-"}</td>
                       <td className="px-3 py-2">{log.staged ?? "-"}</td>
                       <td className="px-3 py-2">{log.skipped ?? "-"}</td>
-                      <td className="px-3 py-2" style={{ color: (log.failed ?? 0) > 0 ? "var(--error)" : undefined }}>
+                      <td className="px-3 py-2" style={{ color: (log.failed ?? 0) > 0 ? "var(--color-danger)" : undefined }}>
                         {log.errors && log.errors.length > 0 ? (
                           <details>
-                            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--error)" }}>
+                            <summary style={{ cursor: "pointer", fontWeight: 600, color: "var(--color-danger)" }}>
                               {log.failed || "확인"}
                             </summary>
                             <div style={{ marginTop: 6, padding: "6px 8px", borderRadius: 4, background: "var(--surface-container-low)", fontSize: "0.68rem", lineHeight: 1.6, minWidth: 200 }}>
@@ -210,7 +210,7 @@ export default async function AdminPage() {
                                 <div key={i} style={{ marginBottom: i < log.errors!.length - 1 ? 4 : 0 }}>
                                   <span style={{ fontWeight: 600 }}>{e.source}</span>
                                   {e.url && <span style={{ color: "var(--on-surface-variant)", marginLeft: 4, wordBreak: "break-all" }}>{e.url}</span>}
-                                  <div style={{ color: "var(--error)" }}>{e.error}</div>
+                                  <div style={{ color: "var(--color-danger)" }}>{e.error}</div>
                                 </div>
                               ))}
                             </div>

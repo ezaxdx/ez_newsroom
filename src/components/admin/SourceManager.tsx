@@ -46,9 +46,9 @@ const fmtDateTime = (iso?: string | null) =>
 
 type Tone = "ok" | "warn" | "bad" | "mute";
 const TONE: Record<Tone, { bg: string; fg: string }> = {
-  ok: { bg: "var(--bg-success, #e7f6ec)", fg: "var(--text-success, #166534)" },
-  warn: { bg: "var(--bg-warning, #fef3c7)", fg: "var(--text-warning, #92400e)" },
-  bad: { bg: "var(--bg-danger, #fee2e2)", fg: "var(--text-danger, #991b1b)" },
+  ok: { bg: "var(--color-success-bg)", fg: "var(--color-success-fg)" },
+  warn: { bg: "var(--color-warning-bg)", fg: "var(--color-warning-fg)" },
+  bad: { bg: "var(--color-danger-bg)", fg: "var(--color-danger-fg)" },
   mute: { bg: "var(--surface-container-high)", fg: "var(--on-surface-variant)" },
 };
 
@@ -114,7 +114,7 @@ function Segmented<T extends string | number>({ value, options, onChange }: { va
         const on = o.value === value;
         return (
           <button key={String(o.value)} type="button" onClick={() => onChange(o.value)} className="flex-1 h-8 rounded-md text-xs font-semibold transition-colors"
-            style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "#fff" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
+            style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "var(--surface-container-lowest)" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
             {o.label}
           </button>
         );
@@ -196,7 +196,7 @@ function KeywordDialog({ initial, categories, onClose, onSaved }: { initial?: Rs
           <div className="flex gap-1.5">
             {([["네이버", naver, setNaver], ["구글", google, setGoogle]] as const).map(([label, on, set]) => (
               <button key={label} type="button" onClick={() => { set(!on); setPreview(null); }} className="flex-1 h-8 rounded-md text-xs font-semibold flex items-center justify-center gap-1"
-                style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "#fff" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
+                style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "var(--surface-container-lowest)" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
                 {on && <Check size={12} />}{label}
               </button>
             ))}
@@ -245,7 +245,7 @@ function KeywordDialog({ initial, categories, onClose, onSaved }: { initial?: Rs
       {err && <p className="text-xs m-0" style={{ color: TONE.bad.fg }}>{err}</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
-        <button onClick={save} disabled={saving || !keyword.trim() || !engines.length} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-40" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
+        <button onClick={save} disabled={saving || !keyword.trim() || !engines.length} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-40" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}>
           {saving && <Loader2 size={13} className="animate-spin" />}{initial ? "저장" : "추가"}
         </button>
       </div>
@@ -349,7 +349,7 @@ function SourceDialog({ initial, categories, focusKeywords, onClose, onSaved }: 
             {preview.ok
               ? <span className="text-[0.7rem] font-semibold px-2 py-0.5 rounded flex items-center gap-1" style={{ background: TONE.ok.bg, color: TONE.ok.fg }}><Check size={11} />기사 {preview.total}건 찾음</span>
               : <span className="text-[0.7rem] font-semibold px-2 py-0.5 rounded flex items-center gap-1" style={{ background: TONE.bad.bg, color: TONE.bad.fg }}><AlertTriangle size={11} />{preview.error ?? "기사를 찾지 못했어요"}</span>}
-            {preview.detected_type && <span className="text-[0.7rem] font-semibold px-2 py-0.5 rounded" style={{ background: "var(--bg-accent, #e0ecff)", color: "var(--text-accent, #1d4ed8)" }}>{TYPE_LABEL[preview.detected_type] ?? preview.detected_type}{preview.mode === "render" ? " · 렌더링 사용" : ""}</span>}
+            {preview.detected_type && <span className="text-[0.7rem] font-semibold px-2 py-0.5 rounded" style={{ background: "var(--color-info-bg)", color: "var(--color-info-fg)" }}>{TYPE_LABEL[preview.detected_type] ?? preview.detected_type}{preview.mode === "render" ? " · 렌더링 사용" : ""}</span>}
             {preview.suggested_url && <span className="text-[0.7rem]" style={labelStyle}>페이지에 있던 RSS 주소로 바꿨어요</span>}
           </div>
           {preview.hint && <p className="text-xs m-0" style={labelStyle}>{preview.hint}</p>}
@@ -402,7 +402,7 @@ function SourceDialog({ initial, categories, focusKeywords, onClose, onSaved }: 
       {stale && !loading && <p className="text-[0.7rem] m-0" style={labelStyle}>주소나 고급 설정을 바꿨다면 [확인]으로 기사를 다시 가져와야 저장할 수 있어요.</p>}
       <div className="flex justify-end gap-2">
         <button onClick={onClose} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
-        <button onClick={save} disabled={!canSave} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-40" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
+        <button onClick={save} disabled={!canSave} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-40" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}>
           {saving && <Loader2 size={13} className="animate-spin" />}{initial ? "저장" : "추가"}
         </button>
       </div>
@@ -471,7 +471,7 @@ export default function SourceManager() {
         {s.is_active ? <ToggleRight size={20} style={{ color: "var(--primary)" }} /> : <ToggleLeft size={20} style={{ color: "var(--on-surface-variant)" }} />}
       </button>
       <button onClick={onEdit} title="수정" className="p-1.5 rounded" style={{ background: "transparent", border: "none", cursor: "pointer" }}><Pencil size={14} style={{ color: "var(--on-surface-variant)" }} /></button>
-      <button onClick={() => remove(s)} title="삭제" className="p-1.5 rounded" style={{ background: "transparent", border: "none", cursor: "pointer" }}><Trash2 size={14} style={{ color: "#dc2626" }} /></button>
+      <button onClick={() => remove(s)} title="삭제" className="p-1.5 rounded" style={{ background: "transparent", border: "none", cursor: "pointer" }}><Trash2 size={14} style={{ color: "var(--color-danger)" }} /></button>
     </div>
   );
   const boxStyle: React.CSSProperties = { background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-highest)" };
@@ -517,7 +517,7 @@ export default function SourceManager() {
                 <h3 className="text-sm font-bold m-0 flex items-center gap-1.5"><Search size={14} />검색 키워드</h3>
                 <p className="text-xs m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>키워드 하나로 네이버뉴스·구글뉴스를 함께 검색합니다</p>
               </div>
-              <button onClick={() => setKwDialog({ open: true })} className="flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}><Plus size={14} />키워드 추가</button>
+              <button onClick={() => setKwDialog({ open: true })} className="flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}><Plus size={14} />키워드 추가</button>
             </div>
             <div className="hidden sm:grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: keywordGrid, background: "var(--surface-container)" }}>
               {["키워드", "카테고리", "네이버", "구글", "최근 수집", ""].map((h, i) => <span key={i} className={headCell} style={labelStyle}>{h}</span>)}
@@ -547,7 +547,7 @@ export default function SourceManager() {
                 <h3 className="text-sm font-bold m-0 flex items-center gap-1.5"><Pin size={14} />지정 소스</h3>
                 <p className="text-xs m-0 mt-0.5" style={{ color: "var(--on-surface-variant)" }}>꼭 챙길 매체·블로그를 직접 등록합니다</p>
               </div>
-              <button onClick={() => setSrcDialog({ open: true })} className="flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}><Plus size={14} />소스 추가</button>
+              <button onClick={() => setSrcDialog({ open: true })} className="flex items-center gap-1.5 h-8 px-3 rounded-md text-sm font-semibold" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}><Plus size={14} />소스 추가</button>
             </div>
             <div className="hidden sm:grid items-center gap-3 px-4 py-2" style={{ gridTemplateColumns: sourceGrid, background: "var(--surface-container)" }}>
               {["소스", "방식", "카테고리", "중요도", "가져올 기사", "최근 수집", ""].map((h, i) => <span key={i} className={headCell} style={labelStyle}>{h}</span>)}
@@ -585,7 +585,7 @@ export default function SourceManager() {
                   {legacyRows.map((s, i) => (
                     <div key={s.id} className="flex items-center justify-between gap-3 px-4 py-2 text-sm" style={{ borderTop: i ? "1px solid var(--surface-container-highest)" : "none", opacity: 0.7 }}>
                       <span className="truncate">{s.source_name} <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>· {TYPE_LABEL[s.source_type] ?? s.source_type}</span></span>
-                      <button onClick={() => remove(s)} title="삭제" className="p-1.5 rounded" style={{ background: "transparent", border: "none", cursor: "pointer" }}><Trash2 size={14} style={{ color: "#dc2626" }} /></button>
+                      <button onClick={() => remove(s)} title="삭제" className="p-1.5 rounded" style={{ background: "transparent", border: "none", cursor: "pointer" }}><Trash2 size={14} style={{ color: "var(--color-danger)" }} /></button>
                     </div>
                   ))}
                 </div>
@@ -603,7 +603,7 @@ export default function SourceManager() {
                 <p className="text-xs mb-3 mt-0" style={{ color: "var(--on-surface-variant)", lineHeight: 1.6 }}>지정 소스에서 &quot;가져올 기사&quot;를 <b>기본 키워드가 들어간 기사</b>로 정한 소스는 제목에 아래 키워드가 하나라도 있는 기사만 수집합니다. 배포 없이 바로 반영돼요.</p>
                 <div className="flex gap-2 mb-3">
                   <input value={newKeyword} onChange={(e) => setNewKeyword(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addFocusKeyword()} placeholder="예: MICE, 스마트관광, AX" className="flex-1 h-8 px-3 rounded-md text-sm outline-none" style={inputStyle} />
-                  <button onClick={addFocusKeyword} disabled={!newKeyword.trim() || savingKeywords} className="h-8 px-4 rounded-md text-sm font-semibold disabled:opacity-40" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>추가</button>
+                  <button onClick={addFocusKeyword} disabled={!newKeyword.trim() || savingKeywords} className="h-8 px-4 rounded-md text-sm font-semibold disabled:opacity-40" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}>추가</button>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {focusKeywords.length === 0 && <span className="text-xs" style={{ color: "var(--on-surface-variant)" }}>등록된 키워드가 없습니다.</span>}

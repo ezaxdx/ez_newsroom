@@ -32,7 +32,7 @@ export default function InsightGrid({ items, onOpen }: Props) {
                 linear-gradient(to top, rgba(0,0,0,0.9), rgba(0,0,0,0.28) 48%, rgba(0,0,0,0)),
                 radial-gradient(circle at 52% 38%, rgba(107,107,107,0.54), #1c1b1d 74%)
               `,
-              color: "#ffffff",
+              color: "var(--color-on-fill)",
             }}
             onClick={() => onOpen(item)}
           >
@@ -49,7 +49,7 @@ export default function InsightGrid({ items, onOpen }: Props) {
                 className="absolute top-3 right-3 px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
                 style={{
                   background: LEVEL_STYLE_DARK[item.level]?.bg ?? "rgba(255,255,255,0.18)",
-                  color: LEVEL_STYLE_DARK[item.level]?.color ?? "#fff",
+                  color: LEVEL_STYLE_DARK[item.level]?.color ?? "var(--color-on-fill)",
                   backdropFilter: "blur(6px)",
                   border: "1px solid rgba(255,255,255,0.2)",
                 }}
@@ -74,7 +74,7 @@ export default function InsightGrid({ items, onOpen }: Props) {
 
             <button
               className="self-start h-8 px-4 rounded-md text-xs font-bold tracking-[0.04em] uppercase transition-opacity hover:opacity-80"
-              style={{ background: "#fff", color: "#000", border: "none", cursor: "pointer" }}
+              style={{ background: "var(--surface-container-lowest)", color: "var(--primary)", border: "none", cursor: "pointer" }}
               onClick={(e) => { e.stopPropagation(); onOpen(item); }}
             >
               VIEW INSIGHT

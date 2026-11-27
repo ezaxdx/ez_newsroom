@@ -41,11 +41,11 @@ type Props = { news: NewsItem[]; events: EventRow[] };
 // 본문 텍스트 기반 매칭은 구조적으로 오탐이 컸음 — AI 판단을 그대로 신뢰하는 쪽으로 전환.
 const DOMAINS: { label: string; color: string }[] = [
   { label: "스마트립",        color: "#0ea5e9" },
-  { label: "글로컬 관광",      color: "#10b981" },
-  { label: "AI 관광",         color: "#6366f1" },
-  { label: "MICE Tech",      color: "#f59e0b" },
+  { label: "글로컬 관광",      color: "var(--color-success)" },
+  { label: "AI 관광",         color: "var(--color-chart-2)" },
+  { label: "MICE Tech",      color: "var(--color-warning)" },
   { label: "ATT(관광 전시)",   color: "#ec4899" },
-  { label: "MEeT(의료 전시)",  color: "#ef4444" },
+  { label: "MEeT(의료 전시)",  color: "var(--color-danger)" },
   { label: "AXDX",           color: "#8b5cf6" },
 ];
 
@@ -235,7 +235,7 @@ function DomainEditor({ item }: { item: NewsItem }) {
           style={{
             padding: "1px 9px", borderRadius: 20, fontSize: "0.62rem", fontWeight: 700,
             border: "none", cursor: saving ? "default" : "pointer",
-            background: "var(--primary)", color: "#fff", opacity: saving ? 0.6 : 1,
+            background: "var(--primary)", color: "var(--color-on-fill)", opacity: saving ? 0.6 : 1,
           }}
         >
           {saving ? "저장 중" : "저장"}
@@ -363,8 +363,8 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
         <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
           <span style={{
             fontSize: "0.65rem", fontWeight: 700, padding: "1px 7px", borderRadius: 10,
-            background: (item.faithfulness_score ?? 0) <= 4 ? "#ef444418" : "#f59e0b18",
-            color: (item.faithfulness_score ?? 0) <= 4 ? "#ef4444" : "#f59e0b",
+            background: (item.faithfulness_score ?? 0) <= 4 ? "color-mix(in srgb, var(--color-danger) 9%, transparent)" : "color-mix(in srgb, var(--color-warning) 9%, transparent)",
+            color: (item.faithfulness_score ?? 0) <= 4 ? "var(--color-danger)" : "var(--color-warning)",
           }}>
             충실도 {item.faithfulness_score ?? "-"}
           </span>
@@ -396,7 +396,7 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
             display: "flex", alignItems: "center", gap: 4,
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
             border: "none", cursor: aiFixing ? "wait" : "pointer",
-            background: "var(--primary)", color: "#fff", opacity: aiFixing ? 0.6 : 1,
+            background: "var(--primary)", color: "var(--color-on-fill)", opacity: aiFixing ? 0.6 : 1,
           }}>
             <Sparkles size={11} /> {aiFixing ? "생성 중..." : "AI로 수정 제안"}
           </button>
@@ -409,8 +409,8 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
           </button>
           <button onClick={unpublish} className="transition-transform active:scale-95" style={{
             padding: "3px 9px", borderRadius: 6, fontSize: "0.68rem", fontWeight: 600,
-            border: "1px solid #ef444440", cursor: "pointer",
-            background: "transparent", color: "#ef4444",
+            border: "1px solid color-mix(in srgb, var(--color-danger) 25%, transparent)", cursor: "pointer",
+            background: "transparent", color: "var(--color-danger)",
           }}>
             발행취소
           </button>
@@ -437,7 +437,7 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
             <button onClick={save} disabled={saving} className="transition-transform active:scale-95" style={{
               padding: "4px 12px", borderRadius: 6, fontSize: "0.7rem", fontWeight: 700,
               border: "none", cursor: saving ? "wait" : "pointer",
-              background: "var(--primary)", color: "#fff", opacity: saving ? 0.6 : 1,
+              background: "var(--primary)", color: "var(--color-on-fill)", opacity: saving ? 0.6 : 1,
             }}>
               {saving ? "저장 중..." : "저장"}
             </button>
@@ -452,7 +452,7 @@ function AuditedItemRow({ item }: { item: NewsItem }) {
           </div>
         </div>
       )}
-      {errorMsg && <p style={{ margin: "6px 0 0", fontSize: "0.68rem", color: "#ef4444" }}>{errorMsg}</p>}
+      {errorMsg && <p style={{ margin: "6px 0 0", fontSize: "0.68rem", color: "var(--color-danger)" }}>{errorMsg}</p>}
     </div>
   );
 }
@@ -567,10 +567,10 @@ function NewsTab({ news }: { news: NewsItem[] }) {
 
   const statCards = [
     { label: "전체 기사", value: stats.total, color: "var(--on-surface)" },
-    { label: "발행됨", value: stats.published, color: "#2563eb" },
-    { label: "이번 주 신규 대기", value: stats.pendingRecent, color: "#d97706", desc: `전체 대기 ${stats.pending}건` },
-    { label: "빠진 필드", value: stats.missingField, color: "#ef4444" },
-    { label: "발행 기준 위반", value: stats.mismatch + stats.fitMismatch, color: "#9333ea" },
+    { label: "발행됨", value: stats.published, color: "var(--color-info)" },
+    { label: "이번 주 신규 대기", value: stats.pendingRecent, color: "var(--color-warning)", desc: `전체 대기 ${stats.pending}건` },
+    { label: "빠진 필드", value: stats.missingField, color: "var(--color-danger)" },
+    { label: "발행 기준 위반", value: stats.mismatch + stats.fitMismatch, color: "var(--color-chart-1)" },
   ];
 
   return (
@@ -648,14 +648,14 @@ function NewsTab({ news }: { news: NewsItem[] }) {
                 style={{
                   display: "flex", justifyContent: "space-between", alignItems: "center",
                   width: "100%", padding: "6px 10px", borderRadius: 6, cursor: "pointer",
-                  border: "1px dashed #ef444460",
-                  background: showUnclassified ? "#ef444410" : "transparent",
+                  border: "1px dashed color-mix(in srgb, var(--color-danger) 38%, transparent)",
+                  background: showUnclassified ? "color-mix(in srgb, var(--color-danger) 6%, transparent)" : "transparent",
                 }}
               >
                 <span style={{ fontSize: "0.72rem", color: "var(--on-surface-variant)" }}>
                   ⚠️ 미분류 (사업영역 미매칭) {showUnclassified ? "▲" : "▼"}
                 </span>
-                <span style={{ fontSize: "0.72rem", color: "#ef4444", fontWeight: 700 }}>
+                <span style={{ fontSize: "0.72rem", color: "var(--color-danger)", fontWeight: 700 }}>
                   {domainCoverage.unclassifiedItems.length}건
                   ({Math.round((domainCoverage.unclassifiedItems.length / (domainCoverage.total || 1)) * 100)}%)
                 </span>
@@ -712,9 +712,9 @@ function NewsTab({ news }: { news: NewsItem[] }) {
             발행 규칙(품질점수·적합성 기준)이 실제로 지켜졌는지, 필수 필드가 빠지지 않았는지 확인
           </p>
           {[
-            { key: "all" as const, label: "전체 이슈", count: issueItems.length, color: "#64748b" },
-            { key: "missing" as const, label: "빠진 필드", count: news.filter(n => !n.category || !n.summary_short).length, color: "#ef4444" },
-            { key: "mismatch" as const, label: "발행 기준 위반", count: stats.mismatch + stats.fitMismatch, color: "#9333ea" },
+            { key: "all" as const, label: "전체 이슈", count: issueItems.length, color: "var(--color-neutral)" },
+            { key: "missing" as const, label: "빠진 필드", count: news.filter(n => !n.category || !n.summary_short).length, color: "var(--color-danger)" },
+            { key: "mismatch" as const, label: "발행 기준 위반", count: stats.mismatch + stats.fitMismatch, color: "var(--color-chart-1)" },
           ].map(({ key, label, count, color }) => (
             <button
               key={key}
@@ -761,7 +761,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
                     {n.issues.map((issue) => (
                       <span key={issue} style={{
                         padding: "1px 7px", borderRadius: 20, fontSize: "0.62rem",
-                        fontWeight: 600, background: "#ef444418", color: "#ef4444",
+                        fontWeight: 600, background: "color-mix(in srgb, var(--color-danger) 9%, transparent)", color: "var(--color-danger)",
                       }}>
                         {issue}
                       </span>
@@ -772,7 +772,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
                         <span key={d} style={{
                           padding: "1px 7px", borderRadius: 20, fontSize: "0.62rem",
                           fontWeight: 600, background: (dom?.color ?? "#64748b") + "18",
-                          color: dom?.color ?? "#64748b",
+                          color: dom?.color ?? "var(--color-neutral)",
                         }}>
                           {d}
                         </span>
@@ -784,8 +784,8 @@ function NewsTab({ news }: { news: NewsItem[] }) {
                   gap: 4, flexShrink: 0 }}>
                   <span style={{
                     padding: "2px 8px", borderRadius: 20, fontSize: "0.65rem", fontWeight: 700,
-                    background: n.is_published ? "#2563eb18" : "#64748b18",
-                    color: n.is_published ? "#2563eb" : "#64748b",
+                    background: n.is_published ? "color-mix(in srgb, var(--color-info) 9%, transparent)" : "color-mix(in srgb, var(--color-neutral) 9%, transparent)",
+                    color: n.is_published ? "var(--color-info)" : "var(--color-neutral)",
                   }}>
                     {n.is_published ? "발행됨" : "대기"}
                   </span>
@@ -837,7 +837,7 @@ function NewsTab({ news }: { news: NewsItem[] }) {
               style={{
                 padding: "6px 14px", borderRadius: 8, fontSize: "0.78rem", fontWeight: 600,
                 border: "none", cursor: auditRunning ? "wait" : "pointer",
-                background: "var(--primary)", color: "#fff", opacity: auditRunning ? 0.6 : 1,
+                background: "var(--primary)", color: "var(--color-on-fill)", opacity: auditRunning ? 0.6 : 1,
               }}
             >
               {auditRunning ? "실행 중..." : "감사 실행"}
@@ -956,7 +956,7 @@ function sourceBadges(e: { source: string | null; seen_at?: Record<string, strin
             color: "var(--on-surface)", outline: "none", boxSizing: "border-box",
             opacity: isSaving ? 0.5 : 1,
           }}
-        />{error && <span role="alert" style={{ color: "#dc2626", fontSize: 11 }}>{error} · 입력 후 Enter로 재시도</span>}</div>
+        />{error && <span role="alert" style={{ color: "var(--color-danger)", fontSize: 11 }}>{error} · 입력 후 Enter로 재시도</span>}</div>
       );
     }
     return (
@@ -965,7 +965,7 @@ function sourceBadges(e: { source: string | null; seen_at?: Record<string, strin
         title="클릭해서 편집"
         style={{
           display: "block", fontSize: "0.78rem", cursor: "text",
-          color: value ? "var(--on-surface)" : "#ef4444",
+          color: value ? "var(--on-surface)" : "var(--color-danger)",
           overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           padding: "2px 4px", borderRadius: 4,
           border: "1px dashed transparent",
@@ -1048,7 +1048,7 @@ function AddEventModal({ onAdd, onClose }: { onAdd: (row: EventRow) => void; onC
                 />
               </div>
             ))}
-            {addEventError && <p style={{ margin: "4px 0 10px", fontSize: 12, color: "#ef4444" }}>{addEventError}</p>}
+            {addEventError && <p style={{ margin: "4px 0 10px", fontSize: 12, color: "var(--color-danger)" }}>{addEventError}</p>}
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 8 }}>
               <button
                 disabled={addingEvent} onClick={onClose}
@@ -1059,7 +1059,7 @@ function AddEventModal({ onAdd, onClose }: { onAdd: (row: EventRow) => void; onC
               <button
                 onClick={addEvent}
                 disabled={addingEvent}
-                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: addingEvent ? 0.6 : 1 }}
+                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: addingEvent ? 0.6 : 1 }}
               >
                 {addingEvent ? "추가 중..." : "추가"}
               </button>
@@ -1358,10 +1358,10 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
       <div className="grid grid-cols-2 sm:grid-cols-5" style={{ gap: 12, marginBottom: 16 }}>
         {([
           { key: "all",       label: "전체",             value: stats.total,     color: "var(--on-surface)", desc: "" },
-          { key: "published", label: "공개",             value: stats.published, color: "#2563eb", desc: "" },
-          { key: "picks",     label: "EZPMP픽",          value: stats.picks,     color: "#f59e0b", desc: "" },
-          { key: "review",    label: "검토 대기",        value: pendingCount,    color: "#2563eb", desc: pendingCount > 0 ? "눌러서 이동" : "처리할 항목 없음" },
-          { key: "recent",    label: "마지막 수집 신규", value: lastNew ?? 0,    color: "#10b981", desc: lastNew == null ? "수집 기록 없음" : "최근 7일 수집분 보기" },
+          { key: "published", label: "공개",             value: stats.published, color: "var(--color-info)", desc: "" },
+          { key: "picks",     label: "EZPMP픽",          value: stats.picks,     color: "var(--color-warning)", desc: "" },
+          { key: "review",    label: "검토 대기",        value: pendingCount,    color: "var(--color-info)", desc: pendingCount > 0 ? "눌러서 이동" : "처리할 항목 없음" },
+          { key: "recent",    label: "마지막 수집 신규", value: lastNew ?? 0,    color: "var(--color-success)", desc: lastNew == null ? "수집 기록 없음" : "최근 7일 수집분 보기" },
         ] as const).map(({ key, label, value, color, desc }) => {
           const active = key !== "review" && statusFilter === key;
           const review = key === "review" && pendingCount > 0;
@@ -1416,7 +1416,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               규칙에 걸린 행사는 <b>수집 단계에서 미리 제외</b>됩니다. 행사명·분야 규칙은 추가 즉시 <b>기존 공개 행사도 비공개</b> 처리합니다
               (EZPMP픽과, 직접 공개/비공개를 바꾼 행사는 건드리지 않음). 잘못 걸린 행사는 위 수집 변경 내역의 <b>자동 제외 내역</b>에서 <b>제외하지 않기</b>로 살립니다.
             </p>
-            {ruleMsg && <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 600, color: "#10b981" }}>{ruleMsg}</p>}
+            {ruleMsg && <p style={{ margin: "0 0 10px", fontSize: 11, fontWeight: 600, color: "var(--color-success)" }}>{ruleMsg}</p>}
             {/* 규칙 추가 */}
             <div style={{ display: "flex", gap: 6, marginBottom: 14 }}>
               <select value={newFilterType} onChange={(e) => setNewFilterType(e.target.value as "name" | "industry" | "category")}
@@ -1429,7 +1429,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
               <input value={newMemo} onChange={(e) => setNewMemo(e.target.value)} placeholder="메모(선택)"
                 style={{ flex: 1, height: 30, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }} />
-              <button onClick={addKeyword} disabled={addingKeyword || !newKeyword.trim()} style={{ height: 30, padding: "0 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>추가</button>
+              <button onClick={addKeyword} disabled={addingKeyword || !newKeyword.trim()} style={{ height: 30, padding: "0 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}>추가</button>
             </div>
             {/* 규칙 목록 — 유형별로 묶고, 최근 수집에서 걸린 건수를 표시 */}
             {filters.length === 0 && <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>규칙 없음</span>}
@@ -1457,7 +1457,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                             </span>
                           )}
                           {f.memo && <span style={{ fontSize: 10, color: "var(--on-surface-variant)" }}>({f.memo})</span>}
-                          <button onClick={() => deleteKeyword(f.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
+                          <button onClick={() => deleteKeyword(f.id)} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-danger)", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
                         </span>
                       );
                     })}
@@ -1481,7 +1481,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
 
       <div className="flex flex-wrap items-center gap-2 my-4 text-sm" aria-label="행사 조회 기간">
         <span className="font-semibold">조회 기간</span>
-        {([["upcoming","진행 중·예정"],["month","이번 달"],["next","다음 달"],["custom","직접 지정"],["all","전체"]] as const).map(([key,label]) => <button key={key} type="button" aria-pressed={period === key} onClick={() => setPeriod(key)} className="rounded-md border px-3 py-2" style={{ background: period === key ? "var(--primary)" : "var(--surface-container-low)", color: period === key ? "#fff" : "var(--on-surface)", borderColor: "var(--surface-container-high)" }}>{label}</button>)}
+        {([["upcoming","진행 중·예정"],["month","이번 달"],["next","다음 달"],["custom","직접 지정"],["all","전체"]] as const).map(([key,label]) => <button key={key} type="button" aria-pressed={period === key} onClick={() => setPeriod(key)} className="rounded-md border px-3 py-2" style={{ background: period === key ? "var(--primary)" : "var(--surface-container-low)", color: period === key ? "var(--surface-container-lowest)" : "var(--on-surface)", borderColor: "var(--surface-container-high)" }}>{label}</button>)}
         {period === "custom" && <><input aria-label="조회 시작일" type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border rounded p-2" /><span>~</span><input aria-label="조회 종료일" type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border rounded p-2" /></>}
       </div>
       <p className="text-xs mb-3">{periodLabel} · 한국시간 기준 · 진행 중 우선, 시작일 가까운 순 · 종료일이 없으면 시작일 하루로 조회합니다.</p>
@@ -1494,7 +1494,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
           onClick={() => setShowAddModal(true)}
           style={{
             padding: "6px 14px", borderRadius: 8, fontSize: "0.8rem", fontWeight: 700,
-            border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer",
+            border: "none", background: "var(--primary)", color: "var(--color-on-fill)", cursor: "pointer",
           }}
         >
           + 행사 추가
@@ -1520,13 +1520,13 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
             padding: "5px 12px", borderRadius: 20, fontSize: "0.75rem",
             fontWeight: 600, cursor: "pointer", border: "1px solid",
             borderColor: statusFilter === key
-              ? (key === "picks" ? "#f59e0b" : "var(--on-surface)")
+              ? (key === "picks" ? "var(--color-warning)" : "var(--on-surface)")
               : "var(--surface-container-high)",
             background: statusFilter === key
-              ? (key === "picks" ? "#f59e0b18" : "var(--on-surface)")
+              ? (key === "picks" ? "color-mix(in srgb, var(--color-warning) 9%, transparent)" : "var(--on-surface)")
               : "transparent",
             color: statusFilter === key
-              ? (key === "picks" ? "#f59e0b" : "var(--surface)")
+              ? (key === "picks" ? "var(--color-warning)" : "var(--surface)")
               : "var(--on-surface-variant)",
           }}>
             {label}
@@ -1612,7 +1612,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
               gridTemplateColumns: "40px 1fr 100px 100px 140px 64px 50px 70px",
               padding: "9px 14px", gap: 8, alignItems: "center",
               borderTop: idx > 0 ? "1px solid var(--surface-container-high)" : "none",
-              background: hasIssue(e) ? "#ef444406" : e.parent_event_id ? "var(--surface-container-low)" : "var(--surface-container-lowest)",
+              background: hasIssue(e) ? "color-mix(in srgb, var(--color-danger) 2%, transparent)" : e.parent_event_id ? "var(--surface-container-low)" : "var(--surface-container-lowest)",
               paddingLeft: e.parent_event_id ? 28 : 14,
             }}>
               {/* No. */}
@@ -1646,7 +1646,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                   {e.is_ezpmp_pick && (
                     <div style={{ marginTop: 3, display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: "0.66rem", color: "var(--on-surface-variant)" }}>
                       <span title="이 행사를 다룬 기사 (자동 수집, 시작 30일 전 ~ 종료 30일 후)">
-                        📰 관련 기사 <b style={{ color: (e.news_count ?? 0) > 0 ? "var(--on-surface)" : "#dc2626" }}>{e.news_count ?? 0}건</b>
+                        📰 관련 기사 <b style={{ color: (e.news_count ?? 0) > 0 ? "var(--on-surface)" : "var(--color-danger)" }}>{e.news_count ?? 0}건</b>
                         {e.news_last ? ` · 최근 ${new Date(e.news_last).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" })}` : ""}
                       </span>
                       {kwEdit?.id === e.id ? (
@@ -1708,7 +1708,7 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                 style={{
                   fontSize: "1rem", lineHeight: 1, padding: "2px 4px",
                   borderRadius: 6, border: "none", cursor: toggling === e.id ? "wait" : "pointer",
-                  background: e.is_ezpmp_pick ? "#f59e0b18" : "transparent",
+                  background: e.is_ezpmp_pick ? "color-mix(in srgb, var(--color-warning) 9%, transparent)" : "transparent",
                   opacity: toggling === e.id ? 0.5 : 1,
                   transition: "all 0.15s",
                 }}
@@ -1731,8 +1731,8 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                   padding: "3px 10px", borderRadius: 20, fontSize: "0.68rem",
                   fontWeight: 700, cursor: toggling === e.id ? "wait" : "pointer",
                   border: "none", opacity: toggling === e.id ? 0.5 : 1,
-                  background: e.is_published ? "#2563eb18" : "#64748b18",
-                  color: e.is_published ? "#2563eb" : "#64748b",
+                  background: e.is_published ? "color-mix(in srgb, var(--color-info) 9%, transparent)" : "color-mix(in srgb, var(--color-neutral) 9%, transparent)",
+                  color: e.is_published ? "var(--color-info)" : "var(--color-neutral)",
                   transition: "all 0.15s",
                 }}
               >
@@ -1760,14 +1760,14 @@ function EventsTab({ initialEvents }: { initialEvents: EventRow[] }) {
                         placeholder="행사명 키워드 (예: 총회, 설명회)"
                         style={{ height: 26, padding: "0 8px", borderRadius: 6, fontSize: "0.74rem", border: "1px solid var(--primary)", outline: "none", background: "var(--surface-container-lowest)", color: "var(--on-surface)", width: 200 }}
                       />
-                      <button onClick={() => addRuleFromPrompt(promptKeyword, "name")} disabled={!promptKeyword.trim()} style={{ ...chipStyle, background: "var(--primary)", color: "#fff", opacity: promptKeyword.trim() ? 1 : 0.5 }}>
+                      <button onClick={() => addRuleFromPrompt(promptKeyword, "name")} disabled={!promptKeyword.trim()} style={{ ...chipStyle, background: "var(--primary)", color: "var(--color-on-fill)", opacity: promptKeyword.trim() ? 1 : 0.5 }}>
                         추가{kwIm ? ` · 공개 ${kwIm.published}건` : ""}
                       </button>
                     </>
                   ) : (
                     <button onClick={() => setHideBar({ ...hideBar, keywordOpen: true })} style={chipStyle}>키워드 입력…</button>
                   )}
-                  <button onClick={deleteAsDuplicate} style={{ ...chipStyle, border: "1px solid #fca5a5", color: "#dc2626" }}>중복이라 삭제</button>
+                  <button onClick={deleteAsDuplicate} style={{ ...chipStyle, border: "1px solid var(--color-danger-bg)", color: "var(--color-danger)" }}>중복이라 삭제</button>
                   <button onClick={undoHide} style={{ ...chipStyle, border: "1px solid var(--surface-container-highest)", color: "var(--on-surface-variant)" }}>다시 공개</button>
                   <button onClick={() => setHideBar(null)} aria-label="닫기" style={{ marginLeft: "auto", background: "none", border: "none", cursor: "pointer", color: "var(--on-surface-variant)", fontSize: 14 }}>×</button>
                 </div>

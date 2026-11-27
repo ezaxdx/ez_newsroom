@@ -205,7 +205,7 @@ export default function EventsClient({ events, scoring }: Props) {
               {DAYS.map((d, i) => (
                 <div key={d} style={{ textAlign: "center", fontSize: "0.68rem",
                   fontWeight: 600, padding: "4px 0",
-                  color: i === 0 ? "#ef4444" : i === 6 ? "#3b82f6"
+                  color: i === 0 ? "var(--color-danger)" : i === 6 ? "var(--color-info)"
                     : "var(--on-surface-variant)" }}>
                   {d}
                 </div>
@@ -233,11 +233,11 @@ export default function EventsClient({ events, scoring }: Props) {
                       cursor: hasEvent ? "pointer" : "default",
                       fontWeight: isToday ? 700 : 400,
                       fontSize: "0.82rem",
-                      color: isSelected ? "#fff"
-                        : col === 0 ? "#ef4444"
-                        : col === 6 ? "#3b82f6"
+                      color: isSelected ? "var(--color-on-fill)"
+                        : col === 0 ? "var(--color-danger)"
+                        : col === 6 ? "var(--color-info)"
                         : "var(--on-surface)",
-                      background: isSelected ? "#1a1c1d" : "transparent",
+                      background: isSelected ? "var(--on-surface)" : "transparent",
                       transition: "background 0.15s",
                     }}
                   >
@@ -247,7 +247,7 @@ export default function EventsClient({ events, scoring }: Props) {
                         position: "absolute", bottom: 3, left: "50%",
                         transform: "translateX(-50%)",
                         width: 4, height: 4, borderRadius: "50%",
-                        background: isSelected ? "#fff" : "#2563eb",
+                        background: isSelected ? "var(--surface-container-lowest)" : "var(--color-info)",
                         display: "block",
                       }} />
                     )}
@@ -504,7 +504,7 @@ function RecommendCard({ event: e, fmtRange, catColor }: {
       {/* 추천 배지 */}
       <span style={{
         minWidth: 28, height: 28, padding: e.is_ezpmp_pick ? 0 : "0 7px", borderRadius: 8, whiteSpace: "nowrap",
-        background: accent, color: "#fff",
+        background: accent, color: "var(--color-on-fill)",
         display: "flex", alignItems: "center", justifyContent: "center",
         fontSize: e.is_ezpmp_pick ? "0.75rem" : "0.65rem", fontWeight: e.is_ezpmp_pick ? 700 : 500, flexShrink: 0,
       }}
@@ -589,8 +589,8 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
     <div style={{
       padding: "14px 18px",
       borderRadius: 12,
-      border: `1px solid ${isPartner ? "#2563eb40" : "var(--surface-container-high)"}`,
-      background: isPartner ? "#2563eb05" : "var(--surface-container-lowest)",
+      border: `1px solid ${isPartner ? "color-mix(in srgb, var(--color-info) 25%, transparent)" : "var(--surface-container-high)"}`,
+      background: isPartner ? "color-mix(in srgb, var(--color-info) 2%, transparent)" : "var(--surface-container-lowest)",
       display: "flex",
       alignItems: "flex-start",
       gap: 14,
@@ -621,7 +621,7 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
 
       {/* 구분선 */}
       <div style={{ width: 1, alignSelf: "stretch", minHeight: 40,
-        background: isPartner ? "#2563eb30" : "var(--surface-container-high)" }} />
+        background: isPartner ? "color-mix(in srgb, var(--color-info) 19%, transparent)" : "var(--surface-container-high)" }} />
 
       {/* 내용 */}
       <div style={{ flex: 1, minWidth: 0 }}>
@@ -643,8 +643,8 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
           {isPartner && (
             <span style={{
               padding: "1px 7px", borderRadius: 20, fontSize: "0.62rem",
-              fontWeight: 700, background: "#2563eb15", color: "#2563eb",
-              border: "1px solid #2563eb30",
+              fontWeight: 700, background: "color-mix(in srgb, var(--color-info) 8%, transparent)", color: "var(--color-info)",
+              border: "1px solid color-mix(in srgb, var(--color-info) 19%, transparent)",
             }}>
               🤝 EZPMP 파트너
             </span>
@@ -671,7 +671,7 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
             </span>
           )}
           {e.website && (
-            <span style={{ fontSize: "0.72rem", color: "#2563eb",
+            <span style={{ fontSize: "0.72rem", color: "var(--color-info)",
               display: "flex", alignItems: "center", gap: 2 }}>
               <ExternalLink size={10} /> 홈페이지
             </span>
@@ -700,7 +700,7 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
             onClick={() => setShowMore((v) => !v)}
             style={{
               background: "none", border: "none", cursor: "pointer",
-              fontSize: "0.7rem", color: "#2563eb", padding: "2px 4px",
+              fontSize: "0.7rem", color: "var(--color-info)", padding: "2px 4px",
               display: "flex", alignItems: "center", gap: 3,
             }}
           >
@@ -713,7 +713,7 @@ function EventCard({ event: e, allEvents, fmtRange, catColor }: {
               marginTop: 6, padding: "10px 12px",
               background: "var(--surface-container)",
               borderRadius: 10, display: "flex", flexDirection: "column", gap: 8,
-              borderLeft: "3px solid #2563eb40",
+              borderLeft: "3px solid color-mix(in srgb, var(--color-info) 25%, transparent)",
             }}>
               {sameOrgEvents.map((ev) => (
                 <div key={ev.id} style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>

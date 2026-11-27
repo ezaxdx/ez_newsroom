@@ -108,7 +108,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose, embedded 
                   const on = lvChoice === c;
                   return (
                     <button key={c} type="button" disabled={!!busy} onClick={() => setLvChoice(c)} className="flex-1 h-8 rounded-md text-xs font-semibold"
-                      style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "#fff" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
+                      style={{ background: on ? "var(--primary)" : "var(--surface-container-low)", color: on ? "var(--surface-container-lowest)" : "var(--on-surface-variant)", border: "none", cursor: "pointer" }}>
                       {c === "keep" ? `유지 (${LEVEL_LABEL[curLevel] ?? curLevel})` : LEVEL_LABEL[c]}
                     </button>
                   );
@@ -116,13 +116,13 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose, embedded 
               </div>
               <span className="text-[0.68rem]" style={{ color: "var(--on-surface-variant)", lineHeight: 1.5 }}>카테고리가 바뀌면 독자층도 달라질 수 있어요. 바꾸지 않으면 지금 레벨({LEVEL_LABEL[curLevel] ?? curLevel})로 씁니다.</span>
             </div>
-            {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
+            {err && <p className="text-xs m-0" style={{ color: "var(--color-danger-fg)" }}>{err}</p>}
             <div className="flex justify-end gap-2 flex-wrap sticky bottom-0 py-3" style={{ background: "var(--surface-container-lowest)" }}>
               <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
               <button onClick={saveOnly} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>
                 {busy === "only" && <Loader2 size={13} className="animate-spin" />}카테고리만 변경
               </button>
-              <button onClick={makeDraft} disabled={!!busy || blocked} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
+              <button onClick={makeDraft} disabled={!!busy || blocked} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}>
                 {busy === "rewrite" && <Loader2 size={13} className="animate-spin" />}{target} 관점으로 다시 쓰기
               </button>
             </div>
@@ -132,7 +132,7 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose, embedded 
           <>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {([["지금 글 · " + item.category, { title: item.title, summary_short: item.summary_short, content_long: cur?.content_long ?? item.content_long, implications: cur?.implications ?? item.implications }], ["새 글 · " + target, draft]] as [string, Rewrite][]).map(([label, v], i) => (
-                <div key={label} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: i ? "var(--bg-accent, #eef4ff)" : "var(--surface-container-low)" }}>
+                <div key={label} className="rounded-lg p-3 flex flex-col gap-2" style={{ background: i ? "var(--color-info-bg)" : "var(--surface-container-low)" }}>
                   <span className="text-[0.7rem] font-bold" style={{ color: "var(--on-surface-variant)" }}>{label}</span>
                   {([["제목", v.title], ["요약", v.summary_short], ["상세", v.content_long], ["시사점", v.implications]] as [string, string][]).map(([k, t]) => (
                     <div key={k}>
@@ -144,10 +144,10 @@ export function CategoryChangeDialog({ item, target, onPatch, onClose, embedded 
               ))}
             </div>
             <p className="text-xs m-0" style={{ color: "var(--on-surface-variant)" }}>[교체]하면 지금 글이 새 글로 바뀌고(글 수준: <b>{LEVEL_LABEL[effLevel] ?? effLevel}</b>), 품질 감사를 다시 받아요. 마음에 안 들면 [취소]하세요 (아무것도 바뀌지 않아요).</p>
-            {err && <p className="text-xs m-0" style={{ color: "#b91c1c" }}>{err}</p>}
+            {err && <p className="text-xs m-0" style={{ color: "var(--color-danger-fg)" }}>{err}</p>}
             <div className="flex justify-end gap-2 flex-wrap sticky bottom-0 py-3" style={{ background: "var(--surface-container-lowest)" }}>
               <button onClick={close} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-medium" style={{ background: "var(--surface-container-highest)", color: "var(--on-surface)", border: "none", cursor: "pointer" }}>취소</button>
-              <button onClick={replace} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}>
+              <button onClick={replace} disabled={!!busy} className="h-9 px-4 rounded-md text-sm font-semibold flex items-center gap-2 disabled:opacity-50" style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}>
                 {busy === "replace" && <Loader2 size={13} className="animate-spin" />}교체
               </button>
             </div>

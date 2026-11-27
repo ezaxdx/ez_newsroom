@@ -1308,7 +1308,7 @@ export default function NewsletterPage() {
         >
           📧 Gmail 연동
           {gmailStatus === "disconnected" && (
-            <span style={{ marginLeft: 5, display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "#c62828", verticalAlign: "middle" }} />
+            <span style={{ marginLeft: 5, display: "inline-block", width: 6, height: 6, borderRadius: "50%", background: "var(--color-danger)", verticalAlign: "middle" }} />
           )}
         </button>
       </div>
@@ -1329,9 +1329,9 @@ export default function NewsletterPage() {
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "5px 12px", borderRadius: 6,
-                    border: "1px solid #6366f1",
-                    background: generatingEditorial ? "var(--surface-container)" : "#ede9fe",
-                    color: "#6366f1", fontWeight: 600, fontSize: 12,
+                    border: "1px solid var(--color-chart-2)",
+                    background: generatingEditorial ? "var(--surface-container)" : "color-mix(in srgb, var(--color-chart-1) 14%, white)",
+                    color: "var(--color-chart-2)", fontWeight: 600, fontSize: 12,
                     cursor: generatingEditorial ? "not-allowed" : "pointer",
                     opacity: generatingEditorial ? 0.7 : 1, transition: "all 0.15s",
                   }}
@@ -1359,7 +1359,7 @@ export default function NewsletterPage() {
                     style={{ width: "100%", boxSizing: "border-box", padding: 10, borderRadius: 6, border: "1px solid var(--surface-container-highest)", fontSize: 12, lineHeight: 1.6, fontFamily: "inherit", resize: "vertical", background: "var(--surface)", color: "var(--on-surface)" }} />
                   <div style={{ display: "flex", gap: 8, marginTop: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <button onClick={() => savePrompt(promptText === DEFAULT_EDITORIAL_PROMPT ? "" : promptText)} disabled={promptSaving}
-                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: promptSaving ? 0.6 : 1 }}>
+                      style={{ padding: "6px 14px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", fontWeight: 600, fontSize: 12, cursor: "pointer", opacity: promptSaving ? 0.6 : 1 }}>
                       {promptSaving ? "저장 중..." : "저장"}
                     </button>
                     <button onClick={() => { if (confirm("기본 프롬프트로 되돌릴까요?")) savePrompt(""); }} disabled={promptSaving}
@@ -1371,7 +1371,7 @@ export default function NewsletterPage() {
                 </div>
               )}
               {editorialError && (
-                <p style={{ margin: "0 0 8px", fontSize: 12, color: "#c0392b" }}>{editorialError}</p>
+                <p style={{ margin: "0 0 8px", fontSize: 12, color: "var(--color-danger)" }}>{editorialError}</p>
               )}
               {/* 서식 툴바 — 정렬/글씨크기/글씨체는 선택한 영역(또는 커서가 있는 줄)에 적용됨 */}
               <div style={{
@@ -1576,7 +1576,7 @@ export default function NewsletterPage() {
                 checked={skipEzpmp}
                 onChange={e => { setSkipEzpmp(e.target.checked); invalidatePreview(); }}
               />
-              <span style={{ color: skipEzpmp ? "#dc2626" : "var(--on-surface-variant)" }}>
+              <span style={{ color: skipEzpmp ? "var(--color-danger)" : "var(--on-surface-variant)" }}>
                 EZPMP 섹션 제외 {skipEzpmp ? "✓" : ""}
               </span>
             </label>
@@ -1649,8 +1649,8 @@ export default function NewsletterPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 6,
                       padding: "8px 18px", borderRadius: 6, border: "none",
-                      background: isDone ? "#16a34a" : "var(--primary)",
-                      color: "#fff", fontWeight: 600,
+                      background: isDone ? "var(--color-success)" : "var(--primary)",
+                      color: "var(--color-on-fill)", fontWeight: 600,
                       fontSize: 14, cursor: (sending || isDone) ? "not-allowed" : "pointer",
                       opacity: (sending || isDone) ? 0.7 : 1,
                     }}
@@ -1673,7 +1673,7 @@ export default function NewsletterPage() {
             {sending && (
               <div style={{
                 padding: "10px 14px", borderRadius: 6, marginBottom: 16,
-                background: "#D1ECF1", color: "#0c5460",
+                background: "var(--color-info-bg)", color: "var(--color-info-fg)",
                 fontSize: 13, fontWeight: 500,
                 display: "flex", alignItems: "center", gap: 10,
               }}>
@@ -1681,7 +1681,7 @@ export default function NewsletterPage() {
                 <span>
                   발송 중... {sendElapsed}초 경과
                   {activeCount && activeCount > 0 && (
-                    <span style={{ marginLeft: 6, fontWeight: 400, color: "#0c5460", opacity: 0.8 }}>
+                    <span style={{ marginLeft: 6, fontWeight: 400, color: "var(--color-info-fg)", opacity: 0.8 }}>
                       (예상 소요: {Math.ceil(activeCount * 0.4)}초)
                     </span>
                   )}
@@ -1695,8 +1695,8 @@ export default function NewsletterPage() {
             {sendResult && (
               <div style={{
                 padding: "10px 14px", borderRadius: 6, marginBottom: 16,
-                background: sendResult.ok ? "#D4EDDA" : "#F8D7DA",
-                color: sendResult.ok ? "#155724" : "#721C24",
+                background: sendResult.ok ? "var(--color-success-bg)" : "var(--color-danger-bg)",
+                color: sendResult.ok ? "var(--color-success-fg)" : "var(--color-danger-fg)",
                 fontSize: 13, fontWeight: 500,
               }}>
                 {sendResult.message}
@@ -1707,7 +1707,7 @@ export default function NewsletterPage() {
               <div style={cardStyle}>
                 <p style={{ margin: "0 0 10px", fontSize: 13, fontWeight: 600, color: "var(--on-surface-variant)" }}>미리보기</p>
                 {previewHtml.includes("<!--IMG_FALLBACK:") && (
-                  <p style={{ fontSize: 13, color: "#925B12" }} role="status">
+                  <p style={{ fontSize: 13, color: "var(--color-warning-fg)" }} role="status">
                     이미지 {(previewHtml.match(/<!--IMG_FALLBACK:/g) ?? []).length}건의 확보·저장을 확인하지 못했습니다.
                     해당 사진은 열람 시 다시 불러오며, 실패하면 기본 이미지가 표시됩니다.
                   </p>
@@ -1816,8 +1816,8 @@ export default function NewsletterPage() {
                             disabled={imageSaving.has(ev.id)}
                             style={{
                               height: 28, padding: "0 10px", borderRadius: 4, border: "none",
-                              background: imageSaved.has(ev.id) ? "#D4EDDA" : "var(--primary)",
-                              color: imageSaved.has(ev.id) ? "#155724" : "#fff",
+                              background: imageSaved.has(ev.id) ? "var(--color-success-bg)" : "var(--primary)",
+                              color: imageSaved.has(ev.id) ? "var(--color-success-fg)" : "var(--color-on-fill)",
                               fontSize: 12, fontWeight: 600, cursor: imageSaving.has(ev.id) ? "not-allowed" : "pointer",
                               whiteSpace: "nowrap",
                             }}
@@ -1858,13 +1858,13 @@ export default function NewsletterPage() {
                   <p style={{ margin: "0 0 4px" }}>
                     <b>헤더 이미지</b> — 뉴스레터 맨 위에 나오는 배경 이미지 전체. 로고·태그라인 등이 전부 이 이미지 한 장 안에 포함돼 있어서, 로고만 따로 바꾸는 기능은 없고 이미지 전체를 새로 만들어 교체해야 함.
                   </p>
-                  <p style={{ margin: "0 0 10px", color: "#666" }}>
+                  <p style={{ margin: "0 0 10px", color: "var(--on-surface-variant)" }}>
                     권장 사이즈: 600×440px (레티나 대비 1200×880px), PNG/JPG
                   </p>
                   <p style={{ margin: "0 0 4px" }}>
                     <b>인사말 장식 이미지</b> — 인사말(에디토리얼) 박스 위쪽에 얹히는 장식 그림(예: 삼각형 모양). 선택사항이라 안 넣으면 장식 없이 기본 박스만 표시됨.
                   </p>
-                  <p style={{ margin: 0, color: "#666" }}>
+                  <p style={{ margin: 0, color: "var(--on-surface-variant)" }}>
                     권장 사이즈: 폭 560~600px, 투명 배경 PNG. 그림 좌우에 흰 여백을 많이 두고 내보내면 실제 박스 폭보다 좁아 보이므로, 여백을 최소화해서 그림이 폭 전체에 가깝게 차도록 내보낼 것.
                   </p>
                 </SectionInfoModal>
@@ -1929,14 +1929,14 @@ export default function NewsletterPage() {
                   )}
                 </div>
                 {addHeaderImageError && (
-                  <p style={{ margin: 0, fontSize: 12, color: "#c0392b" }}>{addHeaderImageError}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: "var(--color-danger)" }}>{addHeaderImageError}</p>
                 )}
                 <button
                   onClick={handleAddHeaderImage}
                   disabled={addingHeaderImage || !newHeaderLabel.trim() || !newHeaderFile}
                   style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--primary)",
                     background: addingHeaderImage ? "var(--surface-container-highest)" : "var(--primary)",
-                    color: addingHeaderImage ? "var(--on-surface-variant)" : "#fff", fontWeight: 600, fontSize: 13,
+                    color: addingHeaderImage ? "var(--on-surface-variant)" : "var(--color-on-fill)", fontWeight: 600, fontSize: 13,
                     cursor: addingHeaderImage ? "not-allowed" : "pointer", width: "fit-content" }}
                 >
                   {addingHeaderImage ? "업로드 중..." : "추가"}
@@ -2002,14 +2002,14 @@ export default function NewsletterPage() {
                       background: "var(--surface-container-lowest)", color: "var(--on-surface)", fontSize: 13 }}
                   />
 
-                  {bannerError && <p style={{ margin: 0, fontSize: 12, color: "#c0392b" }}>{bannerError}</p>}
+                  {bannerError && <p style={{ margin: 0, fontSize: 12, color: "var(--color-danger)" }}>{bannerError}</p>}
 
                   <button
                     onClick={() => handleSaveFooterBanner()}
                     disabled={bannerSaving}
                     style={{ padding: "8px 16px", borderRadius: 6, border: "1px solid var(--primary)",
-                      background: bannerSaving ? "var(--surface-container-highest)" : (bannerSaved ? "#D4EDDA" : "var(--primary)"),
-                      color: bannerSaving ? "var(--on-surface-variant)" : (bannerSaved ? "#155724" : "#fff"),
+                      background: bannerSaving ? "var(--surface-container-highest)" : (bannerSaved ? "var(--color-success-bg)" : "var(--primary)"),
+                      color: bannerSaving ? "var(--on-surface-variant)" : (bannerSaved ? "var(--color-success-fg)" : "var(--color-on-fill)"),
                       fontWeight: 600, fontSize: 13, cursor: bannerSaving ? "not-allowed" : "pointer", width: "fit-content" }}
                   >
                     {bannerUploading ? "업로드 중..." : bannerSaving ? "저장 중..." : bannerSaved ? "저장됨 ✓" : "저장"}
@@ -2142,7 +2142,7 @@ export default function NewsletterPage() {
                     disabled={cronSaving}
                     style={{
                       padding: "8px 18px", borderRadius: 6, border: "none",
-                      background: "var(--primary)", color: "#fff", fontWeight: 600,
+                      background: "var(--primary)", color: "var(--color-on-fill)", fontWeight: 600,
                       fontSize: 13, cursor: cronSaving ? "not-allowed" : "pointer",
                       opacity: cronSaving ? 0.6 : 1,
                     }}
@@ -2191,7 +2191,7 @@ export default function NewsletterPage() {
                   style={{
                     display: "flex", alignItems: "center", gap: 5,
                     padding: "8px 14px", borderRadius: 6, border: "none",
-                    background: "var(--primary)", color: "#fff",
+                    background: "var(--primary)", color: "var(--color-on-fill)",
                     fontWeight: 600, fontSize: 14,
                     cursor: addingSubscriber ? "not-allowed" : "pointer",
                     opacity: addingSubscriber ? 0.6 : 1,
@@ -2244,7 +2244,7 @@ export default function NewsletterPage() {
                     <div style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
                       <span>✅ 추가 {excelResult.inserted}명 / 중복 스킵 {excelResult.skipped}명{excelResult.deactivated ? ` / 비활성화 ${excelResult.deactivated}명` : ""}</span>
                       {excelResult.duplicates.length > 0 && (
-                        <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 6, background: "#FFF3CD", color: "#856404", lineHeight: 1.6 }}>
+                        <div style={{ marginTop: 6, padding: "8px 10px", borderRadius: 6, background: "var(--color-warning-bg)", color: "var(--color-warning-fg)", lineHeight: 1.6 }}>
                           <strong>이미 등록된 이메일 ({excelResult.duplicates.length}명):</strong><br />
                           {excelResult.duplicates.join(", ")}
                         </div>
@@ -2279,8 +2279,8 @@ export default function NewsletterPage() {
                         </label>
                       )}
                       <p style={{ margin: "6px 0 0" }}>
-                        신규 등록 <strong style={{ color: "#10b981" }}>{plan.fresh.length}명</strong> · 이미 등록 {plan.already}명
-                        {plan.missing.length > 0 && <> · 파일에 없는 기존 수신자({plan.domains.join(", ")}) <strong style={{ color: "#d97706" }}>{plan.missing.length}명</strong></>}
+                        신규 등록 <strong style={{ color: "var(--color-success)" }}>{plan.fresh.length}명</strong> · 이미 등록 {plan.already}명
+                        {plan.missing.length > 0 && <> · 파일에 없는 기존 수신자({plan.domains.join(", ")}) <strong style={{ color: "var(--color-warning)" }}>{plan.missing.length}명</strong></>}
                       </p>
                       {plan.missing.length > 0 && (
                         <>
@@ -2295,7 +2295,7 @@ export default function NewsletterPage() {
                       )}
                       <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                         <button onClick={applyExcelImport} disabled={excelUploading || nothingToDo}
-                          style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: excelUploading || nothingToDo ? 0.5 : 1 }}>
+                          style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", fontWeight: 600, fontSize: 13, cursor: "pointer", opacity: excelUploading || nothingToDo ? 0.5 : 1 }}>
                           {excelUploading ? "반영 중..." : "반영"}
                         </button>
                         <button onClick={() => setExcelPreview(null)} style={{ padding: "7px 14px", borderRadius: 6, border: "1px solid var(--surface-container-highest)", background: "transparent", color: "var(--on-surface)", fontSize: 13, cursor: "pointer" }}>취소</button>
@@ -2313,7 +2313,7 @@ export default function NewsletterPage() {
               </div>
 
               {subError && (
-                <p style={{ margin: "8px 0 0", fontSize: 13, color: "#c0392b" }}>{subError}</p>
+                <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--color-danger)" }}>{subError}</p>
               )}
             </div>
 
@@ -2396,7 +2396,7 @@ export default function NewsletterPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 5,
                       padding: "6px 14px", borderRadius: 6, border: "none",
-                      background: "#16a34a", color: "#fff",
+                      background: "var(--color-success)", color: "var(--color-on-fill)",
                       fontWeight: 600, fontSize: 13,
                       cursor: bulkActivating ? "not-allowed" : "pointer",
                       opacity: bulkActivating ? 0.6 : 1,
@@ -2410,7 +2410,7 @@ export default function NewsletterPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 5,
                       padding: "6px 14px", borderRadius: 6, border: "none",
-                      background: "#f59e0b", color: "#fff",
+                      background: "var(--color-warning)", color: "var(--color-on-fill)",
                       fontWeight: 600, fontSize: 13,
                       cursor: bulkDeactivating ? "not-allowed" : "pointer",
                       opacity: bulkDeactivating ? 0.6 : 1,
@@ -2424,7 +2424,7 @@ export default function NewsletterPage() {
                     style={{
                       display: "flex", alignItems: "center", gap: 5,
                       padding: "6px 14px", borderRadius: 6, border: "none",
-                      background: "#dc2626", color: "#fff",
+                      background: "var(--color-danger)", color: "var(--color-on-fill)",
                       fontWeight: 600, fontSize: 13,
                       cursor: bulkDeleting ? "not-allowed" : "pointer",
                       opacity: bulkDeleting ? 0.6 : 1,
@@ -2517,13 +2517,13 @@ export default function NewsletterPage() {
                           </td>
                           <td style={tdStyle}>
                             {sub.unsubscribed_at
-                              ? <span style={{ color: "#c0392b" }}>{new Date(sub.unsubscribed_at).toLocaleDateString("ko-KR")} (본인 신청)</span>
+                              ? <span style={{ color: "var(--color-danger)" }}>{new Date(sub.unsubscribed_at).toLocaleDateString("ko-KR")} (본인 신청)</span>
                               : "-"}
                           </td>
                           <td style={{ ...tdStyle, textAlign: "center" }}>
                             <button
                               onClick={() => handleDelete(sub.id)}
-                              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0, color: "#c0392b" }}
+                              style={{ background: "none", border: "none", cursor: "pointer", padding: 0, lineHeight: 0, color: "var(--color-danger)" }}
                               title="삭제"
                             >
                               <Trash2 size={15} />
@@ -2569,7 +2569,7 @@ export default function NewsletterPage() {
                     {statusDropdownOpen && (
                       <div style={{
                         position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 1000, minWidth: 140,
-                        background: "#ffffff", border: "1px solid #d0d0d0", opacity: 1,
+                        background: "var(--surface-container-lowest)", border: "1px solid var(--surface-container-highest)", opacity: 1,
                         borderRadius: 8, padding: 6, boxShadow: "0 4px 20px rgba(0,0,0,0.25)",
                       }}>
                         {HISTORY_STATUSES.map((s) => {
@@ -2578,7 +2578,7 @@ export default function NewsletterPage() {
                             <label key={s} style={{
                               display: "flex", alignItems: "center", gap: 8, padding: "5px 8px",
                               fontSize: 13, cursor: "pointer", borderRadius: 5, whiteSpace: "nowrap",
-                              color: "#1a1a1a", background: "#ffffff",
+                              color: "var(--on-surface)", background: "var(--surface-container-lowest)",
                             }}>
                               <input
                                 type="checkbox"
@@ -2687,14 +2687,14 @@ export default function NewsletterPage() {
                                 {issue.total_sent + issue.total_failed}
                               </button>
                             </td>
-                            <td style={{ ...tdStyle, textAlign: "center", color: "#155724", fontWeight: 600 }}>
+                            <td style={{ ...tdStyle, textAlign: "center", color: "var(--color-success-fg)", fontWeight: 600 }}>
                               {issue.total_sent}
                             </td>
                             <td style={{ ...tdStyle, textAlign: "center" }}>
                               {issue.total_failed > 0 ? (
                                 <button onClick={() => fetchIssueLogs(issue, "failed")}
                                   style={{ background: "none", border: "none", cursor: "pointer",
-                                    color: "#c0392b", fontWeight: 700, fontSize: 13, textDecoration: "underline" }}
+                                    color: "var(--color-danger)", fontWeight: 700, fontSize: 13, textDecoration: "underline" }}
                                   title="실패 로그만 보기">
                                   {issue.total_failed}
                                 </button>
@@ -2724,7 +2724,7 @@ export default function NewsletterPage() {
                                   title="실제 발송 로그 기준으로 상태 복구"
                                   style={{
                                     marginLeft: 6, padding: "2px 7px", borderRadius: 4, fontSize: 11,
-                                    border: "1px solid #0c5460", background: "transparent", color: "#0c5460",
+                                    border: "1px solid var(--color-info-fg)", background: "transparent", color: "var(--color-info-fg)",
                                     cursor: recoveringId === issue.id ? "not-allowed" : "pointer",
                                     opacity: recoveringId === issue.id ? 0.6 : 1, fontWeight: 600,
                                   }}
@@ -2740,7 +2740,7 @@ export default function NewsletterPage() {
                                   onClick={() => toggleUnsentPanel(issue)}
                                   style={{
                                     padding: "4px 10px", borderRadius: 5,
-                                    border: `1px solid ${isPanelOpen ? "var(--primary)" : "#aaa"}`,
+                                    border: `1px solid ${isPanelOpen ? "var(--primary)" : "var(--outline-variant)"}`,
                                     background: isPanelOpen ? "color-mix(in srgb, var(--primary) 10%, transparent)" : "var(--surface-container)",
                                     color: isPanelOpen ? "var(--primary)" : "var(--on-surface-variant)",
                                     fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
@@ -2759,9 +2759,9 @@ export default function NewsletterPage() {
                           {/* 재발송 결과 메시지 */}
                           {resendResult[issue.id] && (
                             <tr key={`${issue.id}-result`}
-                              style={{ background: resendResult[issue.id].startsWith("✅") ? "#D4EDDA" : "#F8D7DA" }}>
+                              style={{ background: resendResult[issue.id].startsWith("✅") ? "var(--color-success-bg)" : "var(--color-danger-bg)" }}>
                               <td colSpan={8} style={{ padding: "6px 14px", fontSize: 12, fontWeight: 600,
-                                color: resendResult[issue.id].startsWith("✅") ? "#155724" : "#721C24" }}>
+                                color: resendResult[issue.id].startsWith("✅") ? "var(--color-success-fg)" : "var(--color-danger-fg)" }}>
                                 {resendResult[issue.id]}
                               </td>
                             </tr>
@@ -2805,7 +2805,7 @@ export default function NewsletterPage() {
                                         display: "flex", alignItems: "center", gap: 5,
                                         padding: "6px 14px", borderRadius: 6, border: "none",
                                         background: checked.size === 0 ? "var(--surface-container-highest)" : "var(--primary)",
-                                        color: checked.size === 0 ? "var(--on-surface-variant)" : "#fff",
+                                        color: checked.size === 0 ? "var(--on-surface-variant)" : "var(--color-on-fill)",
                                         fontWeight: 700, fontSize: 13,
                                         cursor: (resendingId === issue.id || checked.size === 0) ? "not-allowed" : "pointer",
                                         opacity: resendingId === issue.id ? 0.6 : 1,
@@ -2823,7 +2823,7 @@ export default function NewsletterPage() {
                                       불러오는 중...
                                     </div>
                                   ) : unsent.length === 0 ? (
-                                    <div style={{ padding: "16px 14px", fontSize: 13, color: "#155724", fontWeight: 600 }}>
+                                    <div style={{ padding: "16px 14px", fontSize: 13, color: "var(--color-success-fg)", fontWeight: 600 }}>
                                       ✅ 모든 활성 수신자가 이미 수신했습니다.
                                     </div>
                                   ) : (
@@ -2834,8 +2834,8 @@ export default function NewsletterPage() {
                                         const isAddrErr = !isTimeout && !!err;
                                         const errLabel = isTimeout ? "재시도가능" : isAddrErr ? "주소오류" : null;
                                         const errStyle = isAddrErr
-                                          ? { background: "#F8D7DA", color: "#721C24" }
-                                          : { background: "#FFF3CD", color: "#856404" };
+                                          ? { background: "var(--color-danger-bg)", color: "var(--color-danger-fg)" }
+                                          : { background: "var(--color-warning-bg)", color: "var(--color-warning-fg)" };
                                         return (
                                           <div key={u.email} style={{
                                             display: "flex", alignItems: "center", gap: 8,
@@ -2866,8 +2866,8 @@ export default function NewsletterPage() {
                                                 disabled={deactivating === u.id}
                                                 title="구독 비활성화"
                                                 style={{
-                                                  flexShrink: 0, padding: "2px 7px", borderRadius: 4, border: "1px solid #F8D7DA",
-                                                  background: "transparent", color: "#721C24", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                                                  flexShrink: 0, padding: "2px 7px", borderRadius: 4, border: "1px solid var(--color-danger-bg)",
+                                                  background: "transparent", color: "var(--color-danger-fg)", fontSize: 11, fontWeight: 600, cursor: "pointer",
                                                   opacity: deactivating === u.id ? 0.5 : 1,
                                                 }}
                                               >
@@ -2905,7 +2905,7 @@ export default function NewsletterPage() {
                 {selectedIssue && (
                   <div style={{ marginTop: 12, background: "var(--surface-container)", borderRadius: 8, padding: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: logMode === "failed" ? "#c0392b" : "var(--on-surface)" }}>
+                      <p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: logMode === "failed" ? "var(--color-danger)" : "var(--on-surface)" }}>
                         Vol.{selectedIssue.vol_number} {logMode === "failed" ? "실패 내역" : "전체 발송 내역"}
                       </p>
                       <button
@@ -2935,14 +2935,14 @@ export default function NewsletterPage() {
                                 <td style={{ ...tdStyle, fontSize: 12, textAlign: "center" }}>
                                   <span style={{
                                     display: "inline-block", padding: "1px 7px", borderRadius: 4, fontSize: 11, fontWeight: 600,
-                                    background: log.status === "success" ? "#D4EDDA" : "#F8D7DA",
-                                    color: log.status === "success" ? "#155724" : "#721C24",
+                                    background: log.status === "success" ? "var(--color-success-bg)" : "var(--color-danger-bg)",
+                                    color: log.status === "success" ? "var(--color-success-fg)" : "var(--color-danger-fg)",
                                   }}>
                                     {log.status === "success" ? "성공" : "실패"}
                                   </span>
                                 </td>
                                 {logMode === "all" && (
-                                  <td style={{ ...tdStyle, fontSize: 12, color: "#c0392b" }}>{log.error_message ?? "-"}</td>
+                                  <td style={{ ...tdStyle, fontSize: 12, color: "var(--color-danger)" }}>{log.error_message ?? "-"}</td>
                                 )}
                                 <td style={{ ...tdStyle, fontSize: 12, whiteSpace: "nowrap" }}>
                                   {log.sent_at ? new Date(log.sent_at).toLocaleString("ko-KR") : "-"}
@@ -3131,8 +3131,8 @@ export default function NewsletterPage() {
             {/* 상태 카드 */}
             <div style={{ ...cardStyle, display: "flex", alignItems: "center", gap: 16 }}>
               {gmailStatus === "loading" && <Loader2 size={20} style={{ animation: "spin 1s linear infinite", color: "var(--on-surface-variant)" }} />}
-              {gmailStatus === "connected" && <CheckCircle size={20} color="#2e7d32" />}
-              {gmailStatus === "disconnected" && <XCircle size={20} color="#c62828" />}
+              {gmailStatus === "connected" && <CheckCircle size={20} style={{ color: "var(--color-success)" }} />}
+              {gmailStatus === "disconnected" && <XCircle size={20} style={{ color: "var(--color-danger)" }} />}
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14, marginBottom: 2 }}>
                   {gmailStatus === "loading" && "확인 중..."}

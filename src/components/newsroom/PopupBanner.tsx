@@ -241,7 +241,7 @@ export default function PopupBanner({
             <div ref={tooltipClamp.ref} style={{
               position: "absolute", bottom: "100%", ...tooltipClamp.style,
               marginBottom: 8, padding: "10px 14px", width: "max-content", maxWidth: "min(280px, 90vw)",
-              background: "rgba(0,0,0,0.85)", color: "#fff",
+              background: "rgba(0,0,0,0.85)", color: "var(--color-on-fill)",
               fontSize: "clamp(0.8rem, 3.2vw, 0.92rem)", fontWeight: 500, lineHeight: 1.55, borderRadius: 10,
               whiteSpace: "pre-wrap", textAlign: "center", wordBreak: "keep-all",
               pointerEvents: "none", zIndex: 901,
@@ -281,7 +281,7 @@ export default function PopupBanner({
     ) : (
       <span style={{
         display: "block", padding: "12px 18px", fontSize: "0.85rem", fontWeight: 700,
-        color: "#fff", background: "var(--primary)", borderRadius: 999, whiteSpace: "nowrap",
+        color: "var(--color-on-fill)", background: "var(--primary)", borderRadius: 999, whiteSpace: "nowrap",
       }}>
         {effectiveContent}
       </span>
@@ -308,7 +308,7 @@ export default function PopupBanner({
           <div ref={tooltipClamp.ref} style={{
             position: "absolute", bottom: "100%", ...tooltipClamp.style,
             marginBottom: 8, padding: "10px 14px", width: "max-content", maxWidth: "min(260px, 78vw)",
-            background: "rgba(0,0,0,0.85)", color: "#fff",
+            background: "rgba(0,0,0,0.85)", color: "var(--color-on-fill)",
             fontSize: "clamp(0.8rem, 3.2vw, 0.92rem)", fontWeight: 500, lineHeight: 1.55, borderRadius: 10,
             whiteSpace: "pre-wrap", textAlign: "center", wordBreak: "keep-all",
             pointerEvents: "none", zIndex: 901,
@@ -330,7 +330,7 @@ export default function PopupBanner({
           style={{
             position: "absolute", top: -8, right: -8, width: 20, height: 20,
             borderRadius: "50%", border: "1px solid var(--surface-container-highest)",
-            background: "#fff", color: "var(--on-surface-variant)",
+            background: "var(--surface-container-lowest)", color: "var(--on-surface-variant)",
             fontSize: 12, lineHeight: 1, cursor: "pointer",
             display: "flex", alignItems: "center", justifyContent: "center",
             boxShadow: "0 1px 4px rgba(0,0,0,0.25)", zIndex: 903, padding: 0,
@@ -358,7 +358,7 @@ export default function PopupBanner({
         onClick={(e) => e.stopPropagation()}
         style={{
           position: "fixed", ...modalPlace,
-          background: "#fff",
+          background: "var(--surface-container-lowest)",
           borderRadius: 12,
           overflow: "hidden",
           width: `min(${sizePx}px, calc(100vw - 40px))`,

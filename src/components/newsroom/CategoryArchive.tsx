@@ -158,7 +158,7 @@ export default function CategoryArchive({ category, items: initialItems }: Props
                 onClick={() => setLevelFilter(lv)}
                 className="px-3 py-1 rounded-md text-[0.7rem] font-semibold tracking-wide transition-all"
                 style={{
-                  background: isActive ? "#ffffff" : "transparent",
+                  background: isActive ? "var(--surface-container-lowest)" : "transparent",
                   color: isActive ? "var(--on-surface)" : "var(--on-surface-variant)",
                   border: "none",
                   cursor: "pointer",

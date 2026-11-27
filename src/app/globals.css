@@ -9,6 +9,7 @@
   /* Surface hierarchy */
   --surface:                  #f9f9fa;
   --surface-container-low:    #f3f3f4;
+  --surface-container:        #efeff0;   /* low와 high의 중간 — 이전엔 정의가 없어 41곳이 투명으로 렌더됨 */
   --surface-container-high:   #ebebec;
   --surface-container-highest:#e2e2e3;
   --surface-container-lowest: #ffffff;
@@ -24,6 +25,28 @@
 
   /* Outline */
   --outline-variant:    #c8c5ca;
+
+  /* 상태색 — 같은 의미의 색을 하나로 모은 토큰. 화면 코드에서는 hex 대신 이것만 쓴다.
+     fill = 아이콘·버튼·강조 글자, bg = 연한 배경, fg = 연한 배경 위 글자.
+     연한 투명도가 필요하면 color-mix(in srgb, var(--color-danger) 10%, transparent) 로 만든다. */
+  --color-danger:       #dc2626;
+  --color-danger-bg:    #fee2e2;
+  --color-danger-fg:    #991b1b;
+  --color-success:      #16a34a;
+  --color-success-bg:   #e7f6ec;
+  --color-success-fg:   #166534;
+  --color-warning:      #d97706;
+  --color-warning-bg:   #fef3c7;
+  --color-warning-fg:   #92400e;
+  --color-info:         #2563eb;
+  --color-info-bg:      #eef4ff;
+  --color-info-fg:      #1d4ed8;
+  --color-on-fill:      #ffffff;   /* 색이 채워진 버튼·배지 위의 글자색 */
+  --color-neutral:      #64748b;   /* 보조 회색 글자·아이콘 */
+  --color-neutral-soft: #94a3b8;
+  --color-chart-1:      #7c3aed;   /* 보조 강조색(보라·인디고·청록) — 쓰임이 적어 차트용으로 묶음 */
+  --color-chart-2:      #6366f1;
+  --color-chart-3:      #0891b2;
 
   /* shadcn token mapping */
   --background:         var(--surface);
@@ -71,6 +94,7 @@
   /* newsroom custom */
   --color-surface:                var(--surface);
   --color-surface-low:            var(--surface-container-low);
+  --color-surface-mid:            var(--surface-container);
   --color-surface-high:           var(--surface-container-high);
   --color-surface-highest:        var(--surface-container-highest);
   --color-surface-lowest:         var(--surface-container-lowest);

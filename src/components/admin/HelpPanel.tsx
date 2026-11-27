@@ -178,7 +178,7 @@ export function Section({ title, n, children }: { title: string; n?: number; chi
 export function Step({ n, text }: { n: number; text: string }) {
   return (
     <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
-      <span style={{ minWidth: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "#fff",
+      <span style={{ minWidth: 22, height: 22, borderRadius: "50%", background: "var(--primary)", color: "var(--color-on-fill)",
         fontSize: 12, fontWeight: 700, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
         {n}
       </span>

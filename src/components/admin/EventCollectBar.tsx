@@ -231,7 +231,7 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <span style={muted}>
           {lastRun
-            ? <>마지막 수집 {fmtTime(lastRun.at)} · {lastRun.failed.length ? <b style={{ color: "#dc2626" }}>실패 {lastRun.failed.length}건</b> : "실패 없음"} · </>
+            ? <>마지막 수집 {fmtTime(lastRun.at)} · {lastRun.failed.length ? <b style={{ color: "var(--color-danger)" }}>실패 {lastRun.failed.length}건</b> : "실패 없음"} · </>
             : <>수집 기록 없음 · </>}
           다음 자동 수집 {nextAutoRun()}
           {trackMeta?.at ? ` · 수행실적 기준일 ${new Date(trackMeta.at).toLocaleDateString("ko-KR", { timeZone: "Asia/Seoul", month: "numeric", day: "numeric" })}` : " · 수행실적 미반영"}
@@ -242,7 +242,7 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
             disabled={running}
             style={{
               display: "inline-flex", alignItems: "center", gap: 6, padding: "7px 14px", borderRadius: 8, fontSize: "0.8rem", fontWeight: 700,
-              border: "none", background: "var(--primary)", color: "#fff", cursor: running ? "wait" : "pointer", opacity: running ? 0.7 : 1,
+              border: "none", background: "var(--primary)", color: "var(--color-on-fill)", cursor: running ? "wait" : "pointer", opacity: running ? 0.7 : 1,
             }}
           >
             {running ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -270,7 +270,7 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
             <span style={{ display: "flex", gap: 14, alignItems: "center" }}>
               {SOURCES.map((s) => (
                 <span key={s.key} style={{ display: "inline-flex", alignItems: "center", gap: 4, color: doneSrc.has(s.key) ? "var(--on-surface)" : "var(--on-surface-variant)" }}>
-                  {doneSrc.has(s.key) ? <Check size={13} color="#059669" /> : <Loader2 size={13} className="animate-spin" />}
+                  {doneSrc.has(s.key) ? <Check size={13} style={{ color: "var(--color-success)" }} /> : <Loader2 size={13} className="animate-spin" />}
                   {s.label}{doneSrc.has(s.key) ? "" : " 수집 중"}
                 </span>
               ))}
@@ -285,7 +285,7 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
             </span>
           )}
           {!running && status === "error" && (
-            <span style={{ color: "#dc2626" }}>
+            <span style={{ color: "var(--color-danger)" }}>
               <X size={13} style={{ display: "inline", verticalAlign: -2 }} /> 일부 소스 수집에 실패했습니다
               {lastRun?.failed.map((l) => ` · ${l.source ? sourceLabel(l.source) : "전체"}: ${l.error ?? "오류"}`).join("")}
             </span>
@@ -314,26 +314,26 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface-container)", fontSize: "0.75rem", lineHeight: 1.7 }}>
                 행사형 수행실적 <b>{trackPreview.event_rows}건</b> (전체 {trackPreview.total_rows}건 중 놀이터·플랫폼·연구용역 제외) · 인식한 기관 <b>{trackPreview.org_count}곳</b>
-                <br />이전 반영본 대비 신규 <b style={{ color: "#10b981" }}>{trackPreview.added_count}곳</b> · 빠짐 <b style={{ color: "#d97706" }}>{trackPreview.removed_count}곳</b>
+                <br />이전 반영본 대비 신규 <b style={{ color: "var(--color-success)" }}>{trackPreview.added_count}곳</b> · 빠짐 <b style={{ color: "var(--color-warning)" }}>{trackPreview.removed_count}곳</b>
                 <br /><span style={{ color: "var(--on-surface-variant)" }}>상위: {trackPreview.top.join(", ")}</span>
                 {trackPreview.added_sample.length > 0 && <><br /><span style={{ color: "var(--on-surface-variant)" }}>신규 예: {trackPreview.added_sample.join(", ")}</span></>}
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={resetTrack} style={sub(false)}>취소</button>
-                <button onClick={applyTrack} style={{ ...sub(false), background: "var(--primary)", color: "#fff", border: "none" }}>점수에 반영</button>
+                <button onClick={applyTrack} style={{ ...sub(false), background: "var(--primary)", color: "var(--color-on-fill)", border: "none" }}>점수에 반영</button>
               </div>
             </div>
           )}
           {trackStatus === "running" && <p style={{ ...muted, margin: 0 }}>반영 중…</p>}
           {trackStatus === "done" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: 0, fontSize: "0.75rem", color: "#059669", fontWeight: 600 }}>{trackMsg}</p>
+              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-success)", fontWeight: 600 }}>{trackMsg}</p>
               <button onClick={resetTrack} style={{ ...sub(false), alignSelf: "flex-start" }}>다른 파일 올리기</button>
             </div>
           )}
           {trackStatus === "error" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: 0, fontSize: "0.75rem", color: "#dc2626" }}>{trackMsg}</p>
+              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-danger)" }}>{trackMsg}</p>
               <button onClick={resetTrack} style={{ ...sub(false), alignSelf: "flex-start" }}>다시 시도</button>
             </div>
           )}
@@ -362,10 +362,10 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ padding: "10px 12px", borderRadius: 8, background: "var(--surface-container)", fontSize: "0.75rem" }}>
                 <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                  <span>신규 <b style={{ color: "#10b981" }}>{importPreview.new_count}건</b></span>
-                  <span>보강 <b style={{ color: "#f59e0b" }}>{importPreview.merge_count}건</b></span>
-                  <span>스킵 <b style={{ color: "#94a3b8" }}>{importPreview.skip_count}건</b></span>
-                  {!!importPreview.dropped_count && <span>규칙 제외 <b style={{ color: "#d97706" }}>{importPreview.dropped_count}건</b></span>}
+                  <span>신규 <b style={{ color: "var(--color-success)" }}>{importPreview.new_count}건</b></span>
+                  <span>보강 <b style={{ color: "var(--color-warning)" }}>{importPreview.merge_count}건</b></span>
+                  <span>스킵 <b style={{ color: "var(--color-neutral-soft)" }}>{importPreview.skip_count}건</b></span>
+                  {!!importPreview.dropped_count && <span>규칙 제외 <b style={{ color: "var(--color-warning)" }}>{importPreview.dropped_count}건</b></span>}
                 </div>
                 {importPreview.preview_new.slice(0, 5).map((r, i) => (
                   <p key={i} style={{ margin: "3px 0 0", fontSize: "0.68rem", color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>신규 · {r.name} · {r.date}</p>
@@ -378,7 +378,7 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button onClick={resetImport} style={sub(false)}>취소</button>
-                <button onClick={runImport} style={{ ...sub(false), background: "var(--primary)", color: "#fff", border: "none" }}>가져오기 실행</button>
+                <button onClick={runImport} style={{ ...sub(false), background: "var(--primary)", color: "var(--color-on-fill)", border: "none" }}>가져오기 실행</button>
               </div>
             </div>
           )}
@@ -386,13 +386,13 @@ export default function EventCollectBar({ pendingCount, onReloadEvents, onScrape
           {importStatus === "running" && <p style={{ ...muted, margin: 0 }}>가져오는 중…</p>}
           {importStatus === "done" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: 0, fontSize: "0.75rem", color: "#059669", fontWeight: 600 }}>{importMsg}</p>
+              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-success)", fontWeight: 600 }}>{importMsg}</p>
               <button onClick={resetImport} style={{ ...sub(false), alignSelf: "flex-start" }}>다시 가져오기</button>
             </div>
           )}
           {importStatus === "error" && (
             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              <p style={{ margin: 0, fontSize: "0.75rem", color: "#dc2626" }}>{importMsg}</p>
+              <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--color-danger)" }}>{importMsg}</p>
               <button onClick={resetImport} style={{ ...sub(false), alignSelf: "flex-start" }}>다시 시도</button>
             </div>
           )}

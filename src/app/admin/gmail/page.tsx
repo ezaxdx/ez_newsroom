@@ -37,7 +37,7 @@ export default function GmailPage() {
 
       {/* 상태 카드 */}
       <div style={{
-        border: "1px solid var(--outline-variant, #e0e0e0)",
+        border: "1px solid var(--outline-variant, var(--surface-container-highest))",
         borderRadius: 12,
         padding: "24px",
         marginBottom: 24,
@@ -46,8 +46,8 @@ export default function GmailPage() {
         gap: 16,
       }}>
         {status === "loading" && <Loader2 size={20} style={{ animation: "spin 1s linear infinite" }} />}
-        {status === "connected" && <CheckCircle size={20} color="#2e7d32" />}
-        {status === "disconnected" && <XCircle size={20} color="#c62828" />}
+        {status === "connected" && <CheckCircle size={20} style={{ color: "var(--color-success)" }} />}
+        {status === "disconnected" && <XCircle size={20} style={{ color: "var(--color-danger)" }} />}
         <div>
           <div style={{ fontWeight: 600, marginBottom: 4 }}>
             {status === "loading" && "확인 중..."}
@@ -55,7 +55,7 @@ export default function GmailPage() {
             {status === "disconnected" && "연동 안 됨"}
           </div>
           {updatedAt && (
-            <div style={{ fontSize: 13, color: "var(--on-surface-variant, #666)" }}>
+            <div style={{ fontSize: 13, color: "var(--on-surface-variant, var(--on-surface-variant))" }}>
               마지막 인증: {new Date(updatedAt).toLocaleString("ko-KR", { timeZone: "Asia/Seoul" })}
             </div>
           )}
@@ -68,8 +68,8 @@ export default function GmailPage() {
         alignItems: "center",
         gap: 8,
         padding: "12px 24px",
-        background: status === "connected" ? "var(--surface-container, #f5f5f5)" : "var(--on-surface, #1a1a1a)",
-        color: status === "connected" ? "var(--on-surface, #1a1a1a)" : "var(--surface, #fff)",
+        background: status === "connected" ? "var(--surface-container)" : "var(--on-surface)",
+        color: status === "connected" ? "var(--on-surface)" : "var(--surface)",
         borderRadius: 8,
         fontSize: 14,
         fontWeight: 500,
@@ -82,14 +82,14 @@ export default function GmailPage() {
 
       {/* 사용 방법 */}
       <div style={{
-        background: "var(--surface-container-low, #fafafa)",
+        background: "var(--surface-container-low)",
         borderRadius: 12,
         padding: "20px 24px",
         fontSize: 14,
         lineHeight: 1.7,
-        color: "var(--on-surface-variant, #555)",
+        color: "var(--on-surface-variant, var(--on-surface-variant))",
       }}>
-        <div style={{ fontWeight: 600, marginBottom: 12, color: "var(--on-surface, #111)" }}>설정 방법</div>
+        <div style={{ fontWeight: 600, marginBottom: 12, color: "var(--on-surface, var(--on-surface))" }}>설정 방법</div>
         <ol style={{ margin: 0, paddingLeft: 20 }}>
           <li>아래 전제조건을 먼저 완료하세요.</li>
           <li>위 "Google 계정으로 인증" 클릭 → Gmail 권한 허용 (읽기·발송 권한을 요청하며, 현재는 뉴스레터 발송에만 사용됩니다)</li>
@@ -97,13 +97,13 @@ export default function GmailPage() {
           <li>토큰이 만료되면 이 페이지(또는 뉴스레터 관리 &gt; Gmail 연동 탭)에서 다시 인증하세요</li>
         </ol>
 
-        <div style={{ marginTop: 20, fontWeight: 600, color: "var(--on-surface, #111)" }}>전제조건 (1회)</div>
+        <div style={{ marginTop: 20, fontWeight: 600, color: "var(--on-surface, var(--on-surface))" }}>전제조건 (1회)</div>
         <ol style={{ margin: "8px 0 0", paddingLeft: 20 }}>
           <li><a href="https://console.cloud.google.com/" target="_blank" rel="noreferrer" style={{ color: "inherit" }}>Google Cloud Console</a> → 프로젝트 생성</li>
           <li>Gmail API 활성화</li>
           <li>OAuth 2.0 클라이언트 ID 생성 (웹 애플리케이션 유형)</li>
-          <li>승인된 리디렉션 URI: <code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>http://localhost:3000/api/gmail/callback</code></li>
-          <li><code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>.env.local</code>에 <code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>GMAIL_CLIENT_ID</code>, <code style={{ background: "#eee", padding: "1px 6px", borderRadius: 4 }}>GMAIL_CLIENT_SECRET</code> 입력</li>
+          <li>승인된 리디렉션 URI: <code style={{ background: "var(--surface-container-highest)", padding: "1px 6px", borderRadius: 4 }}>http://localhost:3000/api/gmail/callback</code></li>
+          <li><code style={{ background: "var(--surface-container-highest)", padding: "1px 6px", borderRadius: 4 }}>.env.local</code>에 <code style={{ background: "var(--surface-container-highest)", padding: "1px 6px", borderRadius: 4 }}>GMAIL_CLIENT_ID</code>, <code style={{ background: "var(--surface-container-highest)", padding: "1px 6px", borderRadius: 4 }}>GMAIL_CLIENT_SECRET</code> 입력</li>
         </ol>
       </div>
 

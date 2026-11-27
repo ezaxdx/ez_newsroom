@@ -97,8 +97,8 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
                     fontWeight: 700,
                     letterSpacing: "0.06em",
                     textTransform: "uppercase" as const,
-                    background: "#000",
-                    color: "#fff",
+                    background: "var(--primary)",
+                    color: "var(--color-on-fill)",
                   }}
                 >
                   {item.category}
@@ -114,7 +114,7 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
                       letterSpacing: "0.05em",
                       textTransform: "uppercase" as const,
                       background: LEVEL_STYLE_DARK[item.level]?.bg ?? "rgba(255,255,255,0.18)",
-                      color: "#fff",
+                      color: "var(--color-on-fill)",
                       backdropFilter: "blur(4px)",
                       border: "1px solid rgba(255,255,255,0.25)",
                     }}
@@ -131,7 +131,7 @@ export default function HeroCarousel({ slides, onOpen }: Props) {
                   fontWeight: 800,
                   lineHeight: 1.2,
                   letterSpacing: "-0.02em",
-                  color: "#fff",
+                  color: "var(--color-on-fill)",
                   fontSize: rows === 1
                     ? "clamp(1.5rem, 2.2vw, 2.2rem)"
                     : "clamp(0.95rem, 1.4vw, 1.25rem)",

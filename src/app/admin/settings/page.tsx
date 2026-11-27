@@ -25,8 +25,8 @@ const DEFAULT_LEVEL_PROMPTS: LevelPrompts = {
 
 const LEVEL_BADGE: Record<string, { bg: string; color: string }> = {
   Beginner: { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-  Intermediate: { bg: "rgba(26,28,29,0.75)", color: "#fff" },
-  Advanced: { bg: "var(--primary)", color: "#fff" },
+  Intermediate: { bg: "rgba(26,28,29,0.75)", color: "var(--color-on-fill)" },
+  Advanced: { bg: "var(--primary)", color: "var(--color-on-fill)" },
 };
 
 // 기존 하드코딩 프리셋 → 마이그레이션 시 사용
@@ -239,7 +239,7 @@ export default function SettingsPage() {
           onClick={handleSave}
           disabled={saving}
           className="flex items-center gap-2 h-9 px-5 rounded-md text-sm font-semibold transition-all hover:opacity-80 disabled:opacity-50"
-          style={{ background: saved ? "#16a34a" : "var(--primary)", color: "#fff" }}
+          style={{ background: saved ? "var(--color-success)" : "var(--primary)", color: "var(--color-on-fill)" }}
         >
           {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
           {saving ? "저장 중..." : saved ? "저장됨 ✓" : "전체 저장"}
@@ -302,7 +302,7 @@ export default function SettingsPage() {
             <button
               onClick={addCategory}
               className="flex items-center gap-1 h-8 px-3 rounded-md text-sm font-semibold transition-opacity hover:opacity-80"
-              style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+              style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}
             >
               <Plus size={13} /> 추가
             </button>
@@ -313,12 +313,12 @@ export default function SettingsPage() {
           {navCategories.map((cat) => (
             <span key={cat}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold tracking-wide uppercase"
-              style={{ background: "var(--primary)", color: "#fff" }}
+              style={{ background: "var(--primary)", color: "var(--color-on-fill)" }}
             >
               {cat}
               <button onClick={() => removeCategory(cat)}
                 style={{ background: "transparent", border: "none", cursor: "pointer", padding: 0, display: "flex", opacity: 0.8 }}>
-                <X size={11} color="#fff" />
+                <X size={11} style={{ color: "var(--color-on-fill)" }} />
               </button>
             </span>
           ))}
@@ -377,7 +377,7 @@ export default function SettingsPage() {
                       className="w-9 h-9 rounded-full text-xs font-bold transition-all"
                       style={{
                         background: isOn ? "var(--primary)" : "var(--surface-container-highest)",
-                        color: isOn ? "#fff" : "var(--on-surface-variant)",
+                        color: isOn ? "var(--color-on-fill)" : "var(--on-surface-variant)",
                         border: "none", cursor: "pointer",
                       }}
                     >
@@ -512,7 +512,7 @@ export default function SettingsPage() {
                       className="px-3 py-1.5 text-xs font-semibold transition-colors"
                       style={{
                         background: "transparent",
-                        color: current.persona === preset.prompt ? "#fff" : "var(--on-surface-variant)",
+                        color: current.persona === preset.prompt ? "var(--color-on-fill)" : "var(--on-surface-variant)",
                         border: "none", cursor: "pointer",
                       }}
                     >
@@ -527,7 +527,7 @@ export default function SettingsPage() {
                       }}
                       title="프리셋 삭제"
                     >
-                      <X size={11} style={{ color: current.persona === preset.prompt ? "#fff" : "var(--on-surface-variant)" }} />
+                      <X size={11} style={{ color: current.persona === preset.prompt ? "var(--color-on-fill)" : "var(--on-surface-variant)" }} />
                     </button>
                   </div>
                 ))}
@@ -579,7 +579,7 @@ export default function SettingsPage() {
                       onClick={addPreset}
                       disabled={!newPresetLabel.trim() || !newPresetPrompt.trim()}
                       className="flex items-center gap-1 h-7 px-3 rounded-md text-xs font-semibold disabled:opacity-40"
-                      style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+                      style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}
                     >
                       <Check size={11} /> 추가
                     </button>

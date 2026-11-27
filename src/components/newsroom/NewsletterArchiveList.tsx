@@ -91,7 +91,7 @@ export default function NewsletterArchiveList({ issues }: Props) {
           >
             <div
               className="flex flex-col justify-center px-6 py-8"
-              style={{ background: "linear-gradient(135deg, var(--primary) 0%, #3c5a2e 100%)", color: "#fff", minHeight: 120 }}
+              style={{ background: "linear-gradient(135deg, var(--primary) 0%, #3c5a2e 100%)", color: "var(--color-on-fill)", minHeight: 120 }}
             >
               <span className="text-xs font-semibold tracking-[0.1em] uppercase opacity-80">EZ Letter</span>
               <span className="text-2xl font-bold tracking-tight mt-1">Vol.{String(issue.vol_number).padStart(2, "0")}</span>

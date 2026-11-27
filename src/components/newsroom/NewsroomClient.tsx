@@ -166,7 +166,7 @@ export default function NewsroomClient({
                       fontSize: "0.7rem",
                       fontWeight: 600,
                       letterSpacing: "0.02em",
-                      background: isActive ? "#ffffff" : "transparent",
+                      background: isActive ? "var(--surface-container-lowest)" : "transparent",
                       color: isActive ? "var(--on-surface)" : "var(--on-surface-variant)",
                       border: "none",
                       cursor: "pointer",

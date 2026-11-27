@@ -323,7 +323,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                       borderRadius: "50%",
                       background: isToday
                         ? "rgba(255,255,255,0.7)"
-                        : pickDates.has(cell.dateStr) ? "#f59e0b" : "#7c6ef5",
+                        : pickDates.has(cell.dateStr) ? "var(--color-warning)" : "var(--color-chart-2)",
                     }}
                   />
                 )}
@@ -415,7 +415,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                 {e.is_pick && !e.is_ezpmp_pick && <span style={{
                   display: "inline-block", marginBottom: 3, padding: "1px 5px", borderRadius: 4,
                   fontSize: "0.6rem", fontWeight: 500,
-                  color: "#2563eb", background: "#2563eb12",
+                  color: "var(--color-info)", background: "color-mix(in srgb, var(--color-info) 7%, transparent)",
                 }}>자동 추천</span>}
                 <p
                   style={{
@@ -430,7 +430,7 @@ export default function EventsColumn({ events }: { events: CalendarEvent[] }) {
                     overflow: "hidden",
                   }}
                 >
-                  {e.is_ezpmp_pick && <span title="이즈픽" aria-label="이즈픽" style={{ color: "#f59e0b", marginRight: 3 }}>★</span>}
+                  {e.is_ezpmp_pick && <span title="이즈픽" aria-label="이즈픽" style={{ color: "var(--color-warning)", marginRight: 3 }}>★</span>}
                   {e.event_name}
                 </p>
                 <p

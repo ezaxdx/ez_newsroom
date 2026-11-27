@@ -20,7 +20,7 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
             linear-gradient(to top, rgba(0,0,0,0.88), rgba(0,0,0,0.34) 52%, rgba(0,0,0,0)),
             radial-gradient(circle at 50% 38%, rgba(124,124,124,0.7), rgba(28,27,29,0.94) 70%)
           `,
-          color: "#ffffff",
+          color: "var(--color-on-fill)",
         }}
         onClick={() => onOpen(topNews)}
       >
@@ -33,7 +33,7 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
 
         <span
           className="inline-flex self-start mb-3 px-3 py-1 rounded-full text-xs font-bold tracking-[0.05em] uppercase"
-          style={{ background: "#000", color: "#fff" }}
+          style={{ background: "var(--primary)", color: "var(--color-on-fill)" }}
         >
           TOP NEWS
         </span>
@@ -58,7 +58,7 @@ export default function HeroSection({ topNews, sideNews, onOpen }: Props) {
 
         <button
           className="self-start h-10 px-4 rounded-md text-xs font-bold tracking-[0.04em] uppercase transition-opacity hover:opacity-80"
-          style={{ background: "#fff", color: "#000" }}
+          style={{ background: "var(--surface-container-lowest)", color: "var(--primary)" }}
           onClick={(e) => { e.stopPropagation(); onOpen(topNews); }}
         >
           VIEW INSIGHT →

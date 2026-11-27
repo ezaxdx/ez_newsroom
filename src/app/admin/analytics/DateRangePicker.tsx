@@ -71,7 +71,7 @@ export default function DateRangePicker() {
               height: 32, padding: "0 12px", borderRadius: 6, fontSize: 13,
               fontWeight: active ? 700 : 400, border: "none", cursor: "pointer",
               background: active ? "var(--primary)" : "var(--surface-container-highest)",
-              color: active ? "#fff" : "var(--on-surface-variant)",
+              color: active ? "var(--color-on-fill)" : "var(--on-surface-variant)",
             }}
           >{labels[p]}</button>
         );
@@ -86,7 +86,7 @@ export default function DateRangePicker() {
         style={{
           height: 32, padding: "0 14px", borderRadius: 6, fontSize: 13,
           fontWeight: 600, border: "none", cursor: "pointer",
-          background: "var(--primary)", color: "#fff",
+          background: "var(--primary)", color: "var(--color-on-fill)",
         }}
       >조회</button>
     </div>

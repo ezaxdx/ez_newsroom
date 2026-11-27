@@ -403,10 +403,10 @@ export default function PopupManager() {
                 },
               ].map(({ n, title: t, body }) => (
                 <div key={n} style={{ marginBottom: 14 }}>
-                  <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14, color: "#111" }}>
+                  <p style={{ margin: "0 0 3px", fontWeight: 700, fontSize: 14, color: "var(--on-surface)" }}>
                     {n}. {t}
                   </p>
-                  <p style={{ margin: 0, fontWeight: 400, fontSize: 13, color: "#555", lineHeight: 1.65 }}>
+                  <p style={{ margin: 0, fontWeight: 400, fontSize: 13, color: "var(--on-surface-variant)", lineHeight: 1.65 }}>
                     {body}
                   </p>
                 </div>
@@ -422,7 +422,7 @@ export default function PopupManager() {
           style={{
             display: "flex", alignItems: "center", gap: 4,
             padding: "6px 14px", borderRadius: 6, border: "none",
-            background: "var(--primary)", color: "#fff",
+            background: "var(--primary)", color: "var(--color-on-fill)",
             fontWeight: 600, fontSize: 13, cursor: "pointer",
           }}
         >
@@ -507,7 +507,7 @@ export default function PopupManager() {
                       {live && (
                         <span style={{
                           marginLeft: 6, padding: "1px 6px", borderRadius: 4, fontSize: 10,
-                          fontWeight: 700, background: "var(--primary)", color: "#fff",
+                          fontWeight: 700, background: "var(--primary)", color: "var(--color-on-fill)",
                         }}>노출중</span>
                       )}
                     </td>
@@ -532,7 +532,7 @@ export default function PopupManager() {
                           border: "1px solid",
                           borderColor: p.is_active ? "var(--primary)" : "var(--surface-container-highest)",
                           background: p.is_active ? "var(--primary)" : "transparent",
-                          color: p.is_active ? "#fff" : "var(--on-surface-variant)",
+                          color: p.is_active ? "var(--color-on-fill)" : "var(--on-surface-variant)",
                           cursor: "pointer",
                         }}
                       >
@@ -545,7 +545,7 @@ export default function PopupManager() {
                         수정
                       </button>
                       <button onClick={() => handleDelete(p)}
-                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "#dc2626", textDecoration: "underline", padding: "0 4px" }}>
+                        style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "var(--color-danger)", textDecoration: "underline", padding: "0 4px" }}>
                         삭제
                       </button>
                     </td>
@@ -628,7 +628,7 @@ export default function PopupManager() {
               </label>
               {form.image_url && (
                 <button onClick={() => setForm((f) => ({ ...f, image_url: "" }))}
-                  style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "#dc2626", textDecoration: "underline", padding: 0 }}>
+                  style={{ marginTop: 4, background: "none", border: "none", cursor: "pointer", fontSize: 11, color: "var(--color-danger)", textDecoration: "underline", padding: 0 }}>
                   이미지 제거
                 </button>
               )}
@@ -651,7 +651,7 @@ export default function PopupManager() {
               <button onClick={() => setPreviewOpen(true)} disabled={!form.image_url && !form.content.trim()}
                 style={{
                   padding: "8px 16px", borderRadius: 6, border: "none",
-                  background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                  background: "var(--primary)", color: "var(--color-on-fill)", cursor: "pointer", fontSize: 13, fontWeight: 700,
                   opacity: !form.image_url && !form.content.trim() ? 0.4 : 1,
                 }}>
                 미리보기에서 위치·크기 조정
@@ -709,7 +709,7 @@ export default function PopupManager() {
               <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 5 }}>
                 날짜별 문구 오버라이드 <span style={{ fontWeight: 400 }}>(선택)</span>
                 <SectionInfoModal title="날짜별 문구 오버라이드 안내">
-                  <p style={{ margin: 0, fontWeight: 400, fontSize: 13, color: "#555", lineHeight: 1.65 }}>
+                  <p style={{ margin: 0, fontWeight: 400, fontSize: 13, color: "var(--on-surface-variant)", lineHeight: 1.65 }}>
                     하루만 다르게 하려면 시작·종료를 같은 날로, 여러 날 이어지면 기간으로 지정하세요.
                     <br /><br />
                     예: 게시기간이 8/4~8/6이고 실제 참여는 4일·6일만 가능하면, 8/5(하루)에만 &quot;6일부터 다시 참여 가능합니다&quot;처럼 다르게 띄울 수 있음
@@ -771,7 +771,7 @@ export default function PopupManager() {
               사용여부 (켜야 노출됩니다)
             </label>
 
-            {error && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#dc2626" }}>{error}</p>}
+            {error && <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--color-danger)" }}>{error}</p>}
 
             <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => setShowModal(false)}
@@ -779,7 +779,7 @@ export default function PopupManager() {
                 취소
               </button>
               <button onClick={handleSave} disabled={saving || uploading}
-                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: saving || uploading ? 0.6 : 1 }}>
+                style={{ padding: "7px 16px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", cursor: "pointer", fontSize: 13, fontWeight: 600, opacity: saving || uploading ? 0.6 : 1 }}>
                 {saving ? "저장 중..." : "저장"}
               </button>
             </div>
@@ -803,12 +803,12 @@ export default function PopupManager() {
         ) : isFloatingPreview ? (
           <span style={{
             display: "block", padding: "12px 18px", fontSize: "0.85rem", fontWeight: 700,
-            color: "#fff", background: "var(--primary)", borderRadius: 999, whiteSpace: "nowrap",
+            color: "var(--color-on-fill)", background: "var(--primary)", borderRadius: 999, whiteSpace: "nowrap",
           }}>
             {form.content}
           </span>
         ) : (
-          <p style={{ margin: 0, padding: "18px 20px", fontSize: "0.9rem", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "#fff" }}>
+          <p style={{ margin: 0, padding: "18px 20px", fontSize: "0.9rem", lineHeight: 1.7, whiteSpace: "pre-wrap", background: "var(--surface-container-lowest)" }}>
             {form.content}
           </p>
         );
@@ -833,7 +833,7 @@ export default function PopupManager() {
             <div style={{
               position: "fixed", top: 16, left: 16, zIndex: 2100,
               display: "flex", alignItems: "center", gap: 10,
-              padding: "8px 14px", borderRadius: 8, background: "#fff",
+              padding: "8px 14px", borderRadius: 8, background: "var(--surface-container-lowest)",
               boxShadow: "0 4px 16px rgba(0,0,0,0.3)",
             }}>
               <span style={{ fontSize: 13, fontWeight: 700 }}>미리보기</span>
@@ -843,7 +843,7 @@ export default function PopupManager() {
                 {" · 끌어서 이동, 모서리로 크기 조절"}
               </span>
               <button onClick={() => setPreviewOpen(false)}
-                style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                style={{ padding: "5px 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
                 닫기
               </button>
             </div>
@@ -869,7 +869,7 @@ export default function PopupManager() {
                   title="드래그해서 크기 조절"
                   style={{
                     position: "absolute", right: -6, bottom: -6, width: 18, height: 18,
-                    borderRadius: "50%", background: "var(--primary)", border: "2px solid #fff",
+                    borderRadius: "50%", background: "var(--primary)", border: "2px solid var(--surface-container-lowest)",
                     cursor: "nwse-resize", boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
                   }}
                 />
@@ -879,7 +879,7 @@ export default function PopupManager() {
                 <div
                   onMouseDown={(e) => startDrag("move", e)}
                   style={{
-                    background: "#fff", borderRadius: 12, overflow: "hidden",
+                    background: "var(--surface-container-lowest)", borderRadius: 12, overflow: "hidden",
                     maxHeight: "90vh", overflowY: "auto",
                     boxShadow: "0 12px 40px rgba(0,0,0,0.25)",
                     cursor: dragState?.mode === "move" ? "grabbing" : "grab",
@@ -905,7 +905,7 @@ export default function PopupManager() {
                   title="드래그해서 크기 조절"
                   style={{
                     position: "absolute", right: -6, bottom: -6, width: 18, height: 18,
-                    borderRadius: "50%", background: "var(--primary)", border: "2px solid #fff",
+                    borderRadius: "50%", background: "var(--primary)", border: "2px solid var(--surface-container-lowest)",
                     cursor: "nwse-resize", boxShadow: "0 1px 4px rgba(0,0,0,0.4)",
                   }}
                 />

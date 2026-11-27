@@ -22,8 +22,8 @@ function formatDate(iso: string) {
 
 const LEVEL_STYLE: Record<string, { bg: string; color: string }> = {
   Beginner:     { bg: "var(--surface-container-highest)", color: "var(--on-surface-variant)" },
-  Intermediate: { bg: "rgba(26,28,29,0.72)",              color: "#fff" },
-  Advanced:     { bg: "var(--primary)",                   color: "#fff" },
+  Intermediate: { bg: "rgba(26,28,29,0.72)",              color: "var(--color-on-fill)" },
+  Advanced:     { bg: "var(--primary)",                   color: "var(--color-on-fill)" },
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -42,7 +42,7 @@ function highlight(text: string, query: string) {
         regex.test(part) ? (
           <mark
             key={i}
-            style={{ background: "rgba(var(--primary-rgb,26,115,232),0.18)", color: "inherit", borderRadius: "2px", padding: "0 1px" }}
+            style={{ background: "color-mix(in srgb, var(--color-info) 18%, transparent)", color: "inherit", borderRadius: "2px", padding: "0 1px" }}
           >
             {part}
           </mark>
@@ -121,7 +121,7 @@ export default function SearchResults({ items, query }: Props) {
                     className="px-2 py-0.5 rounded-full text-[0.6rem] font-bold tracking-[0.05em] uppercase"
                     style={{
                       background: CATEGORY_COLORS[item.category] ?? "var(--surface-container-highest)",
-                      color: CATEGORY_COLORS[item.category] ? "#fff" : "var(--on-surface-variant)",
+                      color: CATEGORY_COLORS[item.category] ? "var(--color-on-fill)" : "var(--on-surface-variant)",
                     }}
                   >
                     {item.category}

@@ -224,13 +224,13 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
                 <button key={k} onClick={() => setTab(k)} style={{
                   padding: "5px 12px", borderRadius: 20, fontSize: "0.73rem", fontWeight: 600, cursor: "pointer",
                   border: `1px solid ${active ? "var(--primary)" : "var(--surface-container-high)"}`,
-                  background: active ? "var(--primary)" : "transparent", color: active ? "#fff" : "var(--on-surface-variant)",
+                  background: active ? "var(--primary)" : "transparent", color: active ? "var(--surface-container-lowest)" : "var(--on-surface-variant)",
                 }}>{TAB_LABEL[k]} {n > 0 && <b>{n}</b>}</button>
               );
             })}
           </div>
 
-          {error && <p style={{ margin: "0 0 8px", fontSize: "0.73rem", color: "#dc2626" }}>⚠️ {error}</p>}
+          {error && <p style={{ margin: "0 0 8px", fontSize: "0.73rem", color: "var(--color-danger)" }}>⚠️ {error}</p>}
 
           {tab === "date_suspect" && note(<>이름이 거의 같은데 시작일이 다른 행사입니다. <b>일정 변경</b>은 기존 행사의 일정만 새 값으로 바꾸고(공개 여부·이즈픽·연결 기사 유지), <b>변경 안 함</b>은 기존 일정이 맞을 때 소스 값을 무시하며(같은 값은 다시 묻지 않음), <b>타 행사</b>는 새로 등록하며 다시 묻지 않습니다.</>)}
           {tab === "duplicate_suspect" && note(<>같은 날 같은 주최·장소에 이름이 비슷한 행사가 있습니다. <b>동일 행사</b>는 새로 등록하지 않고 기존 행사의 빈 항목만 채우고, <b>타 행사</b>는 새로 등록하며 다시 묻지 않습니다.</>)}
@@ -306,7 +306,7 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
                       const old = c.payload.old as { start_date: string; end_date: string | null };
                       return (
                         <div style={{ color: "var(--on-surface-variant)" }}>
-                          기존 {fmtRange(old.start_date, old.end_date)} → 소스 <b style={{ color: "#d97706" }}>{fmtRange(cand.start_date, cand.end_date)}</b>
+                          기존 {fmtRange(old.start_date, old.end_date)} → 소스 <b style={{ color: "var(--color-warning)" }}>{fmtRange(cand.start_date, cand.end_date)}</b>
                           {cand.event_name !== name && <span> (소스 표기: {cand.event_name})</span>}
                         </div>
                       );
@@ -315,14 +315,14 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
                       const cand = c.payload.candidate as Candidate;
                       return (
                         <div style={{ color: "var(--on-surface-variant)" }}>
-                          {fmtRange(e?.start_date, e?.end_date)} · 소스 표기 <b style={{ color: "#d97706" }}>{cand.event_name}</b>
+                          {fmtRange(e?.start_date, e?.end_date)} · 소스 표기 <b style={{ color: "var(--color-warning)" }}>{cand.event_name}</b>
                           {cand.organizer ? ` · ${cand.organizer}` : ""}
                         </div>
                       );
                     })()}
                     {c.kind === "field_change" && (
                       <div style={{ color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {FIELD_LABEL[String(c.payload.field)] ?? String(c.payload.field)}: {String(c.payload.old)} → <b style={{ color: "#d97706" }}>{String(c.payload.new)}</b>
+                        {FIELD_LABEL[String(c.payload.field)] ?? String(c.payload.field)}: {String(c.payload.old)} → <b style={{ color: "var(--color-warning)" }}>{String(c.payload.new)}</b>
                       </div>
                     )}
                     {c.kind === "missing" && <div style={{ color: "var(--on-surface-variant)" }}>{fmtRange(e?.start_date, e?.end_date)} · {src}에서 마지막 확인 {fmtDay(String(c.payload.last_seen ?? ""))}</div>}
@@ -347,10 +347,10 @@ export default function EventChangesPanel({ onPatch, onAdd, onCount, refreshKey 
                     {chip(SOURCE_LABEL[d.source] ?? d.source, "#2563eb")}
                     <b style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{d.name}</b>
                   </div>
-                  <div style={{ color: "var(--on-surface-variant)" }}>{d.date} · 걸린 규칙 <span style={{ color: "#d97706", fontWeight: 600 }}>{d.reason}</span></div>
+                  <div style={{ color: "var(--on-surface-variant)" }}>{d.date} · 걸린 규칙 <span style={{ color: "var(--color-warning)", fontWeight: 600 }}>{d.reason}</span></div>
                 </div>
                 {allowed.has(d.key)
-                  ? <span style={{ fontSize: "0.72rem", color: "#059669", fontWeight: 600 }}>등록됨</span>
+                  ? <span style={{ fontSize: "0.72rem", color: "var(--color-success)", fontWeight: 600 }}>등록됨</span>
                   : btn("제외하지 않기", () => allowDropped(d), "plain", busy === d.key)}
               </div>
             ))}

@@ -59,7 +59,7 @@ function LoginForm() {
             className="w-full h-10 pl-3 pr-10 rounded-lg text-sm outline-none"
             style={{
               background: "var(--surface-container-low)",
-              border: `1.5px solid ${error ? "#dc2626" : "transparent"}`,
+              border: `1.5px solid ${error ? "var(--color-danger)" : "transparent"}`,
               color: "var(--on-surface)",
               transition: "border-color 0.15s",
             }}
@@ -82,7 +82,7 @@ function LoginForm() {
           </button>
         </div>
         {error && (
-          <p className="text-xs" style={{ color: "#dc2626" }}>{error}</p>
+          <p className="text-xs" style={{ color: "var(--color-danger)" }}>{error}</p>
         )}
       </div>
 
@@ -90,7 +90,7 @@ function LoginForm() {
         type="submit"
         disabled={loading || !password}
         className="h-10 rounded-lg text-sm font-semibold transition-opacity hover:opacity-80 disabled:opacity-40 flex items-center justify-center gap-2"
-        style={{ background: "var(--primary)", color: "#fff", border: "none", cursor: "pointer" }}
+        style={{ background: "var(--primary)", color: "var(--color-on-fill)", border: "none", cursor: "pointer" }}
       >
         {loading ? <Loader2 size={15} className="animate-spin" /> : <Lock size={15} />}
         {loading ? "확인 중..." : "로그인"}

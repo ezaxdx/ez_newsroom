@@ -88,8 +88,8 @@ export default function TopBar({ navCategories, initialQuery = "" }: Props) {
             href="/admin"
             className="inline-flex items-center h-9 px-4 rounded-md text-sm font-semibold transition-opacity hover:opacity-80 whitespace-nowrap"
             style={{
-              background: "linear-gradient(135deg, #000000, #1c1b1d)",
-              color: "#ffffff",
+              background: "linear-gradient(135deg, var(--primary), var(--primary-container))",
+              color: "var(--color-on-fill)",
             }}
           >
             큐레이션 관리

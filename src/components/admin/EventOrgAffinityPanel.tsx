@@ -81,8 +81,8 @@ export default function EventOrgAffinityPanel() {
             뉴스레터 추천 행사와 홈·행사 캘린더의 자동 이즈픽은 점수 순으로 채워집니다. 아래 주최사가 여는 행사는 가산을 받습니다.
             공공·기관 주최, 동종 업계, 장소 운영사, PEO가 겹치면 가장 큰 쪽 하나만 적용되고, 수행실적 발주처는 별도로 더해집니다.
           </p>
-          {unavailable && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#d97706" }}>목록을 쓰려면 <b>08_event_scoring.sql</b>을 실행해야 합니다. (실행 전에는 기본 목록으로 점수가 계산됩니다)</p>}
-          {error && <p style={{ margin: "0 0 10px", fontSize: 12, color: "#dc2626" }}>⚠️ {error}</p>}
+          {unavailable && <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--color-warning)" }}>목록을 쓰려면 <b>08_event_scoring.sql</b>을 실행해야 합니다. (실행 전에는 기본 목록으로 점수가 계산됩니다)</p>}
+          {error && <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--color-danger)" }}>⚠️ {error}</p>}
 
           {!unavailable && TIERS.map((t) => (
             <div key={t.key} style={{ marginBottom: 14 }}>
@@ -93,7 +93,7 @@ export default function EventOrgAffinityPanel() {
                 {orgs.filter((o) => o.tier === t.key).map((o) => (
                   <span key={o.id} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "3px 10px", borderRadius: 20, background: "var(--surface-container-high)", fontSize: 12, color: "var(--on-surface)" }}>
                     {o.org_name}
-                    <button onClick={() => remove(o.id)} aria-label={`${o.org_name} 삭제`} style={{ background: "none", border: "none", cursor: "pointer", color: "#ef4444", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
+                    <button onClick={() => remove(o.id)} aria-label={`${o.org_name} 삭제`} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--color-danger)", fontSize: 14, lineHeight: 1, padding: "0 2px" }}>×</button>
                   </span>
                 ))}
               </div>
@@ -103,14 +103,14 @@ export default function EventOrgAffinityPanel() {
                   onKeyDown={(e) => e.key === "Enter" && add(t.key)} placeholder={t.placeholder}
                   style={{ width: 200, height: 28, padding: "0 8px", borderRadius: 6, fontSize: 12, border: "1px solid var(--surface-container-highest)", background: "var(--surface-container-low)", color: "var(--on-surface)", outline: "none" }}
                 />
-                <button onClick={() => add(t.key)} disabled={!(draft[t.key] ?? "").trim()} style={{ height: 28, padding: "0 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (draft[t.key] ?? "").trim() ? 1 : 0.5 }}>추가</button>
+                <button onClick={() => add(t.key)} disabled={!(draft[t.key] ?? "").trim()} style={{ height: 28, padding: "0 12px", borderRadius: 6, border: "none", background: "var(--primary)", color: "var(--color-on-fill)", fontSize: 12, fontWeight: 600, cursor: "pointer", opacity: (draft[t.key] ?? "").trim() ? 1 : 0.5 }}>추가</button>
               </div>
             </div>
           ))}
 
           {!unavailable && (
             <div style={{ marginBottom: 14 }}>
-              <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "#2563eb" }}>
+              <p style={{ margin: "0 0 6px", fontSize: 12, fontWeight: 700, color: "var(--color-info)" }}>
                 수행실적 발주처 <span style={{ fontWeight: 500, color: "var(--on-surface-variant)" }}>· {clients.length}곳 · 엑셀로 갱신 (행사 정보 가져오기 줄의 ⋯ 메뉴)</span>
               </p>
               <p style={{ margin: 0, fontSize: 11, color: "var(--on-surface-variant)", lineHeight: 1.6 }}>
